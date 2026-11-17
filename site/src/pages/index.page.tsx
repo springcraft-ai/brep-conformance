@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Annot, fmt, GradeLegend, KernelChip, PageHead, Section } from '@/components'
 import { queryFromUrl, useChromeSearch } from '@/components/search'
+import { EmptyState } from '@/ds'
 import { GRADES, TIERS } from '@/data/results'
 import { href, url } from '@/site/href'
 import { Grid } from './_home/Grid'
@@ -40,6 +41,22 @@ export default function Home({ suite, cases, tests, kernels, board, groups }: Pr
   const canCompare = kernels.length > COMPARE_MAX
   const timed = board.find(r => r.time)?.time?.cases ?? 0
   const speedTests = board.length ? Math.min(...board.map(r => r.speedGroups)) : 0
+
+  // The suite and its counts come from the reports, so with none there is nothing true to state.
+  if (board.length === 0)
+    return (
+      <div className="hm-home">
+        <PageHead title="B-rep kernel leaderboard" />
+        <p className="hm-tagline">
+          An open test suite for exact B-rep CAD kernels. A case passes only at 1e-7 mm.
+        </p>
+        <EmptyState
+          title="no results published yet"
+          height={320}
+          action={<a href={href('/docs/#introduction-add-your-kernel')}>add your kernel</a>}
+        />
+      </div>
+    )
 
   return (
     <div className="hm-home">

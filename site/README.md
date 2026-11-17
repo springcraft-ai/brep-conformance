@@ -75,8 +75,10 @@ A page module is loaded in the browser when it hydrates, so it never imports `so
 
 ## Deployment
 
-`npm run build` writes `dist/site`, which GitHub Pages serves as it is. The Pages workflow, with its
-check that every asset a report names exists, is not set up yet.
+`npm run build` writes `dist/site`, which GitHub Pages serves as it is.
+[`pages.yml`](../.github/workflows/pages.yml) checks, builds and deploys it on every push to `main`.
+It builds with no `BREP_REPORTS_DIR` yet, so the site says no results are published. The reports,
+and a check that every asset a report names exists, are not set up yet.
 
 ## Additional Information
 
