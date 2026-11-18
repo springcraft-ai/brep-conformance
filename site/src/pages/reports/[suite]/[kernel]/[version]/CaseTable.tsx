@@ -5,6 +5,7 @@ import { fmt, GradeLabel, GradeMark, gradeLabel, Table, type Column } from '@/co
 import { GRADES } from '@/data/results'
 import { url } from '@/site/href'
 import {
+  caseHash,
   filterToSearch,
   gradesOf,
   groupByTest,
@@ -32,7 +33,8 @@ export function CaseTable({
   onFilter,
 }: {
   rows: Row[]
-  kernel: string
+  // The kernel as the tests' pages show it: null when they show another of its reports.
+  kernel: string | null
   filter: Filter
   // The view the report opens on.
   opening: Filter
@@ -204,7 +206,7 @@ function TestGroup({
   onToggle,
 }: {
   group: Group
-  kernel: string
+  kernel: string | null
   open: boolean
   onToggle: (open: boolean) => void
 }) {
@@ -222,15 +224,20 @@ function TestGroup({
       key: 'id',
       label: 'case',
       sortable: false,
-      render: r => (
-        <a
-          className="rp-case"
-          href={`${test}#kernel=${encodeURIComponent(kernel)}&case=${encodeURIComponent(r.id)}`}
-          title={`${r.id} on the test’s page`}
-        >
-          {shortCase(r.id)}
-        </a>
-      ),
+      render: r =>
+        r.paged && r.listed ? (
+          <a
+            className="rp-case"
+            href={test + caseHash(kernel, r.id)}
+            title={`${r.id} on the test’s page`}
+          >
+            {shortCase(r.id)}
+          </a>
+        ) : (
+          <span className="rp-cell" title={`${r.id}: not among the current results`}>
+            {shortCase(r.id)}
+          </span>
+        ),
     },
     {
       key: 'kind',
@@ -315,9 +322,11 @@ function TestGroup({
       </summary>
       {open && (
         <div className="rp-group__cases">
-          <a className="rp-group__link" href={test}>
-            {g.test} on its own page
-          </a>
+          {g.paged && (
+            <a className="rp-group__link" href={test}>
+              {g.test} on its own page
+            </a>
+          )}
           <div className="rp-table">
             <Table<Row>
               aria-label={`cases of ${g.test}`}

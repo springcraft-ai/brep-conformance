@@ -19,13 +19,27 @@ older link names stays as it was; a rerun on the same suite version replaces the
   each primitive it has no constructor for.
 - `cases`: one row per case: `id`, `test`, `operation` (the test path's first part, its area),
   `kind` (exact, sound or rejection), `result`, `why`, `failure` (geometry or measurement),
-  `time_ms`, the test's `group_median_ms`, and `asset` and `asset_step`, naming its shape files.
+  `time_ms`, the test's `group_median_ms`, and `exports`, the shape files the kernel wrote for it.
 
 A test's URL segment is its path without the area, joined by dashes: `booleans/overlap/spheres` is
-`overlap-spheres` under `booleans`. Its shape files are `<asset base>/<test>/<id>.<asset>.glb`, and
-`.step` where `asset_step` is true, as `assets::key` in the suite names them. The asset base is the
-suite's compiled default, `https://cdn.springcraft.ai/brep-conformance`; the report does not carry
-it.
+`overlap-spheres` under `booleans`.
+
+Every kernel draws its own shape files, and the site shows no others. A case's `exports` holds the
+key of its drawing as `glb`, or null, and in the list `step` the key of a STEP file for each solid
+the case shows: one, two, or none. A case with no `exports` has no files. A key is a path of plain
+names ending in `.glb` or `.step`, such as `<test>/<id>.<hash>.glb`, by the rule
+[`publish-assets.sh`](../../publish-assets.sh) holds it to; the site refuses a report with any
+other.
+
+A file's URL is the report's `assets`, its kernel's folder, followed by the key. `assets` must be an
+https address ending `/<suite>/<kernel>/<version>/`, the path the report has in the reports
+directory, so that no report names another's files; it is null where the run wrote none. A report
+written before `assets` existed takes the suite's compiled default,
+`https://cdn.springcraft.ai/brep-conformance`, with that path after it.
+
+A test's page shows a case as the selected kernel drew it, and as the first kernel that drew it
+where that one wrote no drawing. It offers each STEP file the kernel wrote, named by its solid's
+role where there are two.
 
 The report does not yet say who wrote a kernel's adapter, which functions a test calls, or a failed
 check's numbers and failing points, so the site shows none of them.

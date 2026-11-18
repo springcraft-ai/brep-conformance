@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   ASSET_BASE,
-  assetUrl,
   caseTimes,
   compareRuns,
   compareVersions,
@@ -40,8 +39,6 @@ function row(id: string, test: string, result: string, tier: string | null, time
     operation: test.split('/')[0],
     kind: 'exact',
     result: r,
-    asset: 'abc',
-    asset_step: false,
     time_ms,
     group_median_ms: time_ms,
     group_low_confidence: true,
@@ -68,7 +65,65 @@ describe('parseReport', () => {
     expect(r.unsupported).toEqual(['torus'])
     expect(r.standIns).toEqual({ torus: 'revolve' })
     expect(r.environment.date).toBe('1970-01-01T00:00:01.000Z')
-    expect(r.methodology.assetBase).toBe(ASSET_BASE)
+    expect(r.methodology.assetBase).toBe(`${ASSET_BASE}/0.9.0/k/1.0.0`)
+  })
+
+  it('names each file a case exports under its own kernel’s base', () => {
+    const key = 'booleans/overlap/boxes/a.abc'
+    const drew = { glb: `${key}.glb`, step: [`${key}.main.step`, `${key}.alt.step`] }
+    const r = parseReport(
+      raw('k w', '1.0.0', [
+        { ...row('a', 'booleans/overlap/boxes', 'pass', '1e-7'), exports: drew },
+        { ...row('b', 'booleans/overlap/boxes', 'crash', null), exports: { glb: null, step: [] } },
+        row('c', 'booleans/overlap/boxes', 'pass', '1e-7'),
+      ]),
+    )
+    const base = `${ASSET_BASE}/0.9.0/k%20w/1.0.0/${key}`
+    expect(r.cases.map(c => [c.glb, c.steps])).toEqual([
+      [`${base}.glb`, [`${base}.main.step`, `${base}.alt.step`]],
+      [null, []],
+      [null, []],
+    ])
+  })
+
+  it('takes the folder a report names as `assets`, and no files where it names none', () => {
+    const cases = [
+      { ...row('a', 't/x', 'pass', '1e-7'), exports: { glb: 't/x/a.abc.glb', step: [] } },
+    ]
+    const named = { ...raw('k', '2.1', cases), assets: 'https://files.example/b/0.9.0/k/2.1/' }
+    expect(parseReport(named).methodology.assetBase).toBe('https://files.example/b/0.9.0/k/2.1')
+    expect(parseReport(named).cases[0]!.glb).toBe(
+      'https://files.example/b/0.9.0/k/2.1/t/x/a.abc.glb',
+    )
+    const none = parseReport({ ...raw('k', '2.1', cases), assets: null })
+    expect([none.methodology.assetBase, none.cases[0]!.glb]).toEqual([null, null])
+  })
+
+  it('refuses `assets` that is not the report’s own folder over https', () => {
+    for (const assets of [
+      'https://files.example/b/0.9.0/other/2.1/',
+      'http://files.example/b/0.9.0/k/2.1/',
+      'https://files.example/b/0.9.0/k/2.1',
+      7,
+    ]) {
+      const bad = { ...raw('k', '2.1', []), assets }
+      expect(() => parseReport(bad)).toThrow(/report\.assets/)
+    }
+  })
+
+  it('holds a key to the rule the publishing script does', () => {
+    const glbOf = (glb: string) =>
+      parseReport(raw('k', '1', [{ ...row('a', 't/x', 'pass', '1e-7'), exports: { glb } }]))
+    expect(glbOf('t/a+b.abc.glb').cases[0]!.glb).toMatch(/\/t\/a\+b\.abc\.glb$/)
+    for (const glb of ['t/_a.abc.glb', 't/.a.abc.glb', 't//a.abc.glb'])
+      expect(() => glbOf(glb)).toThrow(/cases\[0\]\.exports\.glb/)
+  })
+
+  it('refuses an exported key that leaves the kernel’s files', () => {
+    for (const glb of ['../other/1.0.0/t/a.abc.glb', 'https://x.example/a.glb', 't/a.abc.step']) {
+      const bad = raw('k', '1', [{ ...row('a', 't/x', 'pass', '1e-7'), exports: { glb } }])
+      expect(() => parseReport(bad)).toThrow(/cases\[0\]\.exports\.glb/)
+    }
   })
 
   it('names the field it cannot read', () => {
@@ -243,10 +298,5 @@ describe('leaderboard and indexes', () => {
     expect(t!.slug).toBe('x')
     expect(t!.kernels.zeta!.grade).toBe('1e-7')
     expect(t!.kernels.alpha!.grade).toBe('unsupported')
-  })
-
-  it('names a case’s files under the base, as assets::key does', () => {
-    const url = assetUrl('https://cdn.example/b/', 'booleans/overlap/x', 'box-box-1f', 'abc', 'glb')
-    expect(url).toBe('https://cdn.example/b/booleans/overlap/x/box-box-1f.abc.glb')
   })
 })

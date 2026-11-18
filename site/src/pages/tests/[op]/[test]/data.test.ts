@@ -1,21 +1,42 @@
 import { describe, expect, it } from 'vitest'
 import { site } from '@/data/source'
-import { shortCaseIds } from './format'
+import { shortCaseIds, stepLabel } from './format'
 import { propsOf } from './index.data'
 
 describe('propsOf', () => {
   const s = site()
   const pages = s.tests.map(t => propsOf(t, s.latest))
 
-  it('names each case’s files by its test, id and asset, with STEP only where there is one', () => {
-    for (const p of pages) {
-      expect(p.shape.glb).toMatch(new RegExp(`/${p.test}/${p.shape.id}\\.[0-9a-f]+\\.glb$`))
-      for (const k of p.kernels.filter(k => k.worst)) {
-        const w = k.worst!
-        expect(w.glb).toMatch(new RegExp(`/${p.test}/${w.id}\\.[0-9a-f]+\\.glb$`))
-        if (w.step) expect(w.step).toBe(w.glb.replace(/\.glb$/, '.step'))
-      }
-    }
+  it('gives each kernel its own files for a case, under its own report’s path', () => {
+    let seen = 0
+    for (const p of pages)
+      for (const c of p.caseList)
+        p.kernels.forEach((k, i) => {
+          const f = c.files[i]
+          if (!f) return
+          seen++
+          const at = `/${k.suite}/${k.kernel}/${k.version}/${p.test}/${c.id}\\.[0-9a-f]+`
+          expect(f.glb).toMatch(new RegExp(`${at}\\.glb$`))
+          for (const step of f.steps)
+            expect(step).toMatch(new RegExp(`${at}(\\.[a-z0-9-]+)?\\.step$`))
+        })
+    expect(seen).toBeGreaterThan(0)
+  })
+
+  it('gives a case of two solids a STEP file for each', () => {
+    const two = pages
+      .flatMap(p => p.caseList.flatMap(c => c.files))
+      .filter(f => f?.steps.length === 2)
+    expect(two.length).toBeGreaterThan(0)
+    expect(two[0]!.steps.map(stepLabel)).toEqual(['step · main', 'step · alt'])
+  })
+
+  it('gives a kernel no files for a case it does not support', () => {
+    const none = pages.flatMap(p =>
+      p.caseList.flatMap(c => c.files.filter((_, i) => c.grades[i] === 'unsupported')),
+    )
+    expect(none.length).toBeGreaterThan(0)
+    expect(none.every(f => f === null)).toBe(true)
   })
 
   it('gives a kernel no worst case exactly when every case passed at 1e-7', () => {

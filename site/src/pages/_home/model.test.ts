@@ -28,7 +28,7 @@ function entry(operation: string, slug: string, byKernel: Record<string, Grade[]
       { grade: gs[0]!, summary: summarize(cases(...gs)), why: '', failure: null, medianMs: 2 },
     ]),
   )
-  return { test: `x/${slug}`, slug, operation, kind: 'exact', asset: '', cases: [], kernels }
+  return { test: `x/${slug}`, slug, operation, kind: 'exact', cases: [], kernels }
 }
 
 const at = (g: Grade) => GRADES.indexOf(g)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { point, shortCaseIds, testName, value } from './format'
+import { drawnBy, point, stepLabel, shortCaseIds, testName, value } from './format'
 
 describe('value', () => {
   it('writes counts whole, small values in exponent form, the rest to six figures', () => {
@@ -34,5 +34,31 @@ describe('shortCaseIds', () => {
       'box-box 1a2b3c',
       'box-sphere 001122',
     ])
+  })
+})
+
+describe('drawnBy', () => {
+  const drew = { glb: 'x.glb' }
+
+  it('shows the preferred kernel’s drawing where it drew the case', () => {
+    expect(drawnBy([drew, drew], 1)).toBe(1)
+  })
+
+  it('falls back to the first kernel that drew it', () => {
+    expect(drawnBy([null, { glb: null }, drew], 0)).toBe(2)
+    expect(drawnBy([drew, null], -1)).toBe(0)
+  })
+
+  it('shows none where no kernel drew it', () => {
+    expect(drawnBy([null, { glb: null }], 0)).toBeNull()
+  })
+})
+
+describe('stepLabel', () => {
+  it('names a lone file plainly, and one of several by its solid’s role', () => {
+    const at = 'https://cdn.example/b/1.0.0/k/1/t/x/box-box-1f.0123456789abcdef'
+    expect(stepLabel(`${at}.step`)).toBe('step')
+    expect(stepLabel(`${at}.main.step`)).toBe('step · main')
+    expect(stepLabel(`${at}.alt-2.step`)).toBe('step · alt-2')
   })
 })

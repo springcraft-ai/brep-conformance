@@ -34,3 +34,21 @@ export function shortCaseIds(ids: readonly string[]): string[] {
     return mixed && p.family ? `${p.family} ${hash}` : hash
   })
 }
+
+// Whose drawing of a case to show, as an index into the kernels: the preferred kernel's where it
+// drew the case, else the first kernel's that did.
+export function drawnBy(
+  files: readonly ({ glb: string | null } | null)[],
+  preferred: number,
+): number | null {
+  if (files[preferred]?.glb) return preferred
+  const first = files.findIndex(f => f?.glb)
+  return first < 0 ? null : first
+}
+
+// What a STEP file's link says: a case of one solid has one file, <id>.<hash>.step, and a case of
+// two has one each, <id>.<hash>.<role>.step, told apart by the role.
+export function stepLabel(url: string): string {
+  const parts = url.slice(url.lastIndexOf('/') + 1).split('.')
+  return parts.length > 3 ? `step · ${parts.at(-2)}` : 'step'
+}

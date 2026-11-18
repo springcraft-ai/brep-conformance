@@ -13,7 +13,7 @@ import {
 } from '@/components'
 import { GRADES } from '@/data/results'
 import { url } from '@/site/href'
-import { point, shortCaseIds, testName, value } from './format'
+import { drawnBy, point, stepLabel, shortCaseIds, testName, value } from './format'
 import type { CaseOption, CheckView, KernelView, Props } from './index.data'
 import type { Mark } from './scan'
 import { ScanView } from './ScanView'
@@ -257,13 +257,14 @@ function CaseList({
 }
 
 export default function TestPage(props: Props) {
-  const { test, operation, kind, cases, kernels, shape, caseList } = props
+  const { test, operation, kind, cases, kernels, caseList } = props
   const showable = withPoints(kernels)
   const [selected, setSelected] = useState<string | null>(
     (showable[0] ?? kernels.find(k => k.worst))?.kernel ?? null,
   )
   const [focus, setFocus] = useState<number | null>(null)
   const [picked, setPicked] = useState<CaseOption | null>(null)
+  const [drawer, setDrawer] = useState<string | null>(null)
 
   // A link may name the kernel and the case to show: #kernel=<id>&case=<id>.
   useEffect(() => {
@@ -272,6 +273,7 @@ export default function TestPage(props: Props) {
       const k = p.get('kernel')
       if (k && kernels.some(x => x.kernel === k && x.worst)) setSelected(k)
       if (!p.has('kernel') && !p.has('case')) return
+      setDrawer(k && kernels.some(x => x.kernel === k) ? k : null)
       setPicked(caseList.find(x => x.id === p.get('case')) ?? null)
       setFocus(null)
     }
@@ -281,9 +283,18 @@ export default function TestPage(props: Props) {
   }, [kernels, caseList])
 
   const current = kernels.find(k => k.kernel === selected && k.worst) ?? null
-  const shown = picked ?? current?.worst ?? shape
+  const shownId = picked?.id ?? current?.worst?.id ?? caseList[0]?.id ?? ''
+  const shownCase = caseList.find(c => c.id === shownId) ?? null
+  // A kernel that crashed on a case, or does not offer it, drew nothing: another's drawing shows.
+  const drawn = shownCase
+    ? drawnBy(
+        shownCase.files,
+        kernels.findIndex(k => k.kernel === (drawer ?? selected)),
+      )
+    : null
+  const files = drawn === null ? null : shownCase!.files[drawn]!
   // A kernel's misplaced points belong to its worst case, so they show only over that shape.
-  const onWorst = current?.worst?.id === shown.id
+  const onWorst = current?.worst?.id === shownId
   const rows: PointRow[] = useMemo(
     () =>
       ((onWorst && current?.worst?.checks) || [])
@@ -294,6 +305,7 @@ export default function TestPage(props: Props) {
   const marks: Mark[] = useMemo(() => rows.map(r => ({ p: r.p, held: r.got })), [rows])
   const choose = (k: string) => {
     setSelected(k)
+    setDrawer(null)
     setPicked(null)
     setFocus(null)
   }
@@ -302,7 +314,6 @@ export default function TestPage(props: Props) {
     setFocus(null)
   }
   const failed = kernels.filter(k => k.worst)
-  const shownCase = caseList.find(c => c.id === shown.id) ?? null
   const present = GRADES.filter(g => caseList.some(c => c.grades.includes(g)))
   const checked = failed.filter(k => k.worst!.checks.length)
 
@@ -369,7 +380,7 @@ export default function TestPage(props: Props) {
       >
         <div className="bc-cases">
           <div className="bc-cases__list">
-            <CaseList caseList={caseList} kernels={kernels} shownId={shown.id} onPick={pickCase} />
+            <CaseList caseList={caseList} kernels={kernels} shownId={shownId} onPick={pickCase} />
             <GradeLegend grades={present} marks="table" />
           </div>
           <div className="bc-cases__shape">
@@ -377,7 +388,7 @@ export default function TestPage(props: Props) {
               <div className="bc-thiscase">
                 <span className="bc-thiscase__id">
                   <Annot>case</Annot>
-                  <span className="bc-machine">{shown.id}</span>
+                  <span className="bc-machine">{shownId}</span>
                 </span>
                 <ul>
                   {kernels.map((k, i) => {
@@ -385,13 +396,25 @@ export default function TestPage(props: Props) {
                     return (
                       <li key={k.kernel}>
                         <a
-                          href={`${url.report(k.suite, k.kernel, k.version)}?test=${encodeURIComponent(test)}&q=${encodeURIComponent(shown.id)}#cases`}
+                          href={`${url.report(k.suite, k.kernel, k.version)}?test=${encodeURIComponent(test)}&q=${encodeURIComponent(shownId)}#cases`}
                           title={`this case in ${k.kernel}’s report`}
                         >
                           {k.kernel}
                         </a>
                         {g ? <GradeLabel grade={g} /> : <Annot>not run</Annot>}
-                        {k.worst?.id === shown.id && <Annot>its worst case</Annot>}
+                        {k.worst?.id === shownId && <Annot>its worst case</Annot>}
+                        {shownCase.files[i]?.glb &&
+                          (i === drawn ? (
+                            <Annot>its shape shown</Annot>
+                          ) : (
+                            <button
+                              type="button"
+                              className="bc-kernels__show sc-focus"
+                              onClick={() => setDrawer(k.kernel)}
+                            >
+                              show its shape
+                            </button>
+                          ))}
                       </li>
                     )
                   })}
@@ -399,29 +422,37 @@ export default function TestPage(props: Props) {
               </div>
             )}
             <ScanView
-              glb={shown.glb}
-              caption={shown.id}
+              glb={files?.glb ?? null}
+              caption={shownId}
               marks={marks}
               focus={focus}
               onPick={setFocus}
               files={
-                <div className="bc-shape__files">
-                  <a className="bc-file" href={shown.glb} download>
-                    glb
-                  </a>
-                  {shown.step ? (
-                    <a className="bc-file" href={shown.step} download>
-                      step
-                    </a>
-                  ) : (
-                    <span
-                      className="bc-annot bc-shape__nostep"
-                      title="The suite writes exact STEP only for primitives"
-                    >
-                      no exact step
+                files &&
+                drawn !== null && (
+                  <div className="bc-shape__files">
+                    <span className="bc-annot bc-shape__note">
+                      drawn by {kernels[drawn]!.kernel}
                     </span>
-                  )}
-                </div>
+                    <a className="bc-file" href={files.glb!} download>
+                      glb
+                    </a>
+                    {files.steps.length ? (
+                      files.steps.map(step => (
+                        <a key={step} className="bc-file" href={step} download>
+                          {stepLabel(step)}
+                        </a>
+                      ))
+                    ) : (
+                      <span
+                        className="bc-annot bc-shape__note"
+                        title={`${kernels[drawn]!.kernel} wrote no STEP file for this case`}
+                      >
+                        no step
+                      </span>
+                    )}
+                  </div>
+                )
               }
             />
             {current && rows.length > 0 && (

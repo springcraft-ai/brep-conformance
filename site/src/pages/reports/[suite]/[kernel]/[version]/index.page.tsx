@@ -221,10 +221,10 @@ export default function ReportPage(props: Props) {
             </summary>
             <p className="rp-fold__body rp-functions">
               {props.functions.map((f, i) => (
-                <span key={f}>
+                <span key={f.name}>
                   {i > 0 && ', '}
-                  <a href={url.operation(f)}>{f}</a>
-                  {props.standIns[f] && <Annot> sent as {props.standIns[f]}</Annot>}
+                  {f.documented ? <a href={url.operation(f.name)}>{f.name}</a> : f.name}
+                  {props.standIns[f.name] && <Annot> sent as {props.standIns[f.name]}</Annot>}
                 </span>
               ))}
             </p>
@@ -239,7 +239,7 @@ export default function ReportPage(props: Props) {
         >
           <CaseTable
             rows={rows}
-            kernel={id.kernel}
+            kernel={props.current ? null : id.kernel}
             filter={filter}
             opening={opening}
             onFilter={applyFilter}

@@ -3,12 +3,13 @@ import { Annot } from '@/components'
 import type { Mark, ScanHandle } from './scan'
 import type { Loaded } from './viewer'
 
-type Status = 'loading' | 'ready' | 'missing' | 'unreadable'
+type Status = 'loading' | 'ready' | 'missing' | 'unreadable' | 'undrawn'
 
 const EMPTY = new Float32Array(0)
 
-// The expected shape in Scan mode, with a kernel's misplaced points over it. The drawing code loads
-// after hydration; until the shape's file is published the points are drawn on their own.
+// A kernel's drawing of a case in Scan mode, with a kernel's misplaced points over it. The drawing
+// code loads after hydration; where no kernel drew the case, or the file is not published yet, the
+// points are drawn on their own.
 export function ScanView({
   glb,
   caption,
@@ -17,7 +18,7 @@ export function ScanView({
   onPick,
   files,
 }: {
-  glb: string
+  glb: string | null
   caption: string
   marks: Mark[]
   focus: number | null
@@ -33,8 +34,12 @@ export function ScanView({
 
   useEffect(() => {
     let live = true
-    setStatus('loading')
     setLoaded(null)
+    if (!glb) {
+      setStatus('undrawn')
+      return
+    }
+    setStatus('loading')
     void import('./viewer').then(v =>
       v.loadShape(glb).then(
         l => {
@@ -90,6 +95,7 @@ export function ScanView({
     ready: loaded ? `glb · ${loaded.triangles.toLocaleString('en')} triangles` : '',
     missing: 'shape not published yet',
     unreadable: 'shape file unreadable',
+    undrawn: 'no kernel drew this case',
   }[status]
 
   return (
@@ -105,11 +111,11 @@ export function ScanView({
         {empty && (
           <div className="bc-scan__empty sc-hatch">
             <Annot>
-              {status === 'unreadable'
+              {status === 'unreadable' || status === 'undrawn'
                 ? state
                 : hollow
-                  ? 'expected shape · empty'
-                  : 'expected shape · not published yet'}
+                  ? 'shape · empty'
+                  : 'shape · not published yet'}
             </Annot>
           </div>
         )}

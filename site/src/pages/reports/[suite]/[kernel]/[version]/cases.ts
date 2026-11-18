@@ -7,6 +7,17 @@ export interface PackedCases {
   whys: string[]
   // [case id, test index, kind index, grade index, why index, time in ms or null]
   rows: [string, number, number, number, number, number | null][]
+  // The tests with no page of their own, and the cases their test's page does not list, by index:
+  // a test's page is drawn from each kernel's latest report alone.
+  unpaged: number[]
+  unlisted: number[]
+}
+
+// The cases each test's page lists, by `pageKey`.
+export type TestPages = ReadonlyMap<string, ReadonlySet<string>>
+
+export function pageKey(operation: string, slug: string): string {
+  return `${operation}/${slug}`
 }
 
 export interface Row {
@@ -20,6 +31,9 @@ export interface Row {
   rank: number
   why: string
   timeMs: number | null
+  // Whether the test has a page, and whether that page lists this case.
+  paged: boolean
+  listed: boolean
 }
 
 function interner<T>(key: (t: T) => string) {
@@ -40,10 +54,13 @@ function interner<T>(key: (t: T) => string) {
   }
 }
 
-export function packCases(cases: CaseRow[]): PackedCases {
+// With no `pages`, every test has a page that lists each of its cases.
+export function packCases(cases: CaseRow[], pages?: TestPages): PackedCases {
   const tests = interner<[string, string, string]>(t => `${t[2]}/${t[0]}`)
   const whys = interner<string>(w => w)
+  const listing = (c: CaseRow) => pages?.get(pageKey(c.operation, c.slug))
   return {
+    unlisted: pages ? cases.flatMap((c, i) => (listing(c)?.has(c.id) ? [] : [i])) : [],
     rows: cases.map(c => [
       c.id,
       tests.add([c.test, c.slug, c.operation]),
@@ -54,10 +71,15 @@ export function packCases(cases: CaseRow[]): PackedCases {
     ]),
     tests: tests.list,
     whys: whys.list,
+    unpaged: pages
+      ? tests.list.flatMap(([, slug, op], i) => (pages.has(pageKey(op, slug)) ? [] : [i]))
+      : [],
   }
 }
 
 export function unpackCases(packed: PackedCases): Row[] {
+  const unpaged = new Set(packed.unpaged)
+  const unlisted = new Set(packed.unlisted)
   return packed.rows.map(([id, t, k, g, w, timeMs], order) => {
     const [test, slug, operation] = packed.tests[t]!
     return {
@@ -71,6 +93,8 @@ export function unpackCases(packed: PackedCases): Row[] {
       rank: g,
       why: packed.whys[w]!,
       timeMs,
+      paged: !unpaged.has(t),
+      listed: !unlisted.has(order),
     }
   })
 }
@@ -202,6 +226,12 @@ export function sameFilter(a: Filter, b: Filter): boolean {
   return key(a) === key(b)
 }
 
+// What a test's page reads to show one case, as one kernel drew it where the kernel is named.
+export function caseHash(kernel: string | null, id: string): string {
+  const e = encodeURIComponent
+  return `#${kernel ? `kernel=${e(kernel)}&` : ''}case=${e(id)}`
+}
+
 // The six characters of a case id's hash that a table shows; the whole id is the case's name.
 export function shortCase(id: string): string {
   return id.slice(id.lastIndexOf('-') + 1).slice(0, 6)
@@ -232,6 +262,7 @@ export interface Group {
   test: string
   slug: string
   operation: string
+  paged: boolean
   rows: Row[]
   // Every case of the test in the report, shown or not.
   total: number
@@ -273,6 +304,7 @@ export function groupByTest(shown: Row[], all: Row[]): Group[] {
       test: first.test,
       slug: first.slug,
       operation: first.operation,
+      paged: first.paged,
       rows,
       total: totals.get(first.test) ?? rows.length,
       grades: GRADES.map((g): [Grade, number] => [

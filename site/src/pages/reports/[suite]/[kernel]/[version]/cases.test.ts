@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { TIERS, type CaseRow, type Grade, type Kind, type Tier } from '@/data/results'
 import {
   byOperation,
+  caseHash,
   duration,
   filterFromLocation,
   filterFromSearch,
@@ -45,8 +46,8 @@ function row(
     timeMs,
     groupMedianMs: null,
     groupLowConfidence: true,
-    asset: 'abc',
-    assetStep: false,
+    glb: null,
+    steps: [],
     failure: null,
     checks: [],
   }
@@ -87,6 +88,33 @@ describe('packCases', () => {
     const packed = packCases(CASES)
     expect(packed.tests).toHaveLength(6)
     expect(packed.whys).toEqual(['', 'B9 8 points misplaced', 'not offered'])
+  })
+})
+
+describe('a row’s links', () => {
+  const pages = new Map([['boolean/overlap-boxes', new Set(['a1'])]])
+  const rows = unpackCases(packCases(CASES, pages))
+  const of = (id: string) => rows.find(r => r.id === id)!
+
+  it('links a case only where its test’s page lists it', () => {
+    expect([of('a1').paged, of('a1').listed]).toEqual([true, true])
+    expect([of('a2').paged, of('a2').listed]).toEqual([true, false])
+  })
+
+  it('links no test that has no page, nor its cases', () => {
+    const none = rows.filter(r => !pages.has(`${r.operation}/${r.slug}`))
+    expect(none.length).toBeGreaterThan(0)
+    expect(none.every(r => !r.paged && !r.listed)).toBe(true)
+    expect(groupByTest(none, rows).every(g => !g.paged)).toBe(true)
+  })
+
+  it('takes every test as paged and every case as listed when told of no pages', () => {
+    expect(unpackCases(packCases(CASES)).every(r => r.paged && r.listed)).toBe(true)
+  })
+
+  it('names the kernel in a case’s link only where the test’s page shows this report', () => {
+    expect(caseHash('k w', 'box-box-1f')).toBe('#kernel=k%20w&case=box-box-1f')
+    expect(caseHash(null, 'box-box-1f')).toBe('#case=box-box-1f')
   })
 })
 

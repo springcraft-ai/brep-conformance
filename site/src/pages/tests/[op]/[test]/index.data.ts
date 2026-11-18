@@ -1,7 +1,6 @@
 import { site } from '@/data/source'
 import { readDoc } from '@/docs/source'
 import {
-  assetUrl,
   type CaseRow,
   type Check,
   type Failure,
@@ -20,22 +19,24 @@ export interface CheckView extends Check {
   promise: string
 }
 
-// One case a kernel failed: its checks, and the files of its expected shape.
+// One case a kernel failed, with its checks.
 export interface CaseView {
   id: string
-  glb: string
-  // Null when the suite cannot write the case's shape as exact STEP.
-  step: string | null
   checks: CheckView[]
 }
 
-// One case of the test: its expected shape's files, and each kernel's grade on it in `kernels`
-// order, null where a kernel's report has no such case.
+// What one kernel wrote for a case: its drawing, and a STEP file for each solid the case shows.
+export interface CaseFiles {
+  glb: string | null
+  steps: string[]
+}
+
+// One case of the test, with each kernel's grade on it and the files that kernel wrote, both in
+// `kernels` order: null where its report has no such case, or it wrote no file.
 export interface CaseOption {
   id: string
-  glb: string
-  step: string | null
   grades: (Grade | null)[]
+  files: (CaseFiles | null)[]
 }
 
 export interface KernelView {
@@ -59,8 +60,6 @@ export interface Props {
   kindText: string
   definition: Definition | null
   cases: number
-  // The test's first case: the shape shown when no kernel's case is.
-  shape: { id: string; glb: string; step: string | null }
   kernels: KernelView[]
   caseList: CaseOption[]
 }
@@ -69,11 +68,9 @@ let docs: { clauses: Record<string, string>; api: string } | undefined
 const specs = () =>
   (docs ??= { clauses: clausesOf(readDoc('contract.md')), api: readDoc('api.md') })
 
-function caseView(c: CaseRow, base: string): CaseView {
+function caseView(c: CaseRow): CaseView {
   return {
     id: c.id,
-    glb: assetUrl(base, c.test, c.id, c.asset, 'glb'),
-    step: c.assetStep ? assetUrl(base, c.test, c.id, c.asset, 'step') : null,
     checks: c.checks.map(k => ({
       ...k,
       promise: specs().clauses[k.clause] ?? '',
@@ -83,8 +80,6 @@ function caseView(c: CaseRow, base: string): CaseView {
 }
 
 export function propsOf(t: TestEntry, latest: Report[]): Props {
-  const base = latest[0]?.methodology.assetBase ?? ''
-  const first = latest.flatMap(r => r.cases).find(c => c.id === t.cases[0])
   const kernels: KernelView[] = []
   const rowsOf: Map<string, CaseRow>[] = []
   for (const r of latest) {
@@ -102,18 +97,17 @@ export function propsOf(t: TestEntry, latest: Report[]): Props {
       failure: k.failure,
       passing: k.summary.passing,
       total: k.summary.total,
-      worst: worst && worst.grade !== '1e-7' ? caseView(worst, base) : null,
+      worst: worst && worst.grade !== '1e-7' ? caseView(worst) : null,
     })
   }
   const caseList = t.cases.flatMap((id): CaseOption[] => {
-    const any = rowsOf.map(rows => rows.get(id)).find(Boolean)
-    if (!any) return []
+    const rows = rowsOf.map(rows => rows.get(id))
+    if (!rows.some(Boolean)) return []
     return [
       {
         id,
-        glb: assetUrl(base, any.test, id, any.asset, 'glb'),
-        step: any.assetStep ? assetUrl(base, any.test, id, any.asset, 'step') : null,
-        grades: rowsOf.map(rows => rows.get(id)?.grade ?? null),
+        grades: rows.map(c => c?.grade ?? null),
+        files: rows.map(c => (c?.glb || c?.steps.length ? { glb: c.glb, steps: c.steps } : null)),
       },
     ]
   })
@@ -125,11 +119,6 @@ export function propsOf(t: TestEntry, latest: Report[]): Props {
     kindText: KIND_TEXT[t.kind],
     definition: definitionOf(t.operation, specs().api),
     cases: t.cases.length,
-    shape: {
-      id: first?.id ?? t.cases[0] ?? '',
-      glb: first ? assetUrl(base, first.test, first.id, first.asset, 'glb') : '',
-      step: first?.assetStep ? assetUrl(base, first.test, first.id, first.asset, 'step') : null,
-    },
     kernels,
     caseList,
   }
