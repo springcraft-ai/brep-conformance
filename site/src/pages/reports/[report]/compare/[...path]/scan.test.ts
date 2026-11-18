@@ -175,6 +175,31 @@ describe('overlayGeometry, a query’s answers', () => {
     expect(Array.from(g.quiet)).toEqual([3, 0, 0])
   })
 
+  it('spreads a probe of three points across the surface, joined by a stick, so they show apart', () => {
+    const g = overlayOf({
+      sides: [
+        { at: [5, 0, 0], side: 'on' },
+        { at: [5, 0, -0.01], side: 'in' },
+        { at: [5, 0, 0.01], side: 'out' },
+        { at: [8, 0, 0], side: 'on' },
+      ],
+    })
+    const o = overlayGeometry(g, within)
+    // On the surface where it is; inside and outside spread along the line through the three.
+    expect(Array.from(o.points)).toEqual([5, 0, 0, 8, 0, 0])
+    const [ix, iy, iz] = Array.from(o.inside)
+    const [ox, oy, oz] = Array.from(o.quiet)
+    expect([ix, iy, ox, oy]).toEqual([5, 0, 5, 0])
+    expect(iz!).toBeLessThan(-0.2)
+    expect(oz!).toBeCloseTo(-iz!)
+    expect(segments(o.lines)).toEqual([
+      [
+        [5, 0, iz!],
+        [5, 0, oz!],
+      ],
+    ])
+  })
+
   it('draws a normal as an arrow from its point, and a point with none apart', () => {
     const g = overlayGeometry(
       {

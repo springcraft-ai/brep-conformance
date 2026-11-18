@@ -645,6 +645,12 @@ pub fn views(c: &Case) -> Value {
                 vec![solid("main", a, None)],
             ),
         ]
+    } else if !c.exact.sides.is_empty() {
+        vec![noted(
+            "solid",
+            "Each probe is a point on the surface and, where the surface has a normal, points 0.01 mm inside and outside it, drawn spread apart; the kernel must say which side each is on.",
+            vec![solid("main", a, None)],
+        )]
     } else if c.step || c.exact.sew.is_some() || a == b {
         vec![view("solid", vec![solid("main", a, None)])]
     } else {

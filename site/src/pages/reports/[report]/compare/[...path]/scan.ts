@@ -2,7 +2,7 @@
 // kernel's misplaced points over it on a 2D canvas, which also takes the pointer. Orthographic,
 // z up, turned by dragging.
 import { Renderer, type Mesh, type OverlayGeometry, type Rgb } from './gl'
-import type { Overlay } from './glb'
+import type { Overlay, Side } from './glb'
 import type { Vec3 } from './vec'
 
 export interface Mark {
@@ -246,6 +246,10 @@ const DASH = 0.012
 const ARROW = 0.08
 // A point's ball, its radius as a share of the solid's size.
 const BALL = 0.011
+// How far a classify probe's inside and outside points are drawn from its point on the surface, as a
+// share of the solid's size; and how near, in millimetres, they lie in fact.
+const PROBE = 0.035
+const PROBE_NEAR = 0.05
 
 // `ends` as dashes along the polyline `pts`, each `dash` long with as long a gap after it.
 function dashed(pts: readonly Vec3[], dash: number, ends: number[]) {
@@ -374,8 +378,39 @@ export function overlayGeometry(
       lines.push(...c.at, ...c.foot)
     }
   }
-  for (const s of o.sides)
-    (s.side === 'in' ? inside : s.side === 'on' ? points : quiet).push(...s.at)
+  // A classify probe is a point on the surface with points a hair inside and outside it, too close
+  // to tell apart; they are spread along the line through the three, and joined by a stick.
+  const near = (p: Vec3, q: Vec3) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < PROBE_NEAR
+  const used = new Set<number>()
+  o.sides.forEach((s, i) => {
+    if (s.side !== 'on') return
+    const pick = (side: Side) =>
+      o.sides.findIndex((t, j) => t.side === side && !used.has(j) && near(t.at, s.at))
+    const [ii, oi] = [pick('in'), pick('out')]
+    const [inner, outer] = [o.sides[ii]?.at, o.sides[oi]?.at]
+    const ends =
+      inner && outer ? [inner, outer] : inner ? [inner, s.at] : outer ? [s.at, outer] : null
+    if (!ends) return
+    const d = [0, 1, 2].map(k => ends[1]![k]! - ends[0]![k]!)
+    const len = Math.hypot(...d)
+    if (!len) return
+    const spread = (sign: number) =>
+      [0, 1, 2].map(k => s.at[k]! + (sign * PROBE * size * d[k]!) / len)
+    used.add(i)
+    points.push(...s.at)
+    if (inner) {
+      used.add(ii)
+      inside.push(...spread(-1))
+    }
+    if (outer) {
+      used.add(oi)
+      quiet.push(...spread(1))
+    }
+    lines.push(...(inner ? spread(-1) : s.at), ...(outer ? spread(1) : s.at))
+  })
+  o.sides.forEach((s, i) => {
+    if (!used.has(i)) (s.side === 'in' ? inside : s.side === 'on' ? points : quiet).push(...s.at)
+  })
   for (const { at, n } of o.normals) {
     const len = n ? Math.hypot(...n) : 0
     if (!n || !len) {

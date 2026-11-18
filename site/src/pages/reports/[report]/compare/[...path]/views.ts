@@ -103,9 +103,9 @@ export function keysOf(o: Overlay, points: boolean): { mark: Mark; label: string
   if (!points) return keys
   if (o.closest.length) add('dot', 'point asked about')
   if (o.closest.some(c => c.foot)) add('inside', 'nearest point')
-  if (o.sides.some(s => s.side === 'in')) add('inside', 'inside')
-  if (o.sides.some(s => s.side === 'on')) add('dot', 'on the boundary')
-  if (o.sides.some(s => s.side === 'out')) add('quiet', 'outside')
+  if (o.sides.some(s => s.side === 'in')) add('inside', 'just inside')
+  if (o.sides.some(s => s.side === 'on')) add('dot', 'on the surface')
+  if (o.sides.some(s => s.side === 'out')) add('quiet', 'just outside')
   if (o.normals.some(n => n.n)) add('arrow', 'normal')
   if (o.normals.some(n => !n.n)) add('quiet', 'no normal: on a crease')
   return keys

@@ -12,8 +12,8 @@ describe('keysOf', () => {
       ],
     })
     expect(keysOf(o, true)).toEqual([
-      { mark: 'inside', label: 'inside' },
-      { mark: 'quiet', label: 'outside' },
+      { mark: 'inside', label: 'just inside' },
+      { mark: 'quiet', label: 'just outside' },
     ])
   })
 
