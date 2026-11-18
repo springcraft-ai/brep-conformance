@@ -40,6 +40,26 @@ export interface View {
 
 export const HOME: View = { yaw: -Math.PI / 4 - 0.35, pitch: 0.5, zoom: 1, pan: [0, 0] }
 
+// The view a scene opens on: HOME, or for a case about a plane, HOME turned to look nearly along the
+// plane, a little from one side: the pieces either side of it, and the cut between them, are seen
+// side by side, where looking across the plane puts the near piece in front of the cut.
+const ALONG_PLANE = 0.12
+
+export function homeOf(o: Overlay | undefined): View {
+  const n = o?.plane?.normal
+  const len = n ? Math.hypot(...n) : 0
+  if (!n || !len) return { ...HOME }
+  const z = n.map(x => x / len)
+  const cp = Math.cos(HOME.pitch)
+  const home: Vec3 = [cp * Math.cos(HOME.yaw), cp * Math.sin(HOME.yaw), Math.sin(HOME.pitch)]
+  const across = home[0] * z[0]! + home[1] * z[1]! + home[2] * z[2]!
+  const side = across < 0 ? -1 : 1
+  const t = [0, 1, 2].map(k => home[k]! - across * z[k]! + ALONG_PLANE * side * z[k]!)
+  const tl = Math.hypot(...t)
+  if (tl < 1e-9) return { ...HOME }
+  return { ...HOME, yaw: Math.atan2(t[1]!, t[0]!), pitch: Math.asin(t[2]! / tl) }
+}
+
 const ZOOM_MIN = 0.2
 const ZOOM_MAX = 500
 
@@ -309,7 +329,7 @@ export function mountScan(
   const renderer = new Renderer(surface)
   let scene = initial
   let frame = frameOf(scene)
-  let view = { ...HOME }
+  let view = homeOf(scene.overlay)
   let focused = -1
   let w = 0
   let h = 0
@@ -484,6 +504,9 @@ export function mountScan(
 
   return {
     set(next) {
+      // A case about another plane opens on its own view; the same plane keeps the reader's.
+      if (JSON.stringify(next.overlay?.plane) !== JSON.stringify(scene.overlay?.plane))
+        view = homeOf(next.overlay)
       scene = next
       frame = frameOf(scene)
       focused = -1
@@ -496,7 +519,7 @@ export function mountScan(
       redraw()
     },
     reset() {
-      view = { ...HOME }
+      view = homeOf(scene.overlay)
       redraw()
     },
     destroy() {

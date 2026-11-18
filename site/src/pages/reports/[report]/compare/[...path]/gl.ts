@@ -111,7 +111,7 @@ void main() {
                      -dot(d, u_toward) * u_scale.z, 1.0);
   gl_PointSize = u_size;
 }`
-// A ring: the colour round a dark centre, so it reads on a face in light or shade.
+// A disc of the colour with a thin dark rim, so it reads on a face in light or shade.
 const POINTS = `#version 300 es
 precision highp float;
 uniform vec4 u_color;
@@ -119,7 +119,7 @@ out vec4 o;
 void main() {
   float r = length(gl_PointCoord * 2.0 - 1.0);
   if (r > 1.0) discard;
-  vec3 c = r > 0.55 ? u_color.rgb : vec3(0.0);
+  vec3 c = r > 0.75 ? u_color.rgb * 0.35 : u_color.rgb;
   o = vec4(c * u_color.a, u_color.a);
 }`
 

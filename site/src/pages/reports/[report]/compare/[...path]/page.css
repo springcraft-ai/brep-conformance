@@ -81,7 +81,7 @@
   --scan-focus: var(--accent);
   --scan-annot: var(--void-ink-3);
   --scan-dot: var(--accent);
-  --scan-guide: var(--void-ink-2);
+  --scan-guide: var(--series-1);
   --scan-face-alt: color-mix(in srgb, var(--series-1) 30%, var(--scan-face));
   --scan-ghost: var(--series-1);
   --scan-ghost2: var(--series-3);
