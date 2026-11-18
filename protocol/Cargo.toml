@@ -1,10 +1,15 @@
 [package]
 name = "brep-protocol"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 description = "The B-rep operations a conformance suite calls: their data types, the kernel trait, and its JSON-lines binding"
 publish = true
+readme = "README.md"
+repository = "https://github.com/springcraft-ai/brep-conformance"
+documentation = "https://docs.rs/brep-protocol"
+keywords = ["brep", "cad", "geometry", "kernel", "conformance"]
+categories = ["mathematics", "science", "development-tools::testing"]
 
 # crates.io dependencies only: the protocol must build outside this repository.
 [dependencies]
