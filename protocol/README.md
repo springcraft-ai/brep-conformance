@@ -35,7 +35,7 @@ The crate's own version is separate from the protocol's version.
 
 ```toml
 [dependencies]
-brep-protocol = "0.1"
+brep-protocol = "1"
 ```
 
 An adapter implements `Kernel` with one call of its kernel per method, and calls `serve` from
