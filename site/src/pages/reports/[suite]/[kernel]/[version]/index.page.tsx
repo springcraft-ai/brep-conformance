@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { SpecTable } from '@/ds'
 import { Annot, fmt, GradeLabel, KernelChip, PageHead, Section } from '@/components'
 import { useChromeSearch } from '@/components/search'
+import { repoName } from '@/data/kernels'
 import { FAILURES, GRADES, KINDS, TIERS, type Grade } from '@/data/results'
 import { href, url } from '@/site/href'
 import {
@@ -69,7 +70,9 @@ export default function ReportPage(props: Props) {
         corner={[
           `suite ${m.suite}`,
           `run ${fmt.date(env.date)}${env.verified ? '' : ' · unverified'}`,
-          ...(id.adapter ? [`adapter ${id.adapter.name} ${id.adapter.version}`] : []),
+          ...(id.adapter
+            ? [`adapter ${repoName(id.adapter.repo)} ${id.adapter.commit.slice(0, 7)}`]
+            : []),
         ]}
       />
       {props.current && (
@@ -241,9 +244,21 @@ export default function ReportPage(props: Props) {
               ...(id.configuration ? [{ label: 'configuration', value: id.configuration }] : []),
               ...(id.adapter
                 ? [
-                    { label: 'adapter', value: `${id.adapter.name} ${id.adapter.version}` },
-                    { label: 'adapter owner', value: id.adapter.owner },
-                    { label: 'adapter license', value: id.adapter.license },
+                    {
+                      label: 'adapter',
+                      value: `${repoName(id.adapter.repo)} ${id.adapter.commit.slice(0, 7)}`,
+                    },
+                  ]
+                : []),
+              ...(props.adapterLicense
+                ? [{ label: 'adapter license', value: props.adapterLicense }]
+                : []),
+              ...(props.reviewers
+                ? [
+                    {
+                      label: 'adapter reviewed by',
+                      value: ['the suite’s maintainers', ...props.reviewers].join(', '),
+                    },
                   ]
                 : []),
               { label: 'contract', value: m.contract || '–' },

@@ -273,6 +273,7 @@ pub fn flat(results: &Value, verified: bool) -> Value {
     json!({
         "format": crate::run::RESULTS_FORMAT,
         "kernel": results["kernel"],
+        "adapter": results["adapter"],
         "suite": {"version": results["suite"], "contract": results["contract"]},
         "run": {"unix": results["unix"], "verified": verified},
         "environment": results["environment"],

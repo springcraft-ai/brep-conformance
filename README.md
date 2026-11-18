@@ -16,11 +16,12 @@ per contract clause. It is not run on every pull request: it runs in release, by
   ([`generate.rs`](suite/src/generate.rs)), the checks and runner ([`run.rs`](suite/src/run.rs)),
   the summaries ([`report.rs`](suite/src/report.rs)), and the one command that runs them on any
   adapter. Neither crate depends on a kernel.
-- The suite's adapters each have their own repository:
-  [OpenCascade](https://github.com/springcraft-ai/brep-conformance-occt), in Python, and two
-  open-source Rust kernels, [arris](https://github.com/springcraft-ai/brep-conformance-arris) and
-  [solidcore](https://github.com/springcraft-ai/brep-conformance-solidcore), each pinned to one
-  release of its kernel.
+- The suite's adapters each have their own repository, and [`kernels.json`](kernels.json), the
+  registry, pins each to a reviewed commit and one release of its kernel:
+  [OpenCascade](https://github.com/springcraft-ai/brep-conformance-occt), in Python, and three Rust
+  kernels, [arris](https://github.com/springcraft-ai/brep-conformance-arris),
+  [solidcore](https://github.com/springcraft-ai/brep-conformance-solidcore) and
+  [springrep](https://github.com/springcraft-ai/brep-conformance-springrep).
 - [`site/`](site/) is the public results site, built from the kernels' reports for GitHub Pages.
 
 The suite scores kernels that compute exact geometry and measure it exactly, at its tolerance of
@@ -31,8 +32,9 @@ nothing, so a score is the kernel's and not the adapter's. A kernel's developers
 drive it. If an adapter drives a kernel wrongly, that is a fault in the adapter and not in the
 kernel, and a correction from the kernel's developers is the most welcome fix. So that every kernel
 is measured the same way, each adapter in an official run is reviewed against
-[one rule](doc/contract.md#what-an-adapter-may-do). The tests are the suite's and not the adapter's,
-so a stale adapter binary still runs the current tests.
+[one rule](doc/contract.md#what-an-adapter-may-do), and [the registry](doc/process.md#the-registry)
+pins the commit reviewed. The tests are the suite's and not the adapter's, so a stale adapter binary
+still runs the current tests.
 
 The suite and its adapters are under the MIT licence. That licence covers an adapter and not the
 kernel it drives: each kernel keeps its own licence.
@@ -51,6 +53,7 @@ says.
 
 ```bash
 cargo build --release -p brep-conformance
+target/release/brep-conformance --kernel arris --out arris.json  # official: the registry's adapter
 target/release/brep-conformance --adapter path/to/arris-adapter --out arris.json --html arris.html
 target/release/brep-conformance --adapter "uv run -q --project path/to/occt \
     python -I path/to/occt/adapter.py" --out occt.json

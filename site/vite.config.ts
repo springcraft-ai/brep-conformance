@@ -34,6 +34,8 @@ export default defineConfig(({ isSsrBuild }) => ({
   base: process.env.SITE_BASE ?? '/',
   appType: 'mpa',
   plugins: [react(), devPages()],
+  // src/data/kernels.ts imports the registry from the repository's root.
+  server: { fs: { allow: [resolve(__dirname, '..')] } },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
@@ -46,6 +48,6 @@ export default defineConfig(({ isSsrBuild }) => ({
   },
   test: {
     environment: 'node',
-    env: { BREP_REPORTS_DIR: resolve(__dirname, 'src/fixtures/reports') },
+    env: { BREP_REPORTS_DIR: resolve(__dirname, 'src/fixtures/reports'), BREP_ANY_KERNEL: '1' },
   },
 }))

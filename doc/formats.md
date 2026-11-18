@@ -34,6 +34,7 @@ The run:
 | `contract`       | The version of [contract.md](contract.md) its checks implement                       |
 | `tolerance`      | The suite's linear tolerance in mm, which every check is judged to                   |
 | `kernel`         | `name`, `version`, declared `tolerance` and `configuration`, as `hello` gave them    |
+| `adapter`        | On an official run (`--kernel`): the adapter's `repo` and the `commit` it ran        |
 | `unsupported`    | The functions of the suite's protocol version that the kernel's `hello` leaves out   |
 | `stand_ins`      | For each primitive the kernel has no constructor for, the function sent in its place |
 | `environment`    | The machine's `os`, `arch` and `cores`, and the run's `threads`                      |
@@ -109,8 +110,8 @@ scripts, and asks the network for nothing. It is a view of the results file, not
 back.
 
 `brep-conformance-report RESULTS.json --flat report.json` writes one run as the results site reads
-it: `format`, the same number as the results file's, `kernel`, `suite`, `run` (`unix`, and
-`verified` when the suite's own benchmark machine ran it), `environment`, `unsupported`,
+it: `format`, the same number as the results file's, `kernel`, `adapter`, `suite`, `run` (`unix`,
+and `verified` when the suite's own benchmark machine ran it), `environment`, `unsupported`,
 `stand_ins`, a `summary` (the number of `cases`, the headline `pass_1e7` and the count of each
 result) and `cases`, one row per case: `id`, `test`, `operation`, `kind`, `result`, `why`,
 `failure`, `time_ms`, `asset`, its test's `group_median_ms`, and `group_low_confidence`.

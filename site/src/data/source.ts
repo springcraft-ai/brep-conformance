@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { kernelInfo, KERNELS } from './kernels'
 import { buildSite, parseReport, type Report, type Site } from './results'
 
 // Build-time only: a page's *.data.ts may import this, a *.page.tsx never does.
@@ -16,9 +17,26 @@ function subdirs(dir: string): string[] {
     .sort()
 }
 
+// The test fixtures' kernels are made up, so the tests read them without the registry.
+const ANY_KERNEL = process.env.BREP_ANY_KERNEL === '1'
+
+// Only a kernel in the registry is shown, and an official run's adapter must come from the
+// repository the registry names; its commit may be an earlier one, for an earlier report.
+function checkRegistered(file: string, report: Report): void {
+  const id = report.identity
+  const info = kernelInfo(id.kernel)
+  if (!info)
+    throw new Error(
+      `${file}: ${id.kernel} is not in kernels.json, which lists ` +
+        KERNELS.map(k => k.kernel).join(', '),
+    )
+  if (id.adapter && id.adapter.repo !== info.adapter.repo)
+    throw new Error(`${file}: ran the adapter in ${id.adapter.repo}, not ${info.adapter.repo}`)
+}
+
 // <suite>/<kernel>/<version>/report.json: one kernel release keeps a report per suite version, so a
 // rerun on a new suite never replaces the result an older link names.
-export function readReports(dir = REPORTS_DIR): Report[] {
+export function readReports(dir = REPORTS_DIR, anyKernel = ANY_KERNEL): Report[] {
   if (!dir) return []
   const out: Report[] = []
   for (const suite of subdirs(dir)) {
@@ -31,6 +49,7 @@ export function readReports(dir = REPORTS_DIR): Report[] {
         const on = report.methodology.suite
         if (on !== suite || id.kernel !== kernel || id.version !== version)
           throw new Error(`${file}: says ${id.kernel} ${id.version} on suite ${on}`)
+        if (!anyKernel) checkRegistered(file, report)
         out.push(report)
       }
     }

@@ -1,10 +1,14 @@
 //! The suite's command: generate the cases, run them on a kernel's adapter, and write the results.
 //!
 //! ```text
-//! brep-conformance --adapter "<command>" [--peer "<command>"] [--nist DIR] [--family A,B]
-//!                  [--timeout S] [--seed N] [--threads N] [--out FILE] [--glb DIR] [--step DIR]
-//!                  [--html FILE [--viewer viewer.wasm]]
+//! brep-conformance (--adapter "<command>" | --kernel NAME [--work DIR]) [--peer "<command>"]
+//!                  [--nist DIR] [--family A,B] [--timeout S] [--seed N] [--threads N] [--out FILE]
+//!                  [--glb DIR] [--step DIR] [--html FILE [--viewer viewer.wasm]]
 //! ```
+//!
+//! `--kernel` makes an official run: the adapter the [registry](crate::registry) pins for that
+//! kernel, checked out and built under `--work` (`adapters` by default), which must report the
+//! kernel release the registry names. The results record the adapter's repository and commit.
 //!
 //! `--html` also writes the run as a report page, one file that holds its own data and opens
 //! without the network.
@@ -16,9 +20,9 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use brep_protocol::Remote;
+use brep_protocol::{Kernel, Remote};
 
-use crate::{generate, html, report, run};
+use crate::{generate, html, registry, report, run};
 
 pub fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
@@ -28,13 +32,27 @@ pub fn main() -> ExitCode {
             .and_then(|i| args.get(i + 1))
             .cloned()
     };
-    let Some(adapter) = value("--adapter") else {
-        eprintln!(
-            "usage: brep-conformance --adapter \"<command>\" [--peer \"<command>\"] [--nist DIR] \
-             [--family A,B] [--timeout S] [--seed N] [--threads N] [--out FILE] [--glb DIR] \
-             [--step DIR] [--html FILE [--viewer viewer.wasm]]"
-        );
-        return ExitCode::from(2);
+    let (adapter, official) = match (value("--adapter"), value("--kernel")) {
+        (Some(adapter), None) => (adapter.split_whitespace().map(String::from).collect(), None),
+        (None, Some(kernel)) => {
+            let work = PathBuf::from(value("--work").unwrap_or_else(|| "adapters".into()));
+            match registry::find(&kernel).and_then(|e| Ok((e.prepare(&work)?, e))) {
+                Ok((command, entry)) => (command, Some(entry)),
+                Err(e) => {
+                    eprintln!("--kernel {kernel}: {e}");
+                    return ExitCode::from(2);
+                }
+            }
+        }
+        _ => {
+            eprintln!(
+                "usage: brep-conformance (--adapter \"<command>\" | --kernel NAME [--work DIR]) \
+                 [--peer \"<command>\"] [--nist DIR] [--family A,B] [--timeout S] [--seed N] \
+                 [--threads N] [--out FILE] [--glb DIR] [--step DIR] \
+                 [--html FILE [--viewer viewer.wasm]]"
+            );
+            return ExitCode::from(2);
+        }
     };
     let seed: u64 = value("--seed").map_or(1, |s| s.parse().expect("--seed takes a number"));
     let threads = value("--threads").map_or_else(
@@ -53,16 +71,25 @@ pub fn main() -> ExitCode {
         None => None,
     };
 
-    let command = adapter.split_whitespace().map(String::from).collect();
     let limit = value("--timeout").map_or(120.0, |s| s.parse().expect("--timeout takes seconds"));
     let limit = std::time::Duration::from_secs_f64(limit);
-    let kernel = match Remote::new(command, threads, limit) {
+    let kernel = match Remote::new(adapter, threads, limit) {
         Ok(k) => k,
         Err(e) => {
             eprintln!("{e}");
             return ExitCode::from(2);
         }
     };
+    if let Some(e) = &official {
+        let (name, version) = (kernel.name(), kernel.version());
+        if name != e.kernel || version != e.version {
+            eprintln!(
+                "the adapter at {} reports {name} {version}; the registry pins {} {}",
+                e.commit, e.kernel, e.version
+            );
+            return ExitCode::from(2);
+        }
+    }
     // `--family` runs only the named families, comma-separated, for a quick look at one area.
     let only: Option<Vec<String>> =
         value("--family").map(|f| f.split(',').map(String::from).collect());
@@ -94,6 +121,9 @@ pub fn main() -> ExitCode {
         step: value("--step").map(PathBuf::from),
     };
     let mut results = run::run(&kernel, &cases, threads, peer.as_ref(), &exports);
+    if let Some(e) = &official {
+        results["adapter"] = e.stamp();
+    }
     // `--nist DIR` reads NIST's STEP files there as an interop record, apart from the score.
     if let Some(dir) = value("--nist") {
         match run::nist(&kernel, std::path::Path::new(&dir)) {

@@ -1,0 +1,64 @@
+{
+  "kernels": [
+    {
+      "kernel": "arris",
+      "version": "0.10.0",
+      "license": "MIT OR Apache-2.0",
+      "source": "https://github.com/arris-labs/arris",
+      "maintained_by_suite": false,
+      "adapter": {
+        "repo": "https://github.com/springcraft-ai/brep-conformance-arris",
+        "commit": "05019528b3841831c7f988f19ca6bdb29a51b8c8",
+        "license": "MIT",
+        "build": ["cargo build --release --locked"],
+        "run": "{dir}/target/release/arris-adapter"
+      },
+      "reviewers": []
+    },
+    {
+      "kernel": "opencascade",
+      "version": "8.0.1.1.0",
+      "license": "LGPL-2.1-only WITH OCCT-exception-1.0",
+      "source": "https://github.com/Open-Cascade-SAS/OCCT",
+      "maintained_by_suite": false,
+      "adapter": {
+        "repo": "https://github.com/springcraft-ai/brep-conformance-occt",
+        "commit": "49626445559b50f2bf1c490a1499a5df41a68496",
+        "license": "MIT",
+        "build": ["uv sync -q --frozen --project ."],
+        "run": "{dir}/.venv/bin/python -I {dir}/adapter.py"
+      },
+      "reviewers": []
+    },
+    {
+      "kernel": "solidcore",
+      "version": "1.0.1",
+      "license": "Apache-2.0",
+      "source": "https://github.com/tangency-labs/solidcore",
+      "maintained_by_suite": false,
+      "adapter": {
+        "repo": "https://github.com/springcraft-ai/brep-conformance-solidcore",
+        "commit": "0f236f51d22234be109569359bb082bf23ce7e81",
+        "license": "MIT",
+        "build": ["cargo build --release --locked"],
+        "run": "{dir}/target/release/solidcore-adapter"
+      },
+      "reviewers": []
+    },
+    {
+      "kernel": "springrep",
+      "version": "ef604fad8dcc7646",
+      "license": "MIT",
+      "source": "https://github.com/springcraft-ai/springrep",
+      "maintained_by_suite": true,
+      "adapter": {
+        "repo": "https://github.com/springcraft-ai/brep-conformance-springrep",
+        "commit": "7b9c9a0e75d4128f86b4f24756838bf0c4977179",
+        "license": "MIT",
+        "build": ["cargo build --release --locked"],
+        "run": "{dir}/target/release/springrep-adapter"
+      },
+      "reviewers": []
+    }
+  ]
+}

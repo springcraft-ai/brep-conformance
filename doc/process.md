@@ -12,6 +12,25 @@ for new ones come from. This document governs the specs; it is not part of them.
 3. **Two kernels implement it.** It is interoperable once two independent kernels meet the contract
    on its tests. Until then it is specified but not interoperable.
 
+## The registry
+
+[`kernels.json`](../kernels.json) lists the kernels the suite scores officially. Each entry names
+the kernel as its adapter's `hello` does, the kernel release that adapter must report, the kernel's
+licence and source, and its adapter: the repository, the commit the suite's maintainers reviewed as
+pass-through against [the adapter rule](contract.md#what-an-adapter-may-do), the adapter's licence,
+the commands that build it, and the command that starts it, with `{dir}` for its checkout.
+`reviewers` names the kernel's own maintainers who review its adapter, where they do.
+
+An official run is `brep-conformance --kernel NAME`. The runner reads the registry it was built
+with, checks the adapter out at the pinned commit, refuses a checkout with changed files, builds it,
+refuses an adapter that reports another kernel or release, and records the repository and commit in
+the results. The site lists only the kernels in the registry.
+
+A merge to an adapter's repository changes no official run until a pull request here moves its pin.
+The suite's maintainers review that pull request against the adapter's changes since the last pinned
+commit, with the kernel's reviewers where it has them. A new kernel release moves `version` with the
+adapter commit that builds it.
+
 ## Two kinds of test
 
 - **Exact.** The definition fixes the result as a set of points, and the test checks the kernel's

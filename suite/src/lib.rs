@@ -12,6 +12,7 @@ pub mod glb;
 pub mod html;
 pub mod mass;
 pub mod oracle;
+pub mod registry;
 pub mod report;
 pub mod run;
 pub mod sound;

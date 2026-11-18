@@ -62,12 +62,10 @@ export interface CaseRow {
   checks: Check[]
 }
 
-// Who wrote and maintains the adapter. The report does not say yet, so this is always null.
+// The adapter an official run used, at the commit the registry pinned; null on any other run.
 export interface Adapter {
-  name: string
-  version: string
-  owner: string
-  license: string
+  repo: string
+  commit: string
 }
 
 export interface Identity {
@@ -184,6 +182,12 @@ function parseCase(v: unknown, at: string): CaseRow {
   }
 }
 
+function adapterOf(v: unknown, at: string): Adapter | null {
+  if (v === undefined || v === null) return null
+  const o = obj(v, at)
+  return { repo: str(o, 'repo', at), commit: str(o, 'commit', at) }
+}
+
 export function parseReport(raw: unknown, at = 'report'): Report {
   const o = obj(raw, at)
   const k = obj(o.kernel, `${at}.kernel`)
@@ -201,7 +205,7 @@ export function parseReport(raw: unknown, at = 'report'): Report {
       declaredTolerance: numOrNull(k, 'tolerance', `${at}.kernel`),
       configuration:
         typeof k.configuration === 'string' && k.configuration ? k.configuration : null,
-      adapter: null,
+      adapter: adapterOf(o.adapter, `${at}.adapter`),
     },
     environment: {
       os: strOr(env, 'os', ''),

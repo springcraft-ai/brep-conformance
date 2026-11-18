@@ -32,6 +32,9 @@ export interface Props {
   // The release the leaderboard shows for this kernel, when it is not this one.
   current: Release | null
   license: string | null
+  adapterLicense: string | null
+  // The kernel's own maintainers who review its adapter; null for a kernel not in the registry.
+  reviewers: string[] | null
   // Where the results page ranks this report, when it is the kernel's release ranked there.
   standing: { place: number; of: number; speedFactor: number | null } | null
 }
@@ -84,6 +87,8 @@ export function entries(): PageEntry<Props>[] {
                 date: shown.environment.date,
               },
         license: kernelInfo(id.kernel)?.license ?? null,
+        adapterLicense: kernelInfo(id.kernel)?.adapter.license ?? null,
+        reviewers: kernelInfo(id.kernel)?.reviewers ?? null,
         standing: standingOf(suite, id.kernel, id.version),
       },
       title: `${id.name} ${id.version}`,

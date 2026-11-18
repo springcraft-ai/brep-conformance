@@ -115,7 +115,7 @@ describe('boardRows', () => {
     version: '1.0.0',
     suite: '0.9.0',
     date: '2026-11-09',
-    adapter: { name: `${kernel}-adapter`, version: '0.1.0', owner: 'org', license: 'MIT' },
+    adapter: { repo: `https://example.com/${kernel}-adapter/`, commit: '0'.repeat(40) },
     summary,
     speed: { factor, groups: factor === null ? 0 : 3, medians: {} },
     time: factor === null ? null : { median: 4, q1: 3, q3: 5, cases: 2 },

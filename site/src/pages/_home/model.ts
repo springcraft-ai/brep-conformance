@@ -7,7 +7,7 @@ import {
   type LeaderRow,
   type TestEntry,
 } from '@/data/results'
-import { kernelInfo } from '@/data/kernels'
+import { kernelInfo, repoName } from '@/data/kernels'
 
 // Pure shaping of the shared derivations into what the home page draws. Hydrated, so it ships to
 // the browser: no file access here.
@@ -56,9 +56,8 @@ export interface BoardRow {
   source: string | null
   // The suite's maintainer makes this kernel.
   maintainers: boolean
-  // Null until the report says who wrote the adapter.
+  // The adapter's repository, from the report of an official run; null on any other.
   adapter: string | null
-  owner: string | null
 }
 
 export function countsOf(grades: Record<Grade, number>): Counts {
@@ -101,8 +100,7 @@ export function boardRows(board: LeaderRow[]): BoardRow[] {
       license: info?.license ?? null,
       source: info?.source ?? null,
       maintainers: info?.maintainers === true,
-      adapter: r.adapter?.name ?? null,
-      owner: r.adapter?.owner ?? null,
+      adapter: r.adapter ? repoName(r.adapter.repo) : null,
     }
   })
 }

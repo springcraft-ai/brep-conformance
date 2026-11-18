@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MIT
+name: Registry
+
+# The runner's tests check kernels.json's shape; this checks that each adapter commit it pins is in
+# the repository it names, so an official run can check it out.
+on:
+  pull_request:
+    paths: [kernels.json, .github/workflows/registry.yml]
+  push:
+    branches: [main]
+    paths: [kernels.json, .github/workflows/registry.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-commits:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Every pinned adapter commit is in its repository
+        run: |
+          missing=0
+          while read -r kernel repo commit; do
+              dir="$(mktemp -d)"
+              git -C "$dir" init -q
+              if git -C "$dir" fetch -q --depth 1 "$repo" "$commit"; then
+                  echo "$kernel: $commit in $repo"
+              else
+                  echo "$kernel: $commit is not in $repo"
+                  missing=1
+              fi
+          done < <(jq -r '.kernels[] | "\(.kernel) \(.adapter.repo) \(.adapter.commit)"' kernels.json)
+          exit "$missing"
