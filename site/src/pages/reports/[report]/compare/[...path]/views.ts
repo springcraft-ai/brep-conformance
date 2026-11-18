@@ -89,7 +89,8 @@ export function firstView(views: GlbView[]): number {
   return i < 0 ? 0 : i
 }
 
-export type Mark = 'dot' | 'inside' | 'quiet' | 'seen' | 'hidden' | 'arrow'
+export type Mark =
+  'dot' | 'inside' | 'quiet' | 'seen' | 'hidden' | 'arrow' | 'convex' | 'concave' | 'flat'
 
 // The key to the marks the overlay is drawn with, each once: a drawing's lines always, the
 // answers of a point query only while its points are shown.
@@ -108,5 +109,10 @@ export function keysOf(o: Overlay, points: boolean): { mark: Mark; label: string
   if (o.sides.some(s => s.side === 'out')) add('quiet', 'just outside')
   if (o.normals.some(n => n.n)) add('arrow', 'normal')
   if (o.normals.some(n => !n.n)) add('quiet', 'no normal: on a crease')
+  const ks = o.curvature.flatMap(c => c.k)
+  if (ks.length) add('dot', 'point asked about')
+  if (ks.some(k => k > 1e-9)) add('convex', 'bends outward')
+  if (ks.some(k => k < -1e-9)) add('concave', 'bends inward')
+  if (ks.some(k => Math.abs(k) <= 1e-9)) add('flat', 'flat')
   return keys
 }

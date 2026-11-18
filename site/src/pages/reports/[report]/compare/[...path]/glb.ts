@@ -164,6 +164,9 @@ export interface Overlay {
   closest: { at: Xyz; foot: Xyz | null; distance: number }[]
   sides: { at: Xyz; side: Side }[]
   normals: { at: Xyz; n: Xyz | null }[]
+  // Where the boundary lies nearest each of `points`: its normal, first principal direction, and
+  // both curvatures.
+  curvature: { foot: Xyz; n: Xyz; d1: Xyz; k: [number, number] }[]
 }
 
 const xyz = (v: unknown): v is Xyz =>
@@ -207,7 +210,15 @@ export function overlayOf(extras: unknown): Overlay {
   const normals = each(e.normals, n =>
     xyz(n.at) && (n.n === null || xyz(n.n)) ? { at: n.at, n: n.n as Xyz | null } : null,
   )
-  return { points, box, plane, lines, look: xyz(e.look) ? e.look : null, closest, sides, normals }
+  const pair = (v: unknown): v is [number, number] =>
+    Array.isArray(v) && v.length === 2 && v.every(x => typeof x === 'number' && Number.isFinite(x))
+  const curvature = each(e.curvature, c =>
+    xyz(c.foot) && xyz(c.n) && xyz(c.d1) && pair(c.k)
+      ? { foot: c.foot, n: c.n, d1: c.d1, k: c.k }
+      : null,
+  )
+  const look = xyz(e.look) ? e.look : null
+  return { points, box, plane, lines, look, closest, sides, normals, curvature }
 }
 
 export function parseOverlay(buf: ArrayBuffer): Overlay {

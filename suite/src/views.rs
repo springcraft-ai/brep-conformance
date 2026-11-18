@@ -11,7 +11,16 @@ use crate::oracle;
 
 /// The keys of what a case's views lay over its drawing, which the export copies into the file.
 pub const OVERLAY: &[&str] = &[
-    "points", "box", "plane", "lines", "look", "clashes", "closest", "sides", "normals",
+    "points",
+    "box",
+    "plane",
+    "lines",
+    "look",
+    "clashes",
+    "closest",
+    "sides",
+    "normals",
+    "curvature",
 ];
 
 thread_local! {
@@ -575,9 +584,19 @@ pub fn views(c: &Case) -> Value {
         )]
     } else if let Some(cv) = &c.exact.curvature {
         extra["points"] = json!(cv.points);
+        // Where the boundary lies nearest each point, its normal, its first principal direction and
+        // both curvatures, for the viewer to draw the directions as ticks on the surface.
+        let frames: Vec<Value> = c
+            .exact
+            .curvature_frames
+            .iter()
+            .zip(&cv.want)
+            .map(|(f, k)| json!({"foot": f.foot, "n": f.normal, "d1": f.d1, "k": k}))
+            .collect();
+        extra["curvature"] = Value::Array(frames);
         vec![noted(
             "solid",
-            "Dots mark the points: each asks for the principal curvatures where the boundary lies nearest it.",
+            "Dots mark the points: each asks for the principal curvatures where the boundary lies nearest it. There, ticks run along the two principal directions: blue where the surface bends outward, violet where inward, grey where it is flat.",
             vec![solid("main", a, None)],
         )]
     } else if let Some(dr) = &c.exact.drawing {
@@ -737,5 +756,35 @@ mod tests {
             }
         }
         assert!(seen.iter().all(|&n| n > 0), "{seen:?}");
+    }
+
+    #[test]
+    fn a_curvature_case_lays_over_each_point_its_foot_normal_and_principal_direction() {
+        let mut seen = 0;
+        for c in crate::generate::cases(1) {
+            let Some(cv) = &c.exact.curvature else {
+                continue;
+            };
+            seen += 1;
+            let got = views(&c)["curvature"].as_array().expect(&c.id).clone();
+            assert_eq!(got.len(), cv.points.len(), "{}", c.id);
+            for (g, k) in got.iter().zip(&cv.want) {
+                let v = |key: &str| -> Vec3 {
+                    let a = g[key].as_array().unwrap();
+                    [0, 1, 2].map(|i| a[i].as_f64().unwrap())
+                };
+                let (n, d) = (v("n"), v("d1"));
+                let dot = n[0] * d[0] + n[1] * d[1] + n[2] * d[2];
+                let len = |x: Vec3| (x[0] * x[0] + x[1] * x[1] + x[2] * x[2]).sqrt();
+                assert!(
+                    (len(n) - 1.0).abs() < 1e-9 && (len(d) - 1.0).abs() < 1e-9,
+                    "{}",
+                    c.id
+                );
+                assert!(dot.abs() < 1e-9, "{}: d1 not square to n", c.id);
+                assert_eq!(g["k"], json!(k), "{}", c.id);
+            }
+        }
+        assert!(seen > 0);
     }
 }

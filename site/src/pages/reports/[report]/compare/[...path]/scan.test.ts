@@ -229,6 +229,47 @@ describe('overlayGeometry, a query’s answers', () => {
   })
 })
 
+describe('overlayGeometry, curvature', () => {
+  const within: { lo: Vec3; hi: Vec3 } = { lo: [0, 0, 0], hi: [10, 0, 0] }
+
+  it('draws crossed ticks at each foot along its principal directions, sorted by how it bends', () => {
+    const g = overlayGeometry(
+      overlayOf({
+        points: [[0, 0, 1.2]],
+        curvature: [{ foot: [0, 0, 1], n: [0, 0, 1], d1: [1, 0, 0], k: [1, -0.5] }],
+      }),
+      within,
+    )
+    // k1 > 0 along x bends outward; k2 < 0 along y bends inward.
+    const [convex] = segments(g.convex)
+    const [concave] = segments(g.concave)
+    expect(g.flat.length).toBe(0)
+    expect(convex![0]![1]).toBeCloseTo(0)
+    expect(convex![0]![0]).toBeCloseTo(-convex![1]![0]!)
+    expect(concave![0]![0]).toBeCloseTo(0)
+    expect(concave![0]![1]).toBeCloseTo(-concave![1]![1]!)
+    for (const p of [...convex!, ...concave!]) expect(p[2]).toBeCloseTo(1)
+    // A stick from the point asked about down to its foot.
+    const sticks = segments(g.sticks)
+    expect(sticks.length).toBe(1)
+    const want = [0, 0, 1.2, 0, 0, 1]
+    sticks[0]!.flat().forEach((x, i) => expect(x).toBeCloseTo(want[i]!))
+  })
+
+  it('draws a flat direction apart from a bending one', () => {
+    const g = overlayGeometry(
+      overlayOf({
+        points: [[0, 0, 1]],
+        curvature: [{ foot: [0, 0, 1], n: [0, 0, 1], d1: [1, 0, 0], k: [0.2, 0] }],
+      }),
+      within,
+    )
+    expect(g.convex.length / 6).toBe(1)
+    expect(g.flat.length / 6).toBe(1)
+    expect(g.concave.length).toBe(0)
+  })
+})
+
 describe('overlayAt', () => {
   it('gives every place the overlay marks, so the view can take them all in', () => {
     const at = overlayAt({

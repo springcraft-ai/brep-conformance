@@ -185,6 +185,7 @@ describe('overlayOf', () => {
       closest: [],
       sides: [],
       normals: [],
+      curvature: [],
     })
   })
 })

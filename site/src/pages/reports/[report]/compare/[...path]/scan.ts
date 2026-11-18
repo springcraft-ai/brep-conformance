@@ -144,6 +144,8 @@ interface Colors {
   dot: Rgb
   guide: Rgb
   quiet: Rgb
+  // A curvature tick where the surface bends inward.
+  concave: Rgb
   focus: string
   annot: string
 }
@@ -169,6 +171,7 @@ function colorsOf(el: Element): Colors {
     dot: rgbOf(v('--scan-dot', '#f5a200')),
     guide: rgbOf(v('--scan-guide', '#a2a4a6')),
     quiet: rgbOf(v('--scan-quiet', '#a2a4a6')),
+    concave: rgbOf(v('--scan-concave', '#b98cff')),
     focus: v('--scan-focus', '#f5a200'),
     annot: v('--scan-annot', '#6a6c6e'),
   }
@@ -191,6 +194,7 @@ export function overlayAt(o: Overlay): Vec3[] {
   for (const c of o.closest) at.push(c.at, ...(c.foot ? [c.foot] : []))
   for (const s of o.sides) at.push(s.at)
   for (const n of o.normals) at.push(n.at)
+  for (const c of o.curvature) at.push(c.foot)
   return at
 }
 
@@ -250,6 +254,8 @@ const BALL = 0.011
 // share of the solid's size; and how near, in millimetres, they lie in fact.
 const PROBE = 0.035
 const PROBE_NEAR = 0.05
+// Half a curvature tick's length, as a share of the solid's size.
+const TICK = 0.05
 
 // `ends` as dashes along the polyline `pts`, each `dash` long with as long a gap after it.
 function dashed(pts: readonly Vec3[], dash: number, ends: number[]) {
@@ -293,6 +299,9 @@ export function overlayGeometry(
       hiddenLines: none,
       sticks: none,
       seen: none,
+      convex: none,
+      concave: none,
+      flat: none,
       arrows: none,
       dashes: none,
       inside: none,
@@ -423,6 +432,29 @@ export function overlayGeometry(
     }
     arrows.push(...at, ...[0, 1, 2].map(k => at[k]! + (n[k]! / len) * ARROW * size))
   }
+  // At each foot, a tick along each principal direction, sorted by how the surface bends that way:
+  // outward, inward, or not at all; and a stick to the foot from the point asked about.
+  const convex: number[] = []
+  const concave: number[] = []
+  const flat: number[] = []
+  o.curvature.forEach((c, i) => {
+    const { foot: f, n, d1 } = c
+    const d2: Vec3 = [
+      n[1] * d1[2] - n[2] * d1[1],
+      n[2] * d1[0] - n[0] * d1[2],
+      n[0] * d1[1] - n[1] * d1[0],
+    ]
+    for (const [d, k] of [
+      [d1, c.k[0]],
+      [d2, c.k[1]],
+    ] as const) {
+      const half = d.map(x => x * TICK * size)
+      const into = Math.abs(k) < 1e-9 ? flat : k > 0 ? convex : concave
+      into.push(...[0, 1, 2].map(j => f[j]! - half[j]!), ...[0, 1, 2].map(j => f[j]! + half[j]!))
+    }
+    const q = o.points[i]
+    if (q) sticks.push(...q, ...f)
+  })
   // Pairs of points again as dashes, for where the solid hides them.
   const dashesOf = (ends: number[]) => {
     const out: number[] = []
@@ -444,6 +476,9 @@ export function overlayGeometry(
     hiddenLines: dashesOf(lines),
     sticks: Float32Array.from(sticks),
     seen: Float32Array.from(seen),
+    convex: Float32Array.from(convex),
+    concave: Float32Array.from(concave),
+    flat: Float32Array.from(flat),
     arrows: Float32Array.from(arrows),
     dashes: Float32Array.from(dashes),
     inside: Float32Array.from(inside),
@@ -558,6 +593,7 @@ export function mountScan(
         guide: colors.guide,
         dot: colors.dot,
         quiet: colors.quiet,
+        concave: colors.concave,
       },
     )
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)

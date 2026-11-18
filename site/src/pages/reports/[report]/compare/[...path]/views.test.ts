@@ -61,4 +61,16 @@ describe('keysOf', () => {
       { mark: 'quiet', label: 'no normal: on a crease' },
     ])
   })
+
+  it('keys a curvature case’s point, and each way its ticks bend', () => {
+    const o = overlayOf({
+      points: [[0, 0, 1]],
+      curvature: [{ foot: [0, 0, 1], n: [0, 0, 1], d1: [1, 0, 0], k: [1, 0] }],
+    })
+    expect(keysOf(o, true)).toEqual([
+      { mark: 'dot', label: 'point asked about' },
+      { mark: 'convex', label: 'bends outward' },
+      { mark: 'flat', label: 'flat' },
+    ])
+  })
 })

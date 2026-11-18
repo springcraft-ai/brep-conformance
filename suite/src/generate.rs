@@ -61,6 +61,10 @@ pub struct Exact {
     pub sew: Option<Sew>,
     /// Points about `a`'s boundary and the principal curvatures where it lies nearest each.
     pub curvature: Option<Curvatures>,
+    /// For each of `curvature`'s points, where the boundary lies nearest it, the outward normal
+    /// there and the direction of the first principal curvature. Drawn, never checked, and so left
+    /// out of the case's id.
+    pub curvature_frames: Vec<CurvatureFrame>,
     /// `a` drawn looking along a direction, with its hidden lines.
     pub drawing: Option<Drawing>,
     /// `a`'s creases, volume and area, which a display of it must draw and bound.
@@ -105,6 +109,15 @@ pub struct Probe {
     pub point: Vec3,
     pub want: [f64; 2],
     pub tol: f64,
+}
+
+/// A boundary point, its outward unit normal, and the unit direction of its first principal
+/// curvature; the second's is the normal crossed with it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CurvatureFrame {
+    pub foot: Vec3,
+    pub normal: Vec3,
+    pub d1: Vec3,
 }
 
 /// Points, and the principal curvatures `[k1, k2]`, `k1 ≥ k2`, at the boundary point nearest each.

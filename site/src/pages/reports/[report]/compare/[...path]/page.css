@@ -43,6 +43,7 @@
   --scan-dot: var(--accent);
   --scan-guide: var(--series-1);
   --scan-quiet: var(--void-ink-2);
+  --scan-concave: var(--series-5);
   --scan-face-alt: color-mix(in srgb, var(--series-1) 30%, var(--scan-face));
   --scan-ghost: var(--series-1);
   --scan-ghost2: var(--series-3);
@@ -199,6 +200,19 @@
 }
 .bc-key--hidden {
   border-top-style: dashed;
+}
+.bc-key--convex,
+.bc-key--concave,
+.bc-key--flat {
+  width: 12px;
+  height: 0;
+  border-top: 3px solid var(--series-1);
+}
+.bc-key--concave {
+  border-top-color: var(--series-5);
+}
+.bc-key--flat {
+  border-top-color: var(--void-ink-2);
 }
 .bc-key--arrow {
   position: relative;

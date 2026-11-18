@@ -10,8 +10,9 @@ use super::*;
 pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
     let origin = [r.range(-5.0, 5.0), r.range(-5.0, 5.0), r.range(-5.0, 5.0)];
     let frame = turned_frame(r, origin);
-    // Each point as (on the boundary, outward normal, offset along it, curvatures), local.
-    let mut at: Vec<(Vec3, Vec3, f64, [f64; 2])> = Vec::new();
+    // Each point as (on the boundary, outward normal, offset along it, curvatures, the first's
+    // direction), local.
+    let mut at: Vec<(Vec3, Vec3, f64, [f64; 2], Vec3)> = Vec::new();
     let face = |r: &mut Rng, s: Vec3, axis: usize| {
         let top = r.next_u64().is_multiple_of(2);
         let mut q = [0, 1, 2].map(|k| s[k] * r.range(0.25, 0.75));
@@ -19,7 +20,9 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
         let mut n = [0.0; 3];
         n[axis] = if top { 1.0 } else { -1.0 };
         let small = s.iter().copied().fold(f64::INFINITY, f64::min);
-        (q, n, small * r.range(-0.1, 0.1), [0.0, 0.0])
+        let mut d = [0.0; 3];
+        d[(axis + 1) % 3] = 1.0;
+        (q, n, small * r.range(-0.1, 0.1), [0.0, 0.0], d)
     };
     let shape: Shape = match r.next_u64() % 6 {
         0 => {
@@ -37,14 +40,27 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
                 let (a, z) = (r.range(0.0, TAU), height * r.range(0.3, 0.7));
                 let n = [a.cos(), a.sin(), 0.0];
                 let q = [radius * n[0], radius * n[1], z];
-                at.push((q, n, radius * r.range(-0.2, 0.2), [1.0 / radius, 0.0]));
+                let around = [-a.sin(), a.cos(), 0.0];
+                at.push((
+                    q,
+                    n,
+                    radius * r.range(-0.2, 0.2),
+                    [1.0 / radius, 0.0],
+                    around,
+                ));
             }
             for _ in 0..2 {
                 let (a, rho) = (r.range(0.0, TAU), radius * r.range(0.0, 0.5));
                 let top = r.next_u64().is_multiple_of(2);
                 let q = [rho * a.cos(), rho * a.sin(), if top { height } else { 0.0 }];
                 let n = [0.0, 0.0, if top { 1.0 } else { -1.0 }];
-                at.push((q, n, radius * r.range(-0.1, 0.1), [0.0, 0.0]));
+                at.push((
+                    q,
+                    n,
+                    radius * r.range(-0.1, 0.1),
+                    [0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ));
             }
             Primitive::Cylinder {
                 frame,
@@ -67,7 +83,14 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
                 let rho = bottom - slope * z;
                 let n = [a.cos() / lean, a.sin() / lean, slope / lean];
                 let q = [rho * a.cos(), rho * a.sin(), z];
-                at.push((q, n, rho * r.range(-0.1, 0.1), [1.0 / (rho * lean), 0.0]));
+                let around = [-a.sin(), a.cos(), 0.0];
+                at.push((
+                    q,
+                    n,
+                    rho * r.range(-0.1, 0.1),
+                    [1.0 / (rho * lean), 0.0],
+                    around,
+                ));
             }
             cone(frame, bottom, top, height).into()
         }
@@ -77,7 +100,15 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
                 let n = r.direction();
                 let q = n.map(|x| x * radius);
                 let k = 1.0 / radius;
-                at.push((q, n, radius * r.range(-0.3, 0.3), [k, k]));
+                // Umbilic: every tangent is principal.
+                let seed = if n[0].abs() < 0.9 {
+                    [1.0, 0.0, 0.0]
+                } else {
+                    [0.0, 1.0, 0.0]
+                };
+                let s = seed[0] * n[0] + seed[1] * n[1] + seed[2] * n[2];
+                let d = unit3([0, 1, 2].map(|i| seed[i] - s * n[i]));
+                at.push((q, n, radius * r.range(-0.3, 0.3), [k, k], d));
             }
             Primitive::Sphere { frame, radius }.into()
         }
@@ -90,7 +121,9 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
                 let ring = major + minor * b.cos();
                 let q = [ring * a.cos(), ring * a.sin(), minor * b.sin()];
                 let want = [1.0 / minor, b.cos() / ring];
-                at.push((q, n, minor * r.range(-0.3, 0.3), want));
+                // 1/r is the tube's own curvature, along its meridian.
+                let meridian = [-b.sin() * a.cos(), -b.sin() * a.sin(), b.cos()];
+                at.push((q, n, minor * r.range(-0.3, 0.3), want, meridian));
             }
             Primitive::Torus {
                 frame,
@@ -107,7 +140,14 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
                 let (a, z) = (r.range(0.0, TAU), size[2] * r.range(0.3, 0.7));
                 let n = [-a.cos(), -a.sin(), 0.0];
                 let q = [c[0] + radius * a.cos(), c[1] + radius * a.sin(), z];
-                at.push((q, n, radius * r.range(-0.3, 0.3), [0.0, -1.0 / radius]));
+                // The first curvature, zero, runs along the hole's axis.
+                at.push((
+                    q,
+                    n,
+                    radius * r.range(-0.3, 0.3),
+                    [0.0, -1.0 / radius],
+                    [0.0, 0.0, 1.0],
+                ));
             }
             // Only the four sides: the top and bottom have the hole in them.
             for _ in 0..3 {
@@ -125,11 +165,20 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
     };
     let points = at
         .iter()
-        .map(|&(q, n, off, _)| framed(&frame, [0, 1, 2].map(|k| q[k] + off * n[k])).0)
+        .map(|&(q, n, off, _, _)| framed(&frame, [0, 1, 2].map(|k| q[k] + off * n[k])).0)
         .collect();
     let want = at.iter().map(|x| x.3).collect();
+    let curvature_frames = at
+        .iter()
+        .map(|&(q, n, _, _, d)| CurvatureFrame {
+            foot: framed(&frame, q).0,
+            normal: framed(&frame, n).1,
+            d1: framed(&frame, d).1,
+        })
+        .collect();
     let exact = Exact {
         curvature: Some(Curvatures { points, want }),
+        curvature_frames,
         ..Default::default()
     };
     (shape.clone(), shape, exact)

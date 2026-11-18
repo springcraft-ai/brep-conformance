@@ -39,6 +39,7 @@ export interface Look {
   guide: Rgb
   dot: Rgb
   quiet: Rgb
+  concave: Rgb
 }
 
 // The share of a face's light that does not depend on its turn to the light: low for the subject,
@@ -186,6 +187,10 @@ export interface OverlayGeometry {
   sticks: Float32Array
   // A drawing's seen stretches, drawn solid where visible and never dashed.
   seen: Float32Array
+  // Curvature ticks, by how the surface bends along each: outward, inward, or not at all.
+  convex: Float32Array
+  concave: Float32Array
+  flat: Float32Array
   // Each arrow as one segment, from its point to its tip.
   arrows: Float32Array
   dashes: Float32Array
@@ -200,6 +205,8 @@ const GUIDE_ALPHA = 0.85
 const HIDDEN_ALPHA = 0.35
 // A guide line's width in CSS pixels.
 const LINE_WIDTH = 2
+// A curvature tick's width in CSS pixels.
+const TICK_WIDTH = 3
 // A mark's opacity where nothing hides it; an arrow's shaft half width, head length and head half
 // width, each as a share of its length.
 const MARK_ALPHA = 0.8
@@ -218,6 +225,9 @@ type OverlayPart =
   | 'arrows'
   | 'sticks'
   | 'seen'
+  | 'convex'
+  | 'concave'
+  | 'flat'
 
 interface Part {
   vao: WebGLVertexArrayObject | null
@@ -444,6 +454,9 @@ export class Renderer {
       arrows: wide(wideOf(o.arrows, true)),
       sticks: wide(wideOf(o.sticks)),
       seen: wide(wideOf(o.seen)),
+      convex: wide(wideOf(o.convex)),
+      concave: wide(wideOf(o.concave)),
+      flat: wide(wideOf(o.flat)),
     }
   }
 
@@ -668,6 +681,14 @@ export class Renderer {
       // After the balls, so a probe's stick runs behind its balls and does not cut through them.
       gl.uniform4f(band(LINE_WIDTH), ...rgba(look.guide, k))
       draw(P.sticks, gl.TRIANGLES)
+      for (const [part, rgb] of [
+        [P.convex, look.guide],
+        [P.concave, look.concave],
+        [P.flat, look.quiet],
+      ] as const) {
+        gl.uniform4f(band(TICK_WIDTH), ...rgba(rgb, k))
+        draw(part, gl.TRIANGLES)
+      }
       const r = uniforms(this.ribbon)
       gl.uniform3f(gl.getUniformLocation(this.ribbon, 'u_shape'), ...ARROW_SHAPE)
       gl.uniform4f(r, ...rgba(look.guide, k))
