@@ -78,9 +78,12 @@ registry says. `results/build.txt` records every commit and tool version.
 
 When the last pass ends, each kernel's first-pass files are packed into `assets/<pass>.tar`. A pass
 that did not finish cleanly fails the job, after its results are kept, so nothing is published.
-`publish` runs [`publish-assets.sh`](../publish-assets.sh) on each pass's results, which uploads the
-files they list under `brep-conformance/<suite>/<kernel>/<version>/`. Each report names that folder
-as `assets` ([formats.md](../doc/formats.md#assets)).
+`publish` uploads each pass's files under `brep-conformance/<suite>/<kernel>/<version>/`, skipping
+those already there, with each file's type and an immutable cache lifetime. Each report names that
+folder as `assets` ([formats.md](../doc/formats.md#assets)).
+
+The files travel from the machine to `publish` as artifacts because the machine holds no cloud
+credentials: it runs kernel code, which must never be able to write to the CDN.
 
 ## What the bench job may not do
 

@@ -185,7 +185,6 @@ folder its report has on the results site. The base is compiled in from
 [`assets.rs`](../suite/src/assets.rs) gives a file's URL. They are the files of the official
 benchmark pass itself: each kernel's pass runs with both exports, so its report and its shapes come
 from one run. The suite draws a case after judging it, outside every timed call. The
-[Benchmark workflow](../bench/README.md)'s `publish` job then runs
-[`publish-assets.sh`](../publish-assets.sh), which uploads the files a pass's `exports` list that
-the bucket lacks, with each file's type and an immutable cache lifetime. A file is never rewritten:
-a change to what it shows, or to what draws it, gives it a new name.
+[Benchmark workflow](../bench/README.md)'s `publish` job then uploads each pass's files the bucket
+lacks, with each file's type and an immutable cache lifetime. A file is never rewritten: a change to
+what it shows, or to what draws it, gives it a new name.

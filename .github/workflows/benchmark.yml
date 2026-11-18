@@ -225,17 +225,32 @@ jobs:
           role-to-assume: ${{ inputs.publish == 'prod' && vars.BREP_CONFORMANCE_ASSET_ROLE || vars.BREP_CONFORMANCE_ASSET_ROLE_DEV }}
           aws-region: us-west-2
       # Each kernel's first pass; springrep's second is only the session's noise measure.
+      # Under brep-conformance/<suite>/<kernel>/<version>/, the folder each report names as `assets`.
+      # A file's name changes whenever what it shows does, so one already there is skipped, never
+      # rewritten, and a second run uploads nothing.
       - name: Publish the files the CDN lacks
         env:
-          BREP_CONFORMANCE_BUCKET: ${{ inputs.publish == 'prod' && vars.BREP_CONFORMANCE_ASSET_BUCKET || vars.BREP_CONFORMANCE_ASSET_BUCKET_DEV }}
+          BUCKET: ${{ inputs.publish == 'prod' && vars.BREP_CONFORMANCE_ASSET_BUCKET || vars.BREP_CONFORMANCE_ASSET_BUCKET_DEV }}
         run: |
+          immutable="public, max-age=31536000, immutable"
           for pass in springrep-1 arris solidcore opencascade; do
+              # A kernel that can neither draw nor write STEP has no files.
+              [ -f "assets/$pass.tar" ] || continue
               mkdir -p "files/$pass"
-              # A kernel that can neither draw nor write STEP has no files, and lists none.
-              if [ -f "assets/$pass.tar" ]; then
-                  tar -xf "assets/$pass.tar" -C "files/$pass"
+              tar -xf "assets/$pass.tar" -C "files/$pass"
+              folder=$(jq -r '"\(.suite)/\(.kernel.name)/\(.kernel.version)"' "results/$pass.json")
+              if ! [[ "$folder" =~ ^[A-Za-z0-9._+-]+/[A-Za-z0-9._+-]+/[A-Za-z0-9._+-]+$ ]]; then
+                  echo "$pass: $folder cannot name a folder"
+                  exit 1
               fi
-              ./publish-assets.sh "results/$pass.json" "files/$pass" | tee -a "$GITHUB_STEP_SUMMARY"
+              for kind in "glb model/gltf-binary" "step model/step"; do
+                  read -r ext type <<<"$kind"
+                  aws s3 sync "files/$pass" "s3://$BUCKET/brep-conformance/$folder/" --size-only \
+                      --exclude '*' --include "*.$ext" --content-type "$type" \
+                      --cache-control "$immutable" --no-progress --only-show-errors
+              done
+              echo "$pass: $(find "files/$pass" -type f | wc -l) files in brep-conformance/$folder/" \
+                  | tee -a "$GITHUB_STEP_SUMMARY"
           done
 
   stop:
