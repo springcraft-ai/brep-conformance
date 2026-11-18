@@ -72,7 +72,8 @@ its four results with the operands behind them, and a feature its solid before a
 
 `--glb DIR` and `--step DIR` write every case's views as a GLB and the solids it shows as STEP
 files, as the kernel draws them, failed cases' included ([formats.md](doc/formats.md#assets)). The
-[Assets workflow](.github/workflows/assets.yml) publishes each registered kernel's to the CDN.
+official benchmark session writes them for each kernel, and [`publish-assets.sh`](publish-assets.sh)
+publishes them to the CDN.
 
 A run prints outcomes per test and failed checks per clause and writes every case's result to
 `--out`. `--html FILE` also writes the run as a report page: one file that holds its own data and

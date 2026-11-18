@@ -276,10 +276,24 @@ pub fn flat(results: &Value, verified: bool) -> Value {
         })
         .collect();
     let passed = counts.get("1e-7").copied().unwrap_or(0);
+    // Where this run's files are published, when it wrote any: a case's `exports` keys follow it.
+    let wrote = cases.iter().any(|c| c["exports"].is_object());
+    let assets = match (
+        wrote,
+        results["suite"].as_str(),
+        results["kernel"]["name"].as_str(),
+        results["kernel"]["version"].as_str(),
+    ) {
+        (true, Some(suite), Some(kernel), Some(version)) => {
+            json!(crate::assets::url(suite, kernel, version, ""))
+        }
+        _ => Value::Null,
+    };
     json!({
         "format": crate::run::RESULTS_FORMAT,
         "kernel": results["kernel"],
         "adapter": results["adapter"],
+        "assets": assets,
         "suite": {"version": results["suite"], "contract": results["contract"]},
         "run": {"unix": results["unix"], "verified": verified},
         "environment": results["environment"],
@@ -292,44 +306,6 @@ pub fn flat(results: &Value, verified: bool) -> Value {
         "stand_ins": results["stand_ins"],
         "cases": rows,
     })
-}
-
-/// Puts the shape files another run of the same kernel release drew in `results`, case by case:
-/// an official session times the cases, and a separate run on the same suite and adapter draws
-/// them, so drawing never shares the timed machine. A case the other run drew nothing for has none.
-pub fn with_exports(results: &mut Value, drawn: &Value) -> Result<(), String> {
-    if results["suite"] != drawn["suite"] {
-        return Err(format!(
-            "the runs differ in suite: {} and {}",
-            results["suite"], drawn["suite"]
-        ));
-    }
-    for field in ["name", "version"] {
-        if results["kernel"][field] != drawn["kernel"][field] {
-            return Err(format!(
-                "the runs differ in the kernel's {field}: {} and {}",
-                results["kernel"][field], drawn["kernel"][field]
-            ));
-        }
-    }
-    let by_id: BTreeMap<&str, &Value> = drawn["cases"]
-        .as_array()
-        .map_or(&[][..], Vec::as_slice)
-        .iter()
-        .filter_map(|c| Some((c["id"].as_str()?, &c["exports"])))
-        .collect();
-    for c in results["cases"].as_array_mut().into_iter().flatten() {
-        let id = c["id"].as_str().unwrap_or_default();
-        match by_id.get(id) {
-            Some(ex) if ex.is_object() => c["exports"] = (*ex).clone(),
-            _ => {
-                if let Some(o) = c.as_object_mut() {
-                    o.remove("exports");
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -358,28 +334,23 @@ mod tests {
     }
 
     #[test]
-    fn a_session_takes_its_shape_files_from_a_run_of_the_same_kernel_release() {
-        let kernel = json!({"name": "k", "version": "1"});
+    fn a_flat_report_names_where_each_case_s_files_are_published() {
         let ex = json!({"glb": "t/a.h.glb", "step": ["t/a.h.step"], "errors": [], "skipped": []});
-        let mut session = json!({"suite": "1.0.0", "kernel": kernel,
-            "cases": [{"id": "a", "test": "t", "result": "1e-7"}, {"id": "b", "test": "t"}]});
-        let drawn = json!({"suite": "1.0.0", "kernel": kernel,
-            "cases": [{"id": "a", "exports": ex}, {"id": "b"}]});
-        with_exports(&mut session, &drawn).unwrap();
-        let flat = flat(&session, false);
+        let results = json!({"suite": "1.0.0", "kernel": {"name": "k", "version": "2.1"},
+            "cases": [{"id": "a", "test": "t", "result": "1e-7", "exports": ex},
+                      {"id": "b", "test": "t", "result": "1e-7"}]});
+        let flat = flat(&results, false);
+        assert_eq!(
+            flat["assets"],
+            format!("{}/1.0.0/k/2.1/", crate::assets::ASSET_BASE)
+        );
         assert_eq!(
             flat["cases"][0]["exports"],
             json!({"glb": "t/a.h.glb", "step": ["t/a.h.step"]})
         );
         assert!(flat["cases"][1].get("exports").is_none());
-
-        let mut other = drawn.clone();
-        other["kernel"]["version"] = json!("2");
-        assert!(
-            with_exports(&mut session, &other)
-                .unwrap_err()
-                .contains("version")
-        );
+        let none = super::flat(&json!({"cases": []}), false);
+        assert!(none["assets"].is_null());
     }
 
     #[test]

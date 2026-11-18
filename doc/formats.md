@@ -113,13 +113,14 @@ holds its results, its styles and its scripts, and it asks the network for nothi
 the results file, not a format to read back.
 
 `brep-conformance-report RESULTS.json --flat report.json` writes one run in the form the results
-site reads. It holds `format` (the same number as the results file's), `kernel`, `adapter`, `suite`,
-`run` (`unix`, and `verified` when the suite's own benchmark machine ran it), `environment`,
-`unsupported`, `stand_ins`, a `summary` (the number of `cases`, the headline `pass_1e7` and the
-count of each result) and `cases`. `cases` has one row per case, with `id`, `test`, `operation`,
-`kind`, `result`, `why`, `failure`, `time_ms`, `asset`, its test's `group_median_ms`,
-`group_low_confidence`, and, where files were drawn, `exports`: the `glb` key and the list of `step`
-keys, below the kernel's folder of [Assets](#assets).
+site reads. It holds `format` (the same number as the results file's), `kernel`, `adapter`, `assets`
+(the URL of the folder its files are published in, where it wrote any), `suite`, `run` (`unix`, and
+`verified` when the suite's own benchmark machine ran it), `environment`, `unsupported`,
+`stand_ins`, a `summary` (the number of `cases`, the headline `pass_1e7` and the count of each
+result) and `cases`. `cases` has one row per case, with `id`, `test`, `operation`, `kind`, `result`,
+`why`, `failure`, `time_ms`, `asset`, its test's `group_median_ms`, `group_low_confidence`, and,
+where files were drawn, `exports`: the `glb` key and the list of `step` keys, below the kernel's
+folder of [Assets](#assets).
 
 ## Operands
 
@@ -179,13 +180,9 @@ take them back to millimetres. Normals are normalized `BYTE`. Both primitives ar
 Each registered kernel's files are published under `<base>/<suite>/<kernel>/<version>/<key>`, the
 folder its report has on the results site. The base is compiled in from
 `BREP_CONFORMANCE_ASSET_BASE`, `https://cdn.springcraft.ai/brep-conformance` by default;
-[`assets.rs`](../suite/src/assets.rs) gives a file's URL. The
-[Assets workflow](../.github/workflows/assets.yml) draws them: for each kernel in
-[`kernels.json`](../kernels.json), an official run (`--kernel`) with both exports, on a machine of
-its own and not the timed session's. [`publish-assets.sh`](../publish-assets.sh) then uploads the
-files the run's `exports` list that the bucket lacks, with each file's type and an immutable cache
-lifetime. A file is never rewritten: a change to what it shows, or to what draws it, gives it a new
-name. The run's results are kept, and
-`brep-conformance-report RESULTS.json --flat report.json --exports DRAWN.json` puts each case's
-`exports` from them into the official report, after checking that both runs are of one kernel
-release on one suite.
+[`assets.rs`](../suite/src/assets.rs) gives a file's URL. They are the files of the official
+benchmark pass itself: each kernel's pass runs with both exports, so its report and its shapes come
+from one run. The suite draws a case after judging it, outside every timed call.
+[`publish-assets.sh`](../publish-assets.sh) uploads the files a pass's `exports` list that the
+bucket lacks, with each file's type and an immutable cache lifetime. A file is never rewritten: a
+change to what it shows, or to what draws it, gives it a new name.

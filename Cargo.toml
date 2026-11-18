@@ -5,6 +5,9 @@ members = [
     "suite",
     "viewer",
 ]
+# Where an official run (`--kernel`) and a benchmark bundle check adapters out: each is a workspace
+# of its own.
+exclude = ["adapters"]
 
 # Release builds stay incremental so rebuilds stay fast.
 [profile.release]
