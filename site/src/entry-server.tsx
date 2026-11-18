@@ -74,6 +74,8 @@ const esc = (s: string) =>
 // Where the site is served, for the absolute links a link preview needs; the Pages build sets it.
 // Unset, as in dev, the links stay relative to the site.
 const SITE_URL = process.env.SITE_URL
+// The share image, on the CDN under a name that changes with it, so it is cached for good.
+const SHARE_IMAGE = 'https://cdn.springcraft.ai/springrep/brep-kernel-leaderboard-mwljdymv.png'
 
 // What a link to a page previews with: its title and description, and the site's share image.
 function share(title: string, description: string | undefined, path: string): string[] {
@@ -85,7 +87,7 @@ function share(title: string, description: string | undefined, path: string): st
     meta('og:title', title),
     description ? meta('og:description', description) : '',
     meta('og:url', at(path)),
-    meta('og:image', at('/og.png')),
+    meta('og:image', SHARE_IMAGE),
     meta('og:image:width', '1200'),
     meta('og:image:height', '630'),
     meta(

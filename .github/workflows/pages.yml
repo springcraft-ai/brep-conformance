@@ -34,8 +34,6 @@ jobs:
         run: npm ci
       - name: Types, tests and formatting
         run: npx tsc -p . && npm test && npx prettier --check --log-level warn .
-      - name: Draw the link-preview image with the runner's Chrome
-        run: node scripts/og.mjs
       - name: Build the static site under the Pages path
         env:
           SITE_BASE: ${{ steps.pages.outputs.base_path }}/
