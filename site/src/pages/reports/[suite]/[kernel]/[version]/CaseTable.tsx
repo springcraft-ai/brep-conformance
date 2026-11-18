@@ -134,7 +134,12 @@ export function CaseTable({
           value={filter.operation}
           onChange={id => set({ operation: id })}
         />
-        <SearchBox label="search cases" placeholder="e.g. fillets or a case id" />
+        <SearchBox
+          label="search cases"
+          placeholder="e.g. fillets or a case id"
+          value={filter.q}
+          onChange={q => set({ q })}
+        />
       </div>
       <div className="rp-count" aria-live="polite">
         <span className="bc-machine">

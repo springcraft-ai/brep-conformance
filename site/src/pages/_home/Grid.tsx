@@ -86,6 +86,7 @@ export function Grid({
   suite,
   versions,
   q,
+  onSearch,
 }: {
   groups: GridGroup[]
   kernels: string[]
@@ -94,6 +95,7 @@ export function Grid({
   suite: string
   versions: Record<string, string>
   q: string
+  onSearch: (q: string) => void
 }) {
   const root = useRef<HTMLDivElement>(null)
   usePlayOnLoad(root)
@@ -167,7 +169,12 @@ export function Grid({
             onChange={id => setFilter(id as Filter)}
           />
         </span>
-        <SearchBox label="search tests" placeholder="e.g. fillets or cylinders" />
+        <SearchBox
+          label="search tests"
+          placeholder="e.g. fillets or cylinders"
+          value={q}
+          onChange={onSearch}
+        />
         <span className="bc-annot hm-grid__count">
           showing {tests.length} of {allTests}
           {scope !== null &&

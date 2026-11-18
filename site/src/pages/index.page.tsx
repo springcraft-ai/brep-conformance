@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fmt, PageHead, Section } from '@/components'
-import { queryFromUrl, useSearchBox } from '@/components/search'
+import { queryFromUrl } from '@/components/search'
 import { EmptyState } from '@/ds'
 import { href, url } from '@/site/href'
 import { Grid } from './_home/Grid'
@@ -21,12 +21,12 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
   const [q, setQ] = useState('')
 
   useEffect(() => setQ(queryFromUrl()), [])
-  useSearchBox(q, v => {
+  const search = (v: string) => {
     setQ(v)
     const { pathname, hash } = window.location
-    const search = v.trim() ? `?q=${encodeURIComponent(v)}` : ''
-    window.history.replaceState(null, '', pathname + search + hash)
-  })
+    const query = v.trim() ? `?q=${encodeURIComponent(v)}` : ''
+    window.history.replaceState(null, '', pathname + query + hash)
+  }
 
   const compare = (kernel: string) => setPicked(p => toggleCompare(p, kernel, kernels))
   const canCompare = kernels.length > COMPARE_MAX
@@ -125,6 +125,7 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
             suite={suite}
             versions={versions}
             q={q}
+            onSearch={search}
           />
         </Section>
       </div>
