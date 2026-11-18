@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { Logo } from '@/ds'
 import { href } from '@/site/href'
 import { SUITE_URL } from '@/site/repo'
-import { hasOwnSearch } from './search'
 
 export interface NavItem {
   label: string
@@ -37,18 +36,6 @@ export function Shell({ path, nav, suite, children }: ShellProps) {
           <Logo lockup="mark" size={18} title="Springcraft" />
           <span>brep-conformance</span>
         </a>
-        {!hasOwnSearch(path) && (
-          <form className="bc-chrome__find" role="search" action={href('/')} method="get">
-            <input
-              name="q"
-              type="search"
-              className="sc-focus"
-              placeholder="find a test, e.g. fillets or cylinders"
-              aria-label="Find a test"
-              autoComplete="off"
-            />
-          </form>
-        )}
         <nav className="bc-chrome__nav" aria-label="site">
           {nav.map(item => (
             <a
