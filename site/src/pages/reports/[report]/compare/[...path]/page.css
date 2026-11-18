@@ -315,8 +315,7 @@
   }
 }
 
-/* A section that waits closed: the definition, the area's and not the test's own, at the foot, and
-   the summary of each kernel on the test at the head. */
+/* The definition is the area's, not the test's own, so it waits closed at the foot. */
 .bc-fold > summary {
   cursor: pointer;
   list-style: none;
@@ -545,6 +544,26 @@
 .bc-kernels__show:hover {
   color: var(--accent);
   border-bottom-color: var(--accent);
+}
+
+/* The summary opens from a button in the cases' label line, so closed it takes no row of its own. */
+.bc-summary__toggle {
+  padding: 0;
+  border: none;
+  border-bottom: var(--hair) solid var(--void-ink-3);
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.bc-summary__toggle:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+#tp-summary {
+  margin-bottom: var(--sp-6);
 }
 
 /* ---- the case shown: what each kernel made of it ---- */
