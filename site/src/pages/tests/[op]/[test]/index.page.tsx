@@ -393,6 +393,7 @@ export default function TestPage(props: Props) {
                 <ul>
                   {kernels.map((k, i) => {
                     const g = shownCase.grades[i]
+                    const wrote = shownCase.files[i]
                     return (
                       <li key={k.kernel}>
                         <a
@@ -415,6 +416,20 @@ export default function TestPage(props: Props) {
                               show its shape
                             </button>
                           ))}
+                        {wrote && (
+                          <span className="bc-thiscase__files">
+                            {wrote.glb && (
+                              <a className="bc-file bc-file--row" href={wrote.glb} download>
+                                glb
+                              </a>
+                            )}
+                            {wrote.steps.map(step => (
+                              <a key={step} className="bc-file bc-file--row" href={step} download>
+                                {stepLabel(step)}
+                              </a>
+                            ))}
+                          </span>
+                        )}
                       </li>
                     )
                   })}
@@ -434,23 +449,6 @@ export default function TestPage(props: Props) {
                     <span className="bc-annot bc-shape__note">
                       drawn by {kernels[drawn]!.kernel}
                     </span>
-                    <a className="bc-file" href={files.glb!} download>
-                      glb
-                    </a>
-                    {files.steps.length ? (
-                      files.steps.map(step => (
-                        <a key={step} className="bc-file" href={step} download>
-                          {stepLabel(step)}
-                        </a>
-                      ))
-                    ) : (
-                      <span
-                        className="bc-annot bc-shape__note"
-                        title={`${kernels[drawn]!.kernel} wrote no STEP file for this case`}
-                      >
-                        no step
-                      </span>
-                    )}
                   </div>
                 )
               }

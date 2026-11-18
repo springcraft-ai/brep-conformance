@@ -95,7 +95,7 @@
       "asset": "6666666666666666",
       "asset_step": true,
       "exports": {
-        "glb": "chamfers/prism-side-edges/chamfer-prisms-5f60718293a4b5c6.6666666666666666.glb",
+        "glb": null,
         "step": ["chamfers/prism-side-edges/chamfer-prisms-5f60718293a4b5c6.6666666666666666.step"]
       },
       "failure": null,

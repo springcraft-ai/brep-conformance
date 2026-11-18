@@ -16,11 +16,18 @@ describe('propsOf', () => {
           if (!f) return
           seen++
           const at = `/${k.suite}/${k.kernel}/${k.version}/${p.test}/${c.id}\\.[0-9a-f]+`
-          expect(f.glb).toMatch(new RegExp(`${at}\\.glb$`))
+          if (f.glb) expect(f.glb).toMatch(new RegExp(`${at}\\.glb$`))
           for (const step of f.steps)
             expect(step).toMatch(new RegExp(`${at}(\\.[a-z0-9-]+)?\\.step$`))
         })
     expect(seen).toBeGreaterThan(0)
+  })
+
+  it('keeps the STEP files of a kernel that drew nothing', () => {
+    const stepOnly = pages
+      .flatMap(p => p.caseList.flatMap(c => c.files))
+      .filter(f => f && !f.glb && f.steps.length > 0)
+    expect(stepOnly.length).toBeGreaterThan(0)
   })
 
   it('gives a case of two solids a STEP file for each', () => {

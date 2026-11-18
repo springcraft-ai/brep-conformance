@@ -593,6 +593,14 @@
   margin-bottom: -3px;
   padding-bottom: 2px;
 }
+/* A kernel's files sit on its own row, so a STEP file needs no drawing to be offered. */
+.bc-thiscase__files {
+  display: inline-flex;
+  gap: var(--sp-2);
+}
+.bc-file--row {
+  padding: 4px 8px 3px;
+}
 .bc-shape__note {
   align-self: center;
 }

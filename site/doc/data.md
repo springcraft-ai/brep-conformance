@@ -38,8 +38,10 @@ written before `assets` existed takes the suite's compiled default,
 `https://cdn.springcraft.ai/brep-conformance`, with that path after it.
 
 A test's page shows a case as the selected kernel drew it, and as the first kernel that drew it
-where that one wrote no drawing. It offers each STEP file the kernel wrote, named by its solid's
-role where there are two.
+where that one wrote no drawing. Beside each kernel's result on the case it offers the files that
+kernel wrote: its drawing, and each STEP file, named by its solid's role where there are two. A
+kernel that wrote a STEP file and no drawing still has its STEP file offered, and no link waits on
+the viewer.
 
 The report does not yet say who wrote a kernel's adapter, which functions a test calls, or a failed
 check's numbers and failing points, so the site shows none of them.
