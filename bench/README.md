@@ -1,20 +1,22 @@
 # bench
 
-How an official benchmark session gets its machine: one bare-metal instance that is started for the
-session, runs one job, and is terminated.
+How an official benchmark session runs: one bare-metal instance, started for the session, runs the
+suite on every registered kernel and is terminated, and each kernel's shape files are published.
 
 ## Overview
 
 The [Benchmark workflow](../.github/workflows/benchmark.yml) is started by hand on `main`
-(`workflow_dispatch`). It has three jobs:
+(`workflow_dispatch`). It has four jobs:
 
-| Job     | Runs on         | What it does                                                        |
-| ------- | --------------- | ------------------------------------------------------------------- |
-| `start` | GitHub's runner | Registers a one-time runner, launches the machine, waits for it     |
-| `bench` | The machine     | Checks it has no identity token, and records the machine's settings |
-| `stop`  | GitHub's runner | Terminates the machine, also when `bench` failed or was cancelled   |
+| Job       | Runs on         | What it does                                                                       |
+| --------- | --------------- | ---------------------------------------------------------------------------------- |
+| `start`   | GitHub's runner | Registers a one-time runner, launches the machine, waits for it                    |
+| `bench`   | The machine     | Records the machine, builds, runs the session, and keeps the results and the files |
+| `stop`    | GitHub's runner | Terminates the machine, also when `bench` failed or was cancelled                  |
+| `publish` | GitHub's runner | Uploads each kernel's shape files the CDN lacks, when `bench` succeeded            |
 
-Today `bench` only records the machine. Running the suite on each kernel is added to that job.
+Its inputs: `suite_args`, passed to every pass (such as `--family booleans/overlap/boxes` for a
+short run), and `publish`, the CDN the files go to: `dev`, `prod` or `none`.
 
 The machine ends in three independent ways: the `stop` job, a lifetime timer armed at first boot,
 and a shutdown that terminates the instance.
@@ -57,6 +59,29 @@ It writes what it found to `/etc/benchmark-runner/environment`, which the `bench
 processor model and its microcode, the online and isolated cores, and the clock settings. So each
 session records the machine it ran on, and a difference from the table above shows there.
 
+## The session
+
+[`setup.sh`](setup.sh) installs the toolchains, checks each kernel's adapter out under `adapters/`
+at the commit [`kernels.json`](../kernels.json) pins, and builds the suite and each adapter as the
+registry says. `results/build.txt` records every commit and tool version.
+
+[`run-session.sh`](run-session.sh) then runs one pass per kernel with these settings:
+
+| Setting  | Value                                                                                                                      |
+| -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Order    | springrep, arris, solidcore, OpenCascade, then springrep again as the noise measure                                        |
+| Workers  | 24, always passed                                                                                                          |
+| Cores    | The suite's runner on the housekeeping cores; each adapter on an isolated core of its own, through [`pin.sh`](pin.sh)      |
+| Adapters | Started by the registry's command, through [`adapters.py`](adapters.py)                                                    |
+| Release  | A pass whose adapter reports another release than `kernels.json` pins is invalid                                           |
+| Files    | Every pass runs with `--glb` and `--step` to a RAM disk; the suite draws a case after judging it, outside every timed call |
+
+When the last pass ends, each kernel's first-pass files are packed into `assets/<pass>.tar`. A pass
+that did not finish cleanly fails the job, after its results are kept, so nothing is published.
+`publish` runs [`publish-assets.sh`](../publish-assets.sh) on each pass's results, which uploads the
+files they list under `brep-conformance/<suite>/<kernel>/<version>/`. Each report names that folder
+as `assets` ([formats.md](../doc/formats.md#assets)).
+
 ## What the bench job may not do
 
 The `bench` job runs kernel code, so it declares no environment and has no `id-token` permission. It
@@ -78,3 +103,13 @@ The workflow reads these from the `benchmark` environment, which allows only `ma
 
 [`app-token.sh`](app-token.sh) turns the App's key into a token that can only manage this
 repository's runners.
+
+`publish` reads these repository variables. It declares no environment, because the upload roles
+trust this repository's `main` and `v*` tags with the default token subject:
+
+| Name                                | What it is                 |
+| ----------------------------------- | -------------------------- |
+| `BREP_CONFORMANCE_ASSET_ROLE`       | The prod CDN's upload role |
+| `BREP_CONFORMANCE_ASSET_BUCKET`     | The prod CDN's bucket      |
+| `BREP_CONFORMANCE_ASSET_ROLE_DEV`   | The dev CDN's upload role  |
+| `BREP_CONFORMANCE_ASSET_BUCKET_DEV` | The dev CDN's bucket       |

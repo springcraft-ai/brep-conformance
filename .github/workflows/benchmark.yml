@@ -1,10 +1,21 @@
 # SPDX-License-Identifier: MIT
-# Starts the benchmark machine, runs one job on it, and terminates it: bench/README.md.
+# Starts the benchmark machine, runs one session on it, terminates it, and publishes each kernel's
+# shape files to the CDN: bench/README.md.
 name: Benchmark
 
 on:
   workflow_dispatch:
     inputs:
+      suite_args:
+        description: Arguments for every pass, such as --family booleans/overlap/boxes; empty for the
+          whole suite
+        type: string
+        default: ''
+      publish:
+        description: Which CDN to publish the shape files to
+        type: choice
+        options: [dev, prod, none]
+        default: dev
       fail_bench:
         description: Fail the bench job on purpose, to test that the machine still ends
         type: boolean
@@ -157,6 +168,75 @@ jobs:
       - name: Fail on purpose
         if: inputs.fail_bench
         run: exit 1
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # The toolchains, and each adapter at the commit kernels.json pins. Nothing here is timed.
+      - name: Build the suite and the adapters
+        run: bench/setup.sh
+
+      # The session's settings are fixed in bench/README.md: 24 workers, one isolated core each.
+      - name: Run the session
+        env:
+          SUITE_ARGS: ${{ inputs.suite_args }}
+        run: |
+          # shellcheck disable=SC2086
+          bench/run-session.sh 24 $SUITE_ARGS
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: results
+          path: results
+          if-no-files-found: ignore
+
+      - name: Keep the shape files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: assets
+          path: assets
+          # Already packed; GLBs and STEP text compress little more and would take long to zip.
+          compression-level: 0
+          if-no-files-found: error
+
+  # Runs no kernel code. The upload roles trust this repository's main branch and v* tags with the
+  # default token subject, so this job declares no environment.
+  publish:
+    needs: bench
+    if: inputs.publish != 'none' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # for AWS OIDC
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: results
+          path: results
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: assets
+          path: assets
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ inputs.publish == 'prod' && vars.BREP_CONFORMANCE_ASSET_ROLE || vars.BREP_CONFORMANCE_ASSET_ROLE_DEV }}
+          aws-region: us-west-2
+      # Each kernel's first pass; springrep's second is only the session's noise measure.
+      - name: Publish the files the CDN lacks
+        env:
+          BREP_CONFORMANCE_BUCKET: ${{ inputs.publish == 'prod' && vars.BREP_CONFORMANCE_ASSET_BUCKET || vars.BREP_CONFORMANCE_ASSET_BUCKET_DEV }}
+        run: |
+          for pass in springrep-1 arris solidcore opencascade; do
+              mkdir -p "files/$pass"
+              # A kernel that can neither draw nor write STEP has no files, and lists none.
+              if [ -f "assets/$pass.tar" ]; then
+                  tar -xf "assets/$pass.tar" -C "files/$pass"
+              fi
+              ./publish-assets.sh "results/$pass.json" "files/$pass" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
 
   stop:
     needs: [start, bench]
