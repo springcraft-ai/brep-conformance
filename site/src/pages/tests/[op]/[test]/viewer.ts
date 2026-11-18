@@ -1,8 +1,9 @@
-// Everything the Scan view needs in the browser, loaded as one chunk after the page hydrates.
+// Everything the Scan view needs in the browser, loaded as one chunk after the page hydrates. It
+// imports nothing the page itself imports: a module both share is bundled into the page's chunk,
+// which then has no manifest entry of its own and cannot be prerendered.
 import { parseViews, type GlbView } from './glb'
 import { frameOf } from './scan'
 import type { Vec3 } from './vec'
-import { merge, subjectOf } from './views'
 
 export { mountScan, type Ghost, type Mark, type Scene, type ScanHandle } from './scan'
 
@@ -25,8 +26,21 @@ export function loadViews(url: string): Promise<Loaded> {
       })
       .then(buf => {
         const views = parseViews(buf)
-        const all = merge(views.map(subjectOf))
-        return { views, frame: frameOf({ ...all, ghosts: [], marks: [] }) }
+        const none = new Float32Array(0)
+        const solids = views.flatMap(v =>
+          v.solids
+            .filter(s => s.role !== 'ghost' && s.role !== 'ghost2')
+            .map(s => ({ ...s.shape, tone: 0 as const })),
+        )
+        const frame = frameOf({
+          positions: none,
+          normals: none,
+          triangles: new Uint32Array(0),
+          edges: none,
+          ghosts: solids,
+          marks: [],
+        })
+        return { views, frame }
       })
     p.catch(() => cache.delete(url))
     cache.set(url, p)
