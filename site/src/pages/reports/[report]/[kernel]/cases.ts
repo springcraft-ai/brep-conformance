@@ -108,6 +108,18 @@ export function unpackCases(packed: PackedCases): Row[] {
 // several, such as fail with crash and 1e-3, and lists them all.
 export type GradeFilter = 'all' | 'below' | Grade | `${Grade},${string}`
 
+// Whether a filter keeps the cases of one grade.
+export function keeps(f: GradeFilter, g: Grade): boolean {
+  if (f === 'all') return false
+  if (f === 'below') return g !== '1e-7'
+  return gradesOf(f)!.includes(g)
+}
+
+// Whether a filter keeps one grade alone.
+export function onlyGrade(f: GradeFilter): boolean {
+  return f !== 'all' && f !== 'below' && !f.includes(',')
+}
+
 // The grades a filter keeps, or null for 'all' and 'below'.
 export function gradesOf(f: GradeFilter): Grade[] | null {
   return f === 'all' || f === 'below' ? null : (f.split(',') as Grade[])
@@ -128,12 +140,6 @@ export interface Filter {
 }
 
 export const NO_FILTER: Filter = { grade: 'all', operation: 'all', test: 'all', kind: 'all', q: '' }
-
-// The filter a report opens on: the cases that fall short, where it has any, since those are what
-// a reader comes for.
-export function openingFilter(short: number): Filter {
-  return short > 0 ? { ...NO_FILTER, grade: 'below' } : NO_FILTER
-}
 
 export function isUnfiltered(f: Filter): boolean {
   return (
@@ -194,12 +200,12 @@ function gradeFilterOf(value: string): GradeFilter {
   if (!parts.length || !parts.every(g => (GRADES as readonly string[]).includes(g))) return 'all'
   return gradeSet(parts as Grade[])
 }
-const FILTER_KEYS = ['grade', 'op', 'test', 'kind', 'q'] as const
 
-// The filter lives in the query string, so a filtered view of a report is a link.
+// The filter lives in the query string, so a filtered view of a report is a link. No filter is no
+// query string: every grade, gathered by area.
 export function filterFromSearch(search: string): Filter {
   const p = new URLSearchParams(search)
-  const grade = p.get('grade') ?? 'all'
+  const grade = p.get('result') ?? 'all'
   const kind = p.get('kind') ?? 'all'
   return {
     grade: gradeFilterOf(grade),
@@ -208,26 +214,6 @@ export function filterFromSearch(search: string): Filter {
     kind: (KINDS as readonly string[]).includes(kind) ? (kind as Kind) : 'all',
     q: p.get('q') ?? '',
   }
-}
-
-// The page's filter for a query string. An empty one opens on `opening`, so every other view says
-// so in the query string, the whole table as `?grade=all`.
-export function filterFromLocation(search: string, opening: Filter): Filter {
-  // Only a filter's own keys count: a query string that names none of them, such as a campaign
-  // tag, is still the opening view.
-  const p = new URLSearchParams(search)
-  return FILTER_KEYS.some(k => p.has(k)) ? filterFromSearch(search) : opening
-}
-
-export function filterToLocation(f: Filter, opening: Filter): string {
-  if (sameFilter(f, opening)) return ''
-  return filterToSearch(f) || '?grade=all'
-}
-
-// Two filters that show the same cases: a search of spaces alone is no search.
-export function sameFilter(a: Filter, b: Filter): boolean {
-  const key = (f: Filter) => filterToSearch({ ...f, q: f.q.trim() })
-  return key(a) === key(b)
 }
 
 // What a test's page reads to show one case, by its number, as one kernel drew it where the kernel
@@ -243,7 +229,7 @@ export function shortCase(id: string): string {
 
 export function filterToSearch(f: Filter): string {
   const p = new URLSearchParams()
-  if (f.grade !== 'all') p.set('grade', f.grade)
+  if (f.grade !== 'all') p.set('result', f.grade)
   if (f.operation !== 'all') p.set('op', f.operation)
   if (f.test !== 'all') p.set('test', f.test)
   if (f.kind !== 'all') p.set('kind', f.kind)

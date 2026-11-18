@@ -14,6 +14,7 @@ export function TierBar({
   thin,
   top,
   href,
+  each,
 }: {
   counts: Counts
   label: string
@@ -22,8 +23,10 @@ export function TierBar({
   top?: boolean
   // Makes each segment a link, to that grade's cases; its own card then names it, not a title.
   href?: (grade: Grade) => string
+  // A block for every grade, where the leaderboard draws 1e-6 with 1e-5 and 1e-3 with the fails.
+  each?: boolean
 }) {
-  counts = drawn(counts)
+  if (!each) counts = drawn(counts)
   const total = counts.reduce((a, b) => a + b, 0)
   const before = counts.map((_, i) => counts.slice(0, i).reduce((a, b) => a + b, 0))
   const fill = (i: number) =>

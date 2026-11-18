@@ -1,22 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { TIERS, type CaseRow, type Grade, type Kind, type Tier } from '@/data/results'
 import {
+  duration,
   byOperation,
   caseSearch,
-  duration,
-  filterFromLocation,
   filterFromSearch,
-  filterToLocation,
   filterToSearch,
   gradeSet,
   groupByTest,
   matches,
   NO_FILTER,
-  openingFilter,
   ordinal,
   packCases,
   reasonOf,
-  sameFilter,
   shortCase,
   sortRows,
   unpackCases,
@@ -220,12 +216,12 @@ describe('the query string', () => {
   })
 
   it('ignores values it does not know', () => {
-    expect(filterFromSearch('?grade=great&kind=fuzzy')).toEqual(NO_FILTER)
-    expect(filterFromSearch('?grade=fail,great')).toEqual(NO_FILTER)
+    expect(filterFromSearch('?result=great&kind=fuzzy')).toEqual(NO_FILTER)
+    expect(filterFromSearch('?result=fail,great')).toEqual(NO_FILTER)
   })
 
   it('reads a set of grades in GRADES order, and round-trips it', () => {
-    expect(filterFromSearch('?grade=crash,fail').grade).toBe('fail,crash')
+    expect(filterFromSearch('?result=crash,fail').grade).toBe('fail,crash')
     const f = { ...NO_FILTER, grade: gradeSet(['1e-3', 'fail', 'crash']) }
     expect(f.grade).toBe('1e-3,fail,crash')
     expect(filterFromSearch(filterToSearch(f))).toEqual(f)
@@ -313,37 +309,17 @@ describe('duration', () => {
   })
 })
 
-describe('the opening filter', () => {
-  const below = openingFilter(3)
-
-  it('opens on the cases that fall short, and on every case where none does', () => {
-    expect(below.grade).toBe('below')
-    expect(openingFilter(0)).toEqual(NO_FILTER)
+describe('the filter in the query string', () => {
+  it('reads no query string, or one that names no filter, as no filter, and writes no filter as none', () => {
+    expect(filterFromSearch('')).toEqual(NO_FILTER)
+    expect(filterFromSearch('?utm_source=x')).toEqual(NO_FILTER)
+    expect(filterToSearch(NO_FILTER)).toBe('')
   })
 
-  it('reads an empty query string as the opening view and writes that view as none', () => {
-    expect(filterFromLocation('', below)).toEqual(below)
-    expect(filterToLocation(below, below)).toBe('')
-  })
-
-  it('writes the whole table as its own query string, and reads it back', () => {
-    expect(filterToLocation(NO_FILTER, below)).toBe('?grade=all')
-    expect(filterFromLocation('?grade=all', below)).toEqual(NO_FILTER)
-    expect(filterToLocation(NO_FILTER, NO_FILTER)).toBe('')
-  })
-
-  it('reads a query string that names no filter as the opening view', () => {
-    expect(filterFromLocation('?utm_source=x', below)).toEqual(below)
-  })
-
-  it('takes a search of spaces alone as no search', () => {
-    expect(sameFilter({ ...NO_FILTER, q: '  ' }, NO_FILTER)).toBe(true)
-    expect(filterToLocation({ ...below, q: ' ' }, below)).toBe('')
-    expect(sameFilter({ ...NO_FILTER, q: 'box' }, NO_FILTER)).toBe(false)
-  })
-
-  it('keeps a link that names a test on every case of it', () => {
-    expect(filterFromLocation('?test=a/b', below)).toEqual({ ...NO_FILTER, test: 'a/b' })
+  it('writes a grade and a test, and reads them back', () => {
+    const f = { ...NO_FILTER, grade: 'refused' as const, test: 'a/b' }
+    expect(filterToSearch(f)).toBe('?result=refused&test=a%2Fb')
+    expect(filterFromSearch(filterToSearch(f))).toEqual(f)
   })
 })
 

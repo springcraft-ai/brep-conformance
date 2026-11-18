@@ -15,20 +15,30 @@
 
 /* ---- result: headline left, counts, grade distribution right ---- */
 
-.rp-result {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.4fr);
-  gap: var(--sp-8);
-  align-items: start;
-}
+/* The headline: every case by grade in one bar the page's width, its figures on one line under it. */
 .rp-headline {
   display: grid;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-7);
+}
+.rp-headline__bar {
+  display: block;
+}
+.rp-headline .hm-bar {
+  height: 28px;
+}
+.rp-headline__line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  align-items: baseline;
+  margin: 0;
+  font: var(--fw-voice) 15px / 1.4 var(--font-voice);
+  color: var(--void-ink-2);
 }
 .rp-headline__value {
-  font: var(--fw-machine) var(--fs-display-4) / 1 var(--font-machine);
+  font: var(--fw-machine) 28px / 1 var(--font-machine);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
   color: var(--void-ink-1);
 }
 
@@ -38,133 +48,51 @@
   color: var(--void-ink-1);
 }
 
-.rp-stats {
-  display: grid;
-  margin: 0;
+/* Each grade under the bar, as its legend and the table's filter: the grades it keeps marked. */
+.rp-grades {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
 }
-.rp-stat {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--sp-4);
-  align-items: baseline;
-  padding: 9px 0;
-  border-bottom: var(--hairline-void-soft);
-}
-.rp-stat dt {
-  display: grid;
-  gap: 4px;
-}
-.rp-stat__gloss {
-  font: var(--fw-voice) 13px / 1.3 var(--font-voice);
-  color: var(--void-ink-2);
-}
-.rp-stat dd {
-  margin: 0;
-  text-align: right;
-}
-.rp-stat__value {
-  font: var(--fw-machine) 13px / 1.2 var(--font-machine);
-  font-variant-numeric: tabular-nums;
-  color: var(--void-ink-1);
-}
-.rp-stat__sub {
-  margin-left: var(--sp-3);
-  font: var(--fw-machine) 13px / 1.2 var(--font-machine);
-  font-variant-numeric: tabular-nums;
-  color: var(--void-ink-2);
-}
-
-.rp-dist {
-  display: grid;
-}
-.rp-dist__row {
-  display: grid;
-  grid-template-columns: 130px minmax(0, 1fr) 4.5em 6em;
-  gap: var(--sp-4);
+.rp-grade {
+  display: inline-flex;
+  gap: var(--sp-3);
+  /* Centered: the grade's label starts with its mark, an empty box, which gives it no text
+     baseline to line up by. */
   align-items: center;
-  padding: 8px 0;
-  border-bottom: var(--hairline-void-soft);
+  /* No side padding, so the first grade starts where the bar and the line under it start. */
+  padding: 4px 0;
+  border: none;
   font: var(--fw-machine) 13px / 1.2 var(--font-machine);
   font-variant-numeric: tabular-nums;
   color: var(--void-ink-1);
 }
-a.rp-dist__row {
-  border-bottom: var(--hairline-void-soft);
+a.rp-grade:hover .rp-grade__n {
+  color: var(--accent);
 }
-/* A row that lists its cases says so: an arrow at its end, lit with the row. */
-a.rp-dist__row .rp-dist__pct::after {
-  content: ' →';
+.rp-grade[aria-current] {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.rp-grade[data-empty] {
   color: var(--void-ink-3);
 }
-a.rp-dist__row:hover .rp-dist__pct::after {
-  color: var(--accent);
-}
-a.rp-dist__row:hover .rp-dist__n,
-a.rp-dist__row:hover .rp-dist__pct {
-  color: var(--accent);
-}
-a.rp-dist__row:hover .rp-bar {
-  border-color: var(--accent);
-}
-.rp-dist__row[data-empty] {
+.rp-grade__n {
+  font: var(--fw-machine) var(--fs-read-4) / 1 var(--font-machine);
   color: var(--void-ink-2);
-}
-.rp-dist__n,
-.rp-dist__pct {
-  text-align: right;
-}
-.rp-dist__pct {
-  color: var(--void-ink-2);
-}
-
-/* A share bar: the lidar ramp for a tier, hatch for unsupported, a hairline box for the outcomes
-   that reached no tier. Red stays type, never a fill. */
-.rp-bar {
-  display: block;
-  height: 10px;
-  border-left: var(--hairline-void-soft);
-}
-.rp-bar__fill {
-  display: block;
-  height: 100%;
-  box-sizing: border-box;
-  border: var(--hair) solid var(--void-ink-3);
-}
-.rp-bar__fill[data-grade='1e-7'] {
-  background: var(--grade-1e-7);
-  border-color: var(--grade-1e-7);
-}
-.rp-bar__fill[data-grade='1e-6'] {
-  background: var(--grade-1e-6);
-  border-color: var(--grade-1e-6);
-}
-.rp-bar__fill[data-grade='1e-5'] {
-  background: var(--grade-1e-5);
-  border-color: var(--grade-1e-5);
-}
-.rp-bar__fill[data-grade='1e-3'] {
-  background: var(--grade-1e-3);
-  border-color: var(--grade-1e-3);
-}
-.rp-bar__fill[data-grade='unsupported'] {
-  background-image: repeating-linear-gradient(135deg, var(--void-ink-3) 0 1px, transparent 1px 5px);
 }
 
 /* ---- identity, environment, methodology side by side ---- */
 
-.rp-specs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 var(--sp-8);
-}
 .rp-spec {
   display: grid;
   align-content: start;
+  max-width: 640px;
   margin: 0;
 }
 .rp-spec__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* The label keeps its width; a long value, such as a configuration, wraps in the rest. */
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--sp-4);
   align-items: baseline;
   padding: 9px 0;
@@ -202,63 +130,6 @@ a.rp-dist__row:hover .rp-bar {
   padding-left: 8px;
 }
 
-/* ---- by operation: each operation's cases by grade; a row lists its cases ---- */
-
-.rp-ops {
-  display: grid;
-  margin-bottom: var(--sp-4);
-}
-.rp-ops__row {
-  display: grid;
-  grid-template-columns: 150px 170px minmax(120px, 1fr) minmax(0, 1.2fr);
-  gap: var(--sp-5);
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: var(--hairline-void-soft);
-  font: var(--fw-machine) 13px / 1.2 var(--font-machine);
-  font-variant-numeric: tabular-nums;
-  color: var(--void-ink-1);
-}
-.rp-ops__head {
-  padding: 0 0 10px;
-  border-bottom-color: var(--void-ink-1);
-  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--void-ink-2);
-}
-.rp-ops__name {
-  justify-self: start;
-  border-bottom: none;
-  color: var(--void-ink-1);
-  font: var(--fw-voice) 15px / 1.3 var(--font-voice);
-}
-.rp-ops__name:hover {
-  color: var(--accent);
-}
-/* The leaderboard's bar, a little lower, filling as the leaderboard's does. */
-.rp-ops__bar {
-  display: block;
-  min-width: 0;
-}
-.rp-ops__bar .hm-bar {
-  height: 14px;
-}
-.rp-ops__bar .hm-bar__seg {
-  animation: hm-fill 1100ms var(--ease-mech) var(--fill-at, 0ms) both;
-}
-@media (prefers-reduced-motion: reduce) {
-  .rp-ops__bar .hm-bar__seg {
-    animation: none;
-  }
-}
-.rp-ops__short {
-  color: var(--void-ink-2);
-}
-/* A shortfall is never split: a long list breaks between them. */
-.rp-ops__short > span {
-  white-space: nowrap;
-}
 .rp-fold {
   border-bottom: var(--hairline-void-soft);
 }
@@ -300,20 +171,14 @@ a.rp-dist__row:hover .rp-bar {
 /* ---- the case table ---- */
 
 .rp-filters {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 260px)) minmax(0, 420px);
-  gap: var(--sp-5);
-  align-items: end;
-}
-
-.rp-count {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-3) var(--sp-5);
-  align-items: baseline;
-  margin: var(--sp-5) 0 var(--sp-3);
-  color: var(--void-ink-2);
-  font-size: 13px;
+  gap: var(--sp-5);
+  align-items: end;
+  margin-bottom: var(--sp-5);
+}
+.rp-filters > :first-child {
+  width: 260px;
 }
 .rp-clear {
   padding: 0;
@@ -442,6 +307,9 @@ a.rp-dist__row:hover .rp-bar {
 .rp-groups__empty {
   padding: var(--sp-5) 0;
 }
+.rp-list .rp-why {
+  max-width: 70ch;
+}
 .rp-case {
   font: var(--fw-machine) 13px / 1.3 var(--font-machine);
 }
@@ -460,45 +328,40 @@ a.rp-dist__row:hover .rp-bar {
   color: var(--void-ink-2);
 }
 
-.rp-count > .rp-pager {
-  margin: 0 0 0 auto;
+/* ---- areas: a row each, with its cases' bar, opening to its tests ---- */
+
+.rp-area {
+  border-bottom: var(--hairline-void-soft);
 }
-.rp-pager {
-  display: flex;
-  gap: var(--sp-5);
-  align-items: center;
-  justify-content: flex-end;
-  margin-top: var(--sp-5);
-  color: var(--void-ink-2);
-  font-size: 13px;
+.rp-area__name {
+  font: var(--fw-voice) 15px / 1.4 var(--font-voice);
+}
+.rp-area[open] > summary .rp-area__name::before {
+  content: '− ';
+}
+.rp-area__bar {
+  grid-column: 3 / span 2;
+  align-self: center;
+  min-width: 0;
+}
+/* A test hangs under its area, its name indented past the area's. */
+.rp-area > .rp-group {
+  border-bottom: none;
+  border-top: var(--hairline-void-soft);
+}
+.rp-area > .rp-group > .rp-group__row > .rp-group__test {
+  padding-left: calc(2ch + var(--sp-5));
+}
+.rp-area > .rp-group > .rp-group__cases {
+  padding-left: calc(var(--sp-5) * 2);
 }
 
 @media (max-width: 1100px) {
-  .rp-result {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .rp-dist {
-    grid-column: 1 / -1;
-  }
-  .rp-specs {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (max-width: 720px) {
-  .rp-result {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--sp-7);
-  }
-  .rp-headline__value {
-    font-size: var(--fs-display-5);
-  }
-  .rp-dist__row {
-    grid-template-columns: 124px minmax(0, 1fr) 3.5em 5.5em;
-    gap: var(--sp-3);
-  }
-  .rp-filters {
-    grid-template-columns: minmax(0, 1fr);
+  .rp-filters > :first-child {
+    width: 100%;
   }
   /* On a phone a test is a short stack: its name, then what its cases came to, then why. */
   .rp-group__head {
@@ -522,25 +385,46 @@ a.rp-dist__row:hover .rp-bar {
   .rp-table td:nth-child(2) {
     display: none;
   }
-  .rp-ops__row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 4px var(--sp-4);
-  }
-  .rp-ops__head {
-    display: none;
-  }
-  .rp-ops__row > .rp-ops__bar,
-  .rp-ops__row > .rp-ops__short {
+  .rp-area__bar {
     grid-column: 1 / -1;
-  }
-  .rp-count > .rp-pager {
-    margin-left: 0;
-    width: 100%;
   }
   .rp-why {
     min-width: 12ch;
   }
-  .rp-pager {
-    justify-content: space-between;
+}
+
+/* ---- details: folded, its groups side by side ---- */
+
+/* The toggle ends the figures' line, so closed the details take no row of their own. */
+.rp-details__toggle {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-bottom: var(--hair) solid var(--void-ink-3);
+  background: none;
+  color: var(--void-ink-2);
+  font: inherit;
+  cursor: pointer;
+}
+.rp-details__toggle:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.rp-details__groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-5) var(--sp-7);
+  margin-top: var(--sp-5);
+}
+.rp-details__groups .rp-spec {
+  max-width: none;
+}
+.rp-unverified {
+  color: var(--accent);
+}
+
+@media (max-width: 1100px) {
+  .rp-details__groups {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

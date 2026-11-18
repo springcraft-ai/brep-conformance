@@ -217,7 +217,7 @@ export function TierBoard({
                       label={`${r.kernel}: ${n(r.passing)} of ${n(r.total)} cases at 1e-7`}
                       top={r.kernel === b.rate}
                       href={g =>
-                        `${url.kernel(r.suite, r.segment)}?grade=${bandGrades(g).join(',')}#cases`
+                        `${url.kernel(r.suite, r.segment)}?result=${bandGrades(g).join(',')}#cases`
                       }
                     />
                   </BarCard>

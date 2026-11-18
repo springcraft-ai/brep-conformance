@@ -27,7 +27,6 @@ export interface Props {
   environment: Environment
   methodology: Methodology
   summary: Summary
-  totalMs: number
   // The functions the kernel does not offer, each with whether the operations pages document it,
   // and the stand-in sent for each missing constructor.
   functions: { name: string; documented: boolean }[]
@@ -37,10 +36,11 @@ export interface Props {
   releases: Release[]
   // Whether its report's compare pages show this release: its kernel's latest on the suite.
   shown: boolean
+  // Every case's time added up: the time the run spent in the kernel.
+  totalMs: number
   license: string | null
   adapterLicense: string | null
   // The kernel's own maintainers who review its adapter; null for a kernel not in the registry.
-  reviewers: string[] | null
   // Where the results page ranks this report, when it is the kernel's release ranked there.
   standing: { place: number; of: number; speedFactor: number | null } | null
 }
@@ -93,15 +93,14 @@ function entryOf(
         environment: r.environment,
         methodology: r.methodology,
         summary,
-        totalMs: totalTimeMs(r.cases),
         functions: r.unsupported.map(name => ({ name, documented: documented.has(name) })),
         standIns: r.standIns,
         cases: packCases(r.cases, pages),
         releases,
         shown: isShown,
+        totalMs: totalTimeMs(r.cases),
         license: kernelInfo(id.kernel)?.license ?? null,
         adapterLicense: kernelInfo(id.kernel)?.adapter.license ?? null,
-        reviewers: kernelInfo(id.kernel)?.reviewers ?? null,
         standing: standingOf(id.kernel, id.version),
       },
       title: `${id.name} ${id.version}`,
