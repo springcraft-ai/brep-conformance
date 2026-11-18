@@ -8,7 +8,7 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-arris",
-        "commit": "cd8e4fda867a2123c8cfd5ce5e7b184e69cb2d42",
+        "commit": "a87f55e5ca563ee832f9a60b15102940c48d49d0",
         "license": "MIT",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/arris-adapter"
@@ -38,7 +38,7 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-solidcore",
-        "commit": "22476bead4fb2ac6fb42d1acac08dce70b4f3405",
+        "commit": "11aa92d2a13f3a95d0fd077c9118abe4f766d371",
         "license": "MIT",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/solidcore-adapter"
@@ -53,7 +53,7 @@
       "maintained_by_suite": true,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-springrep",
-        "commit": "220f866ec45bc344349d8243e2b7f133a1b5680a",
+        "commit": "a1d93cd3741bd47cec84ac88878168c37ecf429e",
         "license": "MIT",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/springrep-adapter"
