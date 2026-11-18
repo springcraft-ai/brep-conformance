@@ -368,9 +368,13 @@ a.rp-dist__row:hover .rp-bar {
 .rp-seg {
   white-space: nowrap;
 }
+/* The name hangs past its two-character "+ " or "− ", so a wrapped line starts under its first
+   letter. */
 .rp-group__test {
   display: block;
   min-width: 0;
+  padding-left: 2ch;
+  text-indent: -2ch;
   font: var(--fw-machine) 13px / 1.4 var(--font-machine);
   color: var(--void-ink-1);
 }
