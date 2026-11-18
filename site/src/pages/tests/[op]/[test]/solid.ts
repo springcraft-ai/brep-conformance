@@ -1,5 +1,5 @@
-// The shaded solid under the Scan view's edges: a depth-buffered rasterizer for an orthographic
-// view, and the test that hides an edge behind it. Plain arrays, so the page ships no 3D library.
+// The Scan view's shaded solid: a depth-buffered rasterizer for an orthographic view, lit per
+// pixel. Plain arrays, so the page ships no 3D library.
 import type { Vec3 } from './vec'
 
 export interface Mesh {
@@ -27,30 +27,67 @@ export function raster(w: number, h: number): Raster {
   }
 }
 
-const AMBIENT = 0.3
+// A colour for a unit normal in view space: x right, y up, z toward the viewer.
+export type Shade = (x: number, y: number, z: number) => [number, number, number]
 
-// Fills `r` with `mesh` as `at` projects it to pixels and depth, lit from `light`. Both sides of
-// a face are lit alike, so a mesh wound either way, or an open one, still reads as a surface.
+// Brushed metal in a studio: a sky above and a dark floor below, a key light from the upper left,
+// a fill from the lower right, a white highlight, and a cool rim where the surface turns away. The
+// lights are fixed to the view, so the shape keeps one look whichever way it is turned.
+export function studio(base: [number, number, number]): Shade {
+  const unit = (v: Vec3) => {
+    const l = Math.hypot(...v)
+    return v.map(c => c / l) as Vec3
+  }
+  const key = unit([-0.45, 0.75, 0.55])
+  const fill = unit([0.7, -0.25, 0.45])
+  const half = unit([key[0], key[1], key[2] + 1])
+  const tone = (c: number) => 255 * Math.min(1, c) ** (1 / 1.15)
+  return (x, y, z) => {
+    const sky = y * 0.5 + 0.5
+    const light =
+      0.08 +
+      0.22 * sky +
+      0.8 * Math.max(0, x * key[0] + y * key[1] + z * key[2]) +
+      0.22 * Math.max(0, x * fill[0] + y * fill[1] + z * fill[2])
+    const shine = 0.55 * Math.max(0, x * half[0] + y * half[1] + z * half[2]) ** 48
+    const rim = (1 - Math.max(0, z)) ** 3
+    return [
+      tone((base[0] / 255) * light + shine + 0.1 * rim),
+      tone((base[1] / 255) * light + shine + 0.13 * rim),
+      tone((base[2] / 255) * light + shine + 0.18 * rim),
+    ]
+  }
+}
+
+// Fills `r` with `mesh` as `at` projects it to pixels and depth. Each pixel takes `shade` of its
+// normal, turned into the view by `basis` (right, up, toward) and interpolated across the
+// triangle. A face seen from behind is shaded as its front, so a mesh wound either way, or an open
+// one, still reads as a surface.
 export function rasterize(
   r: Raster,
   mesh: Mesh,
   at: (x: number, y: number, z: number) => [number, number, number],
-  light: Vec3,
-  face: [number, number, number],
+  basis: [Vec3, Vec3, Vec3],
+  shade: Shade,
 ) {
   r.depth.fill(-Infinity)
   r.rgba.fill(0)
   const { positions: P, normals: N, triangles: T } = mesh
+  const [right, up, toward] = basis
   const count = P.length / 3
   const S = new Float32Array(count * 3)
-  const lit = new Float32Array(count)
-  const shade = (x: number, y: number, z: number) =>
-    AMBIENT + (1 - AMBIENT) * Math.abs(x * light[0] + y * light[1] + z * light[2])
+  // View-space normals; a vertex with none is marked by a zero vector.
+  const V = new Float32Array(count * 3)
+  const view = (x: number, y: number, z: number, out: Float32Array, at: number) => {
+    out[at] = x * right[0] + y * right[1] + z * right[2]
+    out[at + 1] = x * up[0] + y * up[1] + z * up[2]
+    out[at + 2] = x * toward[0] + y * toward[1] + z * toward[2]
+  }
   for (let i = 0; i < count; i++) {
     S.set(at(P[i * 3]!, P[i * 3 + 1]!, P[i * 3 + 2]!), i * 3)
-    const [nx, ny, nz] = [N[i * 3] ?? 0, N[i * 3 + 1] ?? 0, N[i * 3 + 2] ?? 0]
-    lit[i] = nx || ny || nz ? shade(nx, ny, nz) : -1
+    view(N[i * 3] ?? 0, N[i * 3 + 1] ?? 0, N[i * 3 + 2] ?? 0, V, i * 3)
   }
+  const own = new Float32Array(9)
   for (let t = 0; t + 2 < T.length; t += 3) {
     const [a, b, c] = [T[t]!, T[t + 1]!, T[t + 2]!]
     const [ax, ay, az] = [S[a * 3]!, S[a * 3 + 1]!, S[a * 3 + 2]!]
@@ -58,8 +95,10 @@ export function rasterize(
     const [cx, cy, cz] = [S[c * 3]!, S[c * 3 + 1]!, S[c * 3 + 2]!]
     const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
     if (Math.abs(area) < 1e-9) continue
-    let [la, lb, lc] = [lit[a]!, lit[b]!, lit[c]!]
-    if (la < 0 || lb < 0 || lc < 0) {
+    const none = (v: number) => !V[v * 3] && !V[v * 3 + 1] && !V[v * 3 + 2]
+    let src = V
+    let [ia, ib, ic] = [a * 3, b * 3, c * 3]
+    if (none(a) || none(b) || none(c)) {
       const u = [0, 1, 2].map(k => P[b * 3 + k]! - P[a * 3 + k]!)
       const v = [0, 1, 2].map(k => P[c * 3 + k]! - P[a * 3 + k]!)
       const n = [
@@ -67,8 +106,11 @@ export function rasterize(
         u[2]! * v[0]! - u[0]! * v[2]!,
         u[0]! * v[1]! - u[1]! * v[0]!,
       ]
-      const len = Math.hypot(n[0]!, n[1]!, n[2]!) || 1
-      la = lb = lc = shade(n[0]! / len, n[1]! / len, n[2]! / len)
+      view(n[0]!, n[1]!, n[2]!, own, 0)
+      own.copyWithin(3, 0, 3)
+      own.copyWithin(6, 0, 3)
+      src = own
+      ;[ia, ib, ic] = [0, 3, 6]
     }
     const x0 = Math.max(0, Math.floor(Math.min(ax, bx, cx)))
     const x1 = Math.min(r.w - 1, Math.ceil(Math.max(ax, bx, cx)))
@@ -86,45 +128,18 @@ export function rasterize(
         const i = y * r.w + x
         if (z <= r.depth[i]!) continue
         r.depth[i] = z
-        const l = wa * la + wb * lb + wc * lc
-        r.rgba[i * 4] = face[0] * l
-        r.rgba[i * 4 + 1] = face[1] * l
-        r.rgba[i * 4 + 2] = face[2] * l
+        let nx = wa * src[ia]! + wb * src[ib]! + wc * src[ic]!
+        let ny = wa * src[ia + 1]! + wb * src[ib + 1]! + wc * src[ic + 1]!
+        let nz = wa * src[ia + 2]! + wb * src[ib + 2]! + wc * src[ic + 2]!
+        const len = Math.hypot(nx, ny, nz) || 1
+        const flip = nz < 0 ? -len : len
+        ;[nx, ny, nz] = [nx / flip, ny / flip, nz / flip]
+        const [cr, cg, cb] = shade(nx, ny, nz)
+        r.rgba[i * 4] = cr
+        r.rgba[i * 4 + 1] = cg
+        r.rgba[i * 4 + 2] = cb
         r.rgba[i * 4 + 3] = 255
       }
     }
   }
-}
-
-// The parts of the segment from `a` to `b` (pixels and depth) that no surface hides, as pairs of
-// parameters along it. An edge lies in the surface it bounds, so it counts as hidden only where
-// every pixel around it is nearer than the edge by more than `bias`.
-export function visibleRuns(r: Raster, a: number[], b: number[], bias: number): number[] {
-  const hidden = (x: number, y: number, z: number) => {
-    const [xi, yi] = [Math.floor(x), Math.floor(y)]
-    for (let j = yi - 1; j <= yi + 1; j++) {
-      for (let i = xi - 1; i <= xi + 1; i++) {
-        if (i < 0 || j < 0 || i >= r.w || j >= r.h) return false
-        if (r.depth[j * r.w + i]! <= z + bias) return false
-      }
-    }
-    return true
-  }
-  const n = Math.max(1, Math.ceil(Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!) / 2))
-  const half = 0.5 / n
-  const runs: number[] = []
-  let open = false
-  for (let i = 0; i <= n; i++) {
-    const t = i / n
-    const seen = !hidden(
-      a[0]! + t * (b[0]! - a[0]!),
-      a[1]! + t * (b[1]! - a[1]!),
-      a[2]! + t * (b[2]! - a[2]!),
-    )
-    if (seen && !open) runs.push(Math.max(0, t - half))
-    if (!seen && open) runs.push(t - half)
-    open = seen
-  }
-  if (open) runs.push(1)
-  return runs
 }

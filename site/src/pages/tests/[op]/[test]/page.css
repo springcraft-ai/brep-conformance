@@ -75,8 +75,8 @@
 /* ---- shape: the Scan view, night-graded straight on the void ---- */
 
 .bc-scan {
-  --scan-edge: var(--series-5);
-  --scan-face: color-mix(in srgb, var(--void-ink-3) 80%, var(--ground-void));
+  /* The metal's own colour, before solid.ts's studio light: a cool light grey. */
+  --scan-face: #b8c2cc;
   --scan-fail: var(--error-void);
   --scan-focus: var(--accent);
   --scan-annot: var(--void-ink-3);

@@ -1,8 +1,8 @@
-// The Scan view: the shape as a shaded solid with the edges it shows, and a kernel's misplaced
-// points over it. Orthographic, z up, turned by dragging. Canvas 2D over solid.ts's rasterizer:
-// the suite's meshes redraw well inside a frame, and the page ships no 3D library.
+// The Scan view: the shape as a shaded solid, and a kernel's misplaced points over it.
+// Orthographic, z up, turned by dragging. Canvas 2D over solid.ts's rasterizer: the suite's meshes
+// redraw well inside a frame, and the page ships no 3D library.
 import { bounds, type Vec3 } from './vec'
-import { raster, rasterize, visibleRuns, type Mesh, type Raster } from './solid'
+import { raster, rasterize, studio, type Mesh, type Raster, type Shade } from './solid'
 
 export interface Mark {
   p: Vec3
@@ -59,8 +59,7 @@ export function project(c: Camera, x: number, y: number, z: number): [number, nu
 }
 
 export interface Colors {
-  edge: string
-  face: [number, number, number]
+  face: Shade
   fail: string
   focus: string
   annot: string
@@ -79,8 +78,7 @@ function colorsOf(el: Element): Colors {
   const s = getComputedStyle(el)
   const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback
   return {
-    edge: v('--scan-edge', '#b98cff'),
-    face: rgbOf(v('--scan-face', '#55575a')),
+    face: studio(rgbOf(v('--scan-face', '#b8c2cc'))),
     fail: v('--scan-fail', '#ff5a33'),
     focus: v('--scan-focus', '#f5a200'),
     annot: v('--scan-annot', '#6a6c6e'),
@@ -103,9 +101,6 @@ export function frameOf(scene: Scene): { lo: Vec3; hi: Vec3 } {
   return b
 }
 
-// How far behind a surface an edge may lie and still be drawn, as a share of the frame's radius.
-const EDGE_BIAS = 0.005
-
 function draw(
   ctx: CanvasRenderingContext2D,
   scene: Scene,
@@ -118,9 +113,6 @@ function draw(
   if (!scene.triangles.length && !scene.edges.length && !scene.marks.length) return
   // The raster is in device pixels, the camera in CSS pixels.
   const k = r.w / c.w
-  const t = c.toward
-  const light = [0, 1, 2].map(i => t[i]! + 0.35 * c.up[i]! - 0.25 * c.right[i]!)
-  const len = Math.hypot(...light)
   rasterize(
     r,
     scene,
@@ -128,35 +120,10 @@ function draw(
       const p = project(c, x, y, z)
       return [p[0] * k, p[1] * k, p[2]]
     },
-    light.map(x => x / len) as Vec3,
+    [c.right, c.up, c.toward],
     col.face,
   )
   ctx.putImageData(new ImageData(r.rgba as Uint8ClampedArray<ArrayBuffer>, r.w, r.h), 0, 0)
-
-  const bias = (EDGE_BIAS * 0.44 * Math.min(c.w, c.h)) / c.scale
-  ctx.lineWidth = 1
-  ctx.strokeStyle = col.edge
-  ctx.beginPath()
-  const segment = (E: Float32Array, i: number) => {
-    const a = project(c, E[i]!, E[i + 1]!, E[i + 2]!)
-    const b = project(c, E[i + 3]!, E[i + 4]!, E[i + 5]!)
-    const runs = visibleRuns(r, [a[0] * k, a[1] * k, a[2]], [b[0] * k, b[1] * k, b[2]], bias)
-    for (let n = 0; n + 1 < runs.length; n += 2) {
-      const [u, v] = [runs[n]!, runs[n + 1]!]
-      ctx.moveTo(a[0] + u * (b[0] - a[0]), a[1] + u * (b[1] - a[1]))
-      ctx.lineTo(a[0] + v * (b[0] - a[0]), a[1] + v * (b[1] - a[1]))
-    }
-  }
-  for (let i = 0; i + 5 < scene.edges.length; i += 6) segment(scene.edges, i)
-  // A smooth edge is on the outline where one of its faces turns toward the viewer and the
-  // other away.
-  const S = scene.smooth
-  for (let i = 0; i + 11 < S.length; i += 12) {
-    const f = S[i + 6]! * t[0] + S[i + 7]! * t[1] + S[i + 8]! * t[2]
-    const g = S[i + 9]! * t[0] + S[i + 10]! * t[1] + S[i + 11]! * t[2]
-    if (f * g <= 0 && f !== g) segment(S, i)
-  }
-  ctx.stroke()
 
   ctx.globalAlpha = 1
   ctx.lineWidth = 1.5
