@@ -3,6 +3,7 @@ import { overlayOf } from './glb'
 import type { Vec3 } from './vec'
 import {
   camera,
+  curvatureLabel,
   drawnAt,
   frameOf,
   HOME,
@@ -289,6 +290,14 @@ describe('overlayGeometry, curvature', () => {
     expect(g.convex.length / 6).toBe(1)
     expect(g.flat.length / 6).toBe(1)
     expect(g.concave.length).toBe(0)
+  })
+})
+
+describe('curvatureLabel', () => {
+  it('names each principal curvature by how it bends and its radius', () => {
+    expect(curvatureLabel([1 / 3, 0])).toBe('outward, radius 3.00 mm · flat')
+    expect(curvatureLabel([0, -0.5])).toBe('flat · inward, radius 2.00 mm')
+    expect(curvatureLabel([0.25, 0.25])).toBe('outward, radius 4.00 mm · outward, radius 4.00 mm')
   })
 })
 

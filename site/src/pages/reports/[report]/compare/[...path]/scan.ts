@@ -220,6 +220,16 @@ export function frameOf(scene: Scene): { lo: Vec3; hi: Vec3 } {
   return b
 }
 
+// A curvature query's two principal curvatures as a reader names them: which way the surface bends
+// along each, and its radius there.
+export function curvatureLabel(k: readonly [number, number]): string {
+  const one = (x: number) =>
+    Math.abs(x) < 1e-9
+      ? 'flat'
+      : `${x > 0 ? 'outward' : 'inward'}, radius ${(1 / Math.abs(x)).toFixed(2)} mm`
+  return `${one(k[0])} · ${one(k[1])}`
+}
+
 // Where `p` is drawn: the place a probe point was spread to, if it is one, else where it is.
 export function drawnAt(moved: readonly [Vec3, Vec3][], p: Vec3): Vec3 {
   const hit = moved.find(([f]) => Math.hypot(f[0] - p[0], f[1] - p[1], f[2] - p[2]) < 1e-6)
@@ -234,6 +244,7 @@ function overlay(
   col: Colors,
   focus: number,
   moved: readonly [Vec3, Vec3][],
+  hovered: number,
 ) {
   ctx.clearRect(0, 0, c.w, c.h)
 
@@ -246,6 +257,18 @@ function overlay(
     else ctx.strokeRect(x - 3.25, y - 3.25, 6.5, 6.5)
     if (i === focus) reticle(ctx, x, y, col.focus)
   })
+  const hc = scene.overlay?.curvature[hovered]
+  if (hc) {
+    const [x, y] = project(c, ...hc.foot)
+    const text = curvatureLabel(hc.k)
+    ctx.font = '12px ui-monospace, monospace'
+    const tw = ctx.measureText(text).width
+    const [bx, by] = [Math.min(x + 12, c.w - tw - 14), Math.max(y - 26, 4)]
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)'
+    ctx.fillRect(bx - 6, by, tw + 12, 20)
+    ctx.fillStyle = col.focus
+    ctx.fillText(text, bx, by + 14)
+  }
   triad(ctx, c, col.annot)
 }
 
@@ -565,6 +588,8 @@ export function mountScan(
   let frame = frameOf(scene)
   let view = homeOf(scene.overlay)
   let focused = -1
+  // The curvature query under the pointer, whose values are written beside it.
+  let hovered = -1
   let w = 0
   let h = 0
   let queued = 0
@@ -611,7 +636,7 @@ export function mountScan(
       },
     )
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    overlay(ctx, scene, c, colors, focused, moved)
+    overlay(ctx, scene, c, colors, focused, moved, hovered)
   }
   const redraw = () => {
     if (!queued) queued = requestAnimationFrame(render)
@@ -644,7 +669,22 @@ export function mountScan(
     drag = { mode, x: e.clientX, y: e.clientY, moved: false }
   }
   const move = (e: PointerEvent) => {
-    if (!pointers.has(e.pointerId)) return
+    if (!pointers.has(e.pointerId)) {
+      const r = canvas.getBoundingClientRect()
+      const c = camera(view, frame, w, h)
+      let best = -1
+      let bestD = 14
+      scene.overlay?.curvature.forEach((q, i) => {
+        const [x, y] = project(c, ...q.foot)
+        const d = Math.hypot(x - (e.clientX - r.left), y - (e.clientY - r.top))
+        if (d < bestD) [best, bestD] = [i, d]
+      })
+      if (best !== hovered) {
+        hovered = best
+        redraw()
+      }
+      return
+    }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (pinch && pointers.size === 2) {
       const now = pinchOf()
