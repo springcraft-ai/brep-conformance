@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Annot, fmt, GradeLegend, KernelChip, PageHead, Section } from '@/components'
+import { Annot, fmt, KernelChip, PageHead, Section } from '@/components'
 import { queryFromUrl, useChromeSearch } from '@/components/search'
 import { EmptyState } from '@/ds'
 import { GRADES, TIERS } from '@/data/results'
 import { href, url } from '@/site/href'
 import { Grid } from './_home/Grid'
 import { TierBar } from './_home/TierBar'
-import { TierBoard } from './_home/TierBoard'
+import { BoardKey, TierBoard } from './_home/TierBoard'
 import { COMPARE_MAX, defaultCompare, toggleCompare, type BoardRow } from './_home/model'
 import type { Props } from './index.data'
 import './index.css'
@@ -20,7 +20,7 @@ const n = (x: number) => x.toLocaleString('en-US')
 const looserOf = (r: BoardRow) =>
   TIERS.reduce((sum, t) => sum + (t === '1e-7' ? 0 : r.counts[GRADES.indexOf(t)]!), 0)
 
-export default function Home({ suite, cases, tests, kernels, board, groups }: Props) {
+export default function Home({ suite, cases, kernels, runs, board, groups }: Props) {
   const versions = Object.fromEntries(board.map(r => [r.kernel, r.version]))
   const [picked, setPicked] = useState(() => defaultCompare(board))
   const [q, setQ] = useState('')
@@ -39,8 +39,6 @@ export default function Home({ suite, cases, tests, kernels, board, groups }: Pr
 
   const compare = (kernel: string) => setPicked(p => toggleCompare(p, kernel, kernels))
   const canCompare = kernels.length > COMPARE_MAX
-  const timed = board.find(r => r.time)?.time?.cases ?? 0
-  const speedTests = board.length ? Math.min(...board.map(r => r.speedGroups)) : 0
 
   // The suite and its counts come from the reports, so with none there is nothing true to state.
   if (board.length === 0)
@@ -60,19 +58,16 @@ export default function Home({ suite, cases, tests, kernels, board, groups }: Pr
 
   return (
     <div className="hm-home">
-      <PageHead
-        title="B-rep kernel leaderboard"
-        corner={[`suite ${suite}`, `${kernels.length} kernels`, `${n(tests)} tests`]}
-      />
-      <p className="hm-tagline">
-        An open test suite for exact B-rep CAD kernels. Every kernel runs the same {n(cases)} cases,
-        and a case passes only at 1e-7 mm.
-      </p>
+      <PageHead title="B-rep kernel leaderboard" />
 
-      <Section
-        label="latest release per kernel"
-        aside={<a href={href('/docs/#introduction-how-it-works')}>how scoring works</a>}
-      >
+      <section className="hm-lead">
+        <div className="hm-board__head">
+          <p className="hm-lede">
+            An open test suite for exact B-rep CAD kernels. Every kernel runs the same {n(cases)}{' '}
+            cases, and a case passes only at 1e-7 mm.
+          </p>
+          <BoardKey board={board} />
+        </div>
         <TierBoard board={board} picked={canCompare ? picked : null} onCompare={compare} />
         <ol className="hm-cards" aria-label="Leaderboard">
           {board.map(r => (
@@ -104,24 +99,22 @@ export default function Home({ suite, cases, tests, kernels, board, groups }: Pr
             </li>
           ))}
         </ol>
-        <a className="hm-slot" href={href('/docs/#introduction-add-your-kernel')}>
-          + your kernel
-        </a>
-        <GradeLegend />
-        <p className="hm-rules bc-annot">
-          expected values never come from a kernel · an operation a kernel does not offer counts as
-          a failure
-          {timed > 0 && ` · case times are over the ${n(timed)} cases every kernel answered`}
-          {speedTests > 0 &&
-            ` · time vs fastest: a kernel’s time over the fastest kernel’s on each of the ${speedTests} tests all pass alike, averaged, so 1.00× means fastest on every one`}
-        </p>
-      </Section>
+        <div className="hm-foot">
+          <a className="hm-slot" href={href('/docs/#introduction-add-your-kernel')}>
+            + your kernel
+          </a>
+          <span className="hm-foot__meta bc-annot">
+            <a href={href('/docs/#introduction-how-it-works')}>how scoring works</a>
+            <span>
+              {runs.length > 0 && `${fmt.runs(runs)} · `}
+              suite {suite} · {n(cases)} cases
+            </span>
+          </span>
+        </div>
+      </section>
 
       <div id="by-test">
-        <Section
-          label="by test"
-          aside="a test’s name opens the test · a cell opens that kernel’s cases"
-        >
+        <Section label="by test">
           <Grid
             groups={groups}
             kernels={kernels}

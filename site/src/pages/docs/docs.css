@@ -22,20 +22,6 @@
   padding: 0;
   list-style: none;
 }
-/* Finds a section by its name: the list narrows to the headings that match. */
-.dx-find {
-  display: block;
-  width: calc(100% - 10px);
-  margin: 0 0 var(--sp-4);
-  padding: 7px 10px;
-  border: var(--hairline-void-soft);
-  background: transparent;
-  color: var(--void-ink-1);
-  font: var(--fw-machine) var(--fs-micro-1) / 1.2 var(--font-machine);
-}
-.dx-find::placeholder {
-  color: var(--void-ink-2);
-}
 /* Named with the script's own class, to outrank the rule that folds every group but one. */
 .dx-nav--js.dx-nav--finding .dx-nav__g > ul {
   display: block;

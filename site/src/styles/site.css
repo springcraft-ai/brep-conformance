@@ -12,18 +12,37 @@
   --font-voice: 'Hanken Grotesk Variable', 'Archivo Variable', sans-serif;
   --font-machine: 'Martian Mono Variable', ui-monospace, 'SFMono-Regular', monospace;
 
-  /* The one scale every kernel is read on. Tiers take the lidar ramp, brightest best; it is data
-     visualisation, so it marks cells and swatches and never sits behind type. */
-  --grade-1e-7: var(--lidar-5);
-  --grade-1e-6: var(--lidar-4);
-  --grade-1e-5: var(--lidar-3);
-  --grade-1e-3: var(--lidar-2);
+  /* The one scale every kernel is read on. A pass at any tolerance is one family, from ink at
+     1e-7 down through blues a clear step darker each, so the passes read together and anything
+     else stands apart from them: red for a failure, a dark block for a case that ran no check. It
+     marks cells and swatches and never sits behind type. */
+  --grade-1e-7: var(--void-ink-1);
+  --grade-1e-6: #a9c7e8;
+  --grade-1e-5: #5f8fc4;
+  --grade-1e-3: #34557f;
   --grade-fail: var(--error-void);
+  --grade-none: #45484c;
   --grade-quiet: var(--void-ink-2);
 }
 
 html {
   background: var(--ground-void);
+  /* The scrollbar's room is kept whether or not the page scrolls, so a page that grows long
+     enough to scroll does not shift sideways. */
+  scrollbar-gutter: stable;
+  /* Lets a <details> body animate to and from its own height. */
+  interpolate-size: allow-keywords;
+}
+
+/* Every hover and focus change fades rather than snapping. Zero specificity, so a component that
+   sets its own transition keeps it. */
+:where(a, button, summary, input, select, textarea, label, .hm-row, .hm-row *, .hm-cell *) {
+  transition:
+    color var(--dur-3) var(--ease-mech),
+    background-color var(--dur-3) var(--ease-mech),
+    border-color var(--dur-3) var(--ease-mech),
+    box-shadow var(--dur-3) var(--ease-mech),
+    opacity var(--dur-3) var(--ease-mech);
 }
 
 body {
@@ -32,12 +51,15 @@ body {
 
 /* ---- shell ---- */
 
+/* The header as springrep's: its row as wide as the page's content, the links plain, the current
+   one marked in the accent, and the source a small outlined button with GitHub's mark. */
 .bc-chrome {
   display: flex;
   align-items: center;
   gap: var(--sp-6);
   height: 56px;
-  padding: 0 var(--grid-margin-wide);
+  padding: 0
+    max(var(--grid-margin-wide), calc((100% - var(--page-max)) / 2 + var(--grid-margin-wide)));
   border-bottom: var(--hairline-void-soft);
   /* It stays in view: the search box in it narrows lists a screen below. */
   position: sticky;
@@ -61,7 +83,7 @@ body {
   align-items: center;
   gap: 10px;
   color: var(--void-ink-1);
-  font: var(--fw-voice) var(--fs-voice-2) / 1 var(--font-voice);
+  font: var(--fw-voice) var(--fs-voice-1) / 1 var(--font-voice);
 }
 .bc-search {
   flex: 1;
@@ -71,7 +93,7 @@ body {
 }
 .bc-search input {
   width: 100%;
-  height: 34px;
+  height: 28px;
   padding: 0 12px;
   border: var(--hairline-void-soft);
   border-radius: 0;
@@ -85,21 +107,46 @@ body {
 .bc-chrome__nav {
   display: flex;
   flex: none;
-  border: var(--hairline-void-soft);
+  align-self: stretch;
 }
 .bc-chrome__nav a {
-  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
   color: var(--void-ink-2);
   font: var(--fw-voice) var(--fs-voice-2) / 1 var(--font-voice);
-}
-.bc-chrome__nav a + a {
-  border-left: var(--hairline-void-soft);
 }
 .bc-chrome__nav a:hover {
   color: var(--void-ink-1);
 }
 .bc-chrome__nav a[aria-current='page'] {
   color: var(--accent);
+  box-shadow: inset 0 -1px 0 var(--accent);
+}
+.bc-chrome__gh {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  border: var(--hair) solid var(--void-ink-3);
+  color: var(--void-ink-1);
+  font: var(--fw-voice) var(--fs-voice-2) / 1 var(--font-voice);
+}
+.bc-chrome a.bc-chrome__gh {
+  border-bottom: var(--hair) solid var(--void-ink-3);
+}
+.bc-chrome__gh:hover {
+  border-color: var(--void-ink-1);
+}
+.bc-chrome a.bc-chrome__gh:hover {
+  border-bottom-color: var(--void-ink-1);
+}
+.bc-chrome__gh svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
 }
 
 .bc-main {
@@ -127,7 +174,7 @@ body {
     gap: var(--sp-4);
   }
   .bc-chrome__nav a {
-    padding: 8px 10px;
+    padding: 0 10px;
   }
 }
 
@@ -310,14 +357,22 @@ a.bc-chip:hover {
   content: '×';
 }
 
-/* Beside a bar the mark is the bar's own: an empty box in the error ink, not the table's ×. */
-:is(.bc-legend:not(.bc-legend--table), .hm-barcard__card)
+/* Beside a bar the mark is the bar's own block, not the table's ×. */
+:is(.bc-legend:not(.bc-legend--table), .hm-key)
   .bc-mark:is([data-grade='fail'], [data-grade='crash']) {
-  border: var(--hair) solid var(--grade-fail);
+  background: var(--grade-fail);
 }
-:is(.bc-legend:not(.bc-legend--table), .hm-barcard__card)
+:is(.bc-legend:not(.bc-legend--table), .hm-key)
   .bc-mark:is([data-grade='fail'], [data-grade='crash'])::before {
   content: none;
+}
+:is(.bc-legend:not(.bc-legend--table), .hm-key)
+  .bc-mark:is([data-grade='refused'], [data-grade='timeout']) {
+  background: var(--grade-none);
+  border-color: var(--grade-none);
+}
+:is(.bc-legend:not(.bc-legend--table), .hm-key) .bc-mark[data-grade='unsupported'] {
+  border-color: var(--void-ink-3);
 }
 .bc-legend {
   display: flex;

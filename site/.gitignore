@@ -4,3 +4,5 @@ dist/
 .vite/
 # The design system build scripts/fetch-ds.mjs fetches.
 .ds/
+# The link-preview image scripts/og.mjs draws; the Pages build draws it before building.
+public/og.png

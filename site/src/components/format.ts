@@ -20,6 +20,31 @@ export function date(iso: string): string {
   return iso.slice(0, 10)
 }
 
+// The days some runs ended, earliest and latest, as ISO dates; one where they share a day, none where
+// no run is dated.
+export function runDays(dates: string[]): string[] {
+  const days = dates
+    .filter(Boolean)
+    .map(d => d.slice(0, 10))
+    .sort()
+  return days.length ? [...new Set([days[0]!, days[days.length - 1]!])] : []
+}
+
+// A date as the springrep site writes one, month first: "11-16-2026".
+export function mdy(iso: string): string {
+  return `${iso.slice(5, 7)}-${iso.slice(8, 10)}-${iso.slice(0, 4)}`
+}
+
+// Runs' days: "11-16-2026 run", or a span of runs.
+export function runs(days: string[]): string {
+  return days.length ? `${days.map(mdy).join(' – ')} ${days.length > 1 ? 'runs' : 'run'}` : ''
+}
+
+// A kernel version as a reader names it: a release as it is, an unreleased build by its commit.
+export function version(v: string): string {
+  return /^[0-9a-f]{12,40}$/.test(v) ? `rev ${v.slice(0, 7)}` : v
+}
+
 // A reason with a run of one message said once: "A; A; A; B" reads "A ×3; B". A clause's label on
 // the first of a run ("B1: A; A; A") does not set it apart from the rest; a part with a label of
 // its own ("B2: A") is another clause's and starts a new run.

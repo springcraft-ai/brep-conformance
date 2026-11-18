@@ -1,4 +1,5 @@
 import type { DocEntry, DocGroup } from '@/docs/source'
+import { takeSearch } from '@/components/search'
 import { prettyJson } from '@/docs/example'
 import { Markdown, type DocLinks } from '@/pages/operations/Markdown'
 import { url } from '@/site/href'
@@ -18,14 +19,6 @@ export default function Docs({ parts, links }: Props) {
         contents
       </button>
       <nav className="dx-nav" aria-label="Contents">
-        <input
-          id="dx-find"
-          className="dx-find sc-focus"
-          type="search"
-          placeholder="find a section"
-          aria-label="Find a section by name"
-          autoComplete="off"
-        />
         <ul>
           {parts.map(p => (
             <li key={p.id} className="dx-nav__part">
@@ -182,12 +175,12 @@ export function enhance() {
     if (!finding) a?.scrollIntoView({ block: 'nearest' })
   }
 
-  // Finding a section: only the headings that match stay in the list, with what they sit under.
+  // Finding a section with the header's search: only the headings that match stay in the list,
+  // with what they sit under, and Enter goes to the first.
   let finding = false
-  const find = document.getElementById('dx-find') as HTMLInputElement | null
   const items = [...nav.querySelectorAll<HTMLLIElement>('li')]
-  const narrow = () => {
-    const words = (find?.value ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const narrow = (q: string) => {
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
     finding = words.length > 0
     nav.classList.toggle('dx-nav--finding', finding)
     const hit = (li: HTMLLIElement) => {
@@ -200,9 +193,7 @@ export function enhance() {
         for (let up = li.parentElement?.closest('li'); up; up = up.parentElement?.closest('li'))
           up.hidden = false
   }
-  find?.addEventListener('input', narrow)
-  find?.addEventListener('keydown', e => {
-    if (e.key !== 'Enter') return
+  takeSearch(narrow, () => {
     const first = items.find(li => !li.hidden && li.querySelector('ul') === null)
     first?.querySelector('a')?.click()
   })

@@ -1,17 +1,16 @@
-import { GradeMark, KernelChip, PageHead, Section, Table } from '@/components'
-import type { KernelSupport } from '../catalog'
+import { PageHead, Section } from '@/components'
 import { Markdown } from '../Markdown'
 import '../operations.css'
 import type { Props } from './index.data'
 
+// An operation's specification: what it takes, what it makes, and what its group has in common. It
+// is reference, so it says nothing of any kernel: which kernels offer an operation is a fact of a
+// run, and the operations page gives it with the run's date.
 export default function OperationPage({ op, links }: Props) {
   const { doc } = op
   return (
-    <>
-      <PageHead
-        title={op.id}
-        corner={[doc.group, `offered by ${op.offeredBy.length} of ${op.kernels.length} kernels`]}
-      />
+    <div className="bc-op-page">
+      <PageHead title={op.id} corner={[doc.group]} />
 
       <Section label="definition" aside={`api.md § ${doc.heading}`}>
         <div className="bc-op-prose">
@@ -26,30 +25,6 @@ export default function OperationPage({ op, links }: Props) {
           </div>
         </Section>
       )}
-
-      <Section label="support" aside="as each kernel's adapter reports it">
-        <div className="bc-op-scroll">
-          <Table<KernelSupport>
-            rowKey="kernel"
-            sortBy={null}
-            rows={op.kernels}
-            columns={[
-              { key: 'kernel', label: 'kernel', render: k => <KernelChip kernel={k.kernel} /> },
-              {
-                key: 'offered',
-                label: 'offered',
-                render: k =>
-                  k.offered ? 'offered' : <GradeMark grade="unsupported" title="unsupported" />,
-              },
-              {
-                key: 'standIn',
-                label: 'sent instead',
-                render: k => k.standIn ?? <span className="bc-op-dash">–</span>,
-              },
-            ]}
-          />
-        </div>
-      </Section>
-    </>
+    </div>
   )
 }

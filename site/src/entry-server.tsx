@@ -71,6 +71,31 @@ function navItems(): NavItem[] {
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 
+// Where the site is served, for the absolute links a link preview needs; the Pages build sets it.
+// Unset, as in dev, the links stay relative to the site.
+const SITE_URL = process.env.SITE_URL
+
+// What a link to a page previews with: its title and description, and the site's share image.
+function share(title: string, description: string | undefined, path: string): string[] {
+  const at = (p: string) => (SITE_URL ? new URL(p.replace(/^\//, ''), SITE_URL).href : href(p))
+  const meta = (key: string, value: string) => `<meta property="${key}" content="${esc(value)}">`
+  return [
+    meta('og:type', 'website'),
+    meta('og:site_name', 'brep-conformance'),
+    meta('og:title', title),
+    description ? meta('og:description', description) : '',
+    meta('og:url', at(path)),
+    meta('og:image', at('/og.png')),
+    meta('og:image:width', '1200'),
+    meta('og:image:height', '630'),
+    meta(
+      'og:image:alt',
+      'brep-conformance: the B-rep kernel leaderboard, with bars of cases by the tightest tolerance passed',
+    ),
+    '<meta name="twitter:card" content="summary_large_image">',
+  ]
+}
+
 function cssOf(manifest: Manifest, keys: string[]): string[] {
   const css = new Set<string>()
   const seen = new Set<string>()
@@ -125,6 +150,7 @@ function renderPage(module: string, entry: Entry, path: string, manifest: Manife
     '<style>html{background:#000}</style>',
     `<title>${esc(title)}</title>`,
     entry.description ? `<meta name="description" content="${esc(entry.description)}">` : '',
+    ...share(title, entry.description, path),
     `<link rel="icon" href="${href('/favicon.svg')}" type="image/svg+xml">`,
     ...head,
     '</head>',

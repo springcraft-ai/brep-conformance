@@ -3,10 +3,12 @@ import type { PageEntry } from '@/site/page'
 import { AREA_SECTION } from '../tests/[op]/[test]/definition'
 import { operations } from './doc'
 
+// A kernel's column is one run: the version it ran, against which suite, on which day.
 export interface KernelColumn {
   kernel: string
   version: string
   suite: string
+  date: string
   // How many of the functions it offers.
   offered: number
 }
@@ -21,16 +23,15 @@ export interface FunctionRow {
 
 export interface GroupRows {
   group: string
-  // The test areas that exercise the group's functions. A report does not say which tests call a
-  // function, so how well a kernel does is known per area and not per function.
+  // The test areas that exercise the group's functions, for the reader to go to.
   areas: string[]
-  // Per kernel, the share of those areas' cases it passes at 1e-7; null where it ran none.
-  rates: (number | null)[]
   functions: FunctionRow[]
 }
 
 export interface Props {
   total: number
+  // The suite versions the runs were made against, one where they agree.
+  suites: string[]
   kernels: KernelColumn[]
   groups: GroupRows[]
 }
@@ -42,6 +43,7 @@ export function propsOf(): Props {
     kernel: r.identity.kernel,
     version: r.identity.version,
     suite: r.methodology.suite,
+    date: r.environment.date,
     offered: ops.filter(o => o.offeredBy.includes(r.identity.kernel)).length,
   }))
   const groups: GroupRows[] = []
@@ -49,19 +51,7 @@ export function propsOf(): Props {
     let g = groups.find(x => x.group === o.doc.group)
     if (!g) {
       const areas = Object.keys(AREA_SECTION).filter(a => AREA_SECTION[a] === o.doc.group)
-      const tests = s.tests.filter(t => areas.includes(t.operation))
-      g = {
-        group: o.doc.group,
-        areas,
-        rates: kernels.map(k => {
-          const sums = tests.flatMap(t =>
-            t.kernels[k.kernel] ? [t.kernels[k.kernel]!.summary] : [],
-          )
-          const total = sums.reduce((n, x) => n + x.total, 0)
-          return total ? sums.reduce((n, x) => n + x.passing, 0) / total : null
-        }),
-        functions: [],
-      }
+      g = { group: o.doc.group, areas, functions: [] }
       groups.push(g)
     }
     g.functions.push({
@@ -74,7 +64,12 @@ export function propsOf(): Props {
       }),
     })
   }
-  return { total: ops.length, kernels, groups }
+  return {
+    total: ops.length,
+    suites: [...new Set(kernels.map(k => k.suite))],
+    kernels,
+    groups,
+  }
 }
 
 export function entries(): PageEntry<Props>[] {

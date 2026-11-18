@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>brep-conformance share image</title>
+    <!-- The image a link to the site previews with. scripts/og.mjs photographs this at 1200 × 630. Its
+         bars are the leaderboard's look, not results: they never name a kernel or a figure. -->
+    <link rel="stylesheet" href="../.ds/sc.css" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=Hanken+Grotesk:wght@300;400&family=Martian+Mono:wght@400&display=swap"
+    />
+    <style>
+      :root {
+        --font-display: 'Archivo', sans-serif;
+        --font-voice: 'Hanken Grotesk', sans-serif;
+        --font-machine: 'Martian Mono', monospace;
+        --g7: #fff;
+        --g5: #5f8fc4;
+        --g3: #34557f;
+        --none: #45484c;
+        --fail: var(--error-void);
+      }
+      html,
+      body {
+        width: 1200px;
+        height: 630px;
+        margin: 0;
+        overflow: hidden;
+        background: #000;
+        color: #fff;
+      }
+      main {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: 22px;
+        height: 100%;
+        box-sizing: border-box;
+        padding: 64px 72px 94px;
+      }
+      .id {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        margin-top: 79px;
+      }
+      .id img {
+        height: 136px;
+      }
+      h1 {
+        margin: 0;
+        font: 700 76px / 0.9 var(--font-display);
+        letter-spacing: -0.03em;
+        text-transform: uppercase;
+      }
+      p {
+        margin: 0;
+        font: 300 22px / 1.3 var(--font-voice);
+        color: var(--void-ink-2);
+      }
+      .board {
+        display: grid;
+        align-content: end;
+        gap: 18px;
+      }
+      .bar {
+        display: flex;
+        gap: 4px;
+        height: 26px;
+      }
+      .bar i {
+        display: block;
+      }
+      .hatch {
+        background: repeating-linear-gradient(135deg, #6a6c6e 0 1px, transparent 1px 6px);
+        box-shadow: inset 0 0 0 1px #6a6c6e;
+      }
+      .ruler {
+        display: flex;
+        justify-content: space-between;
+        font: 400 11px / 1 var(--font-machine);
+        color: var(--void-ink-2);
+      }
+      .ruler span {
+        padding-left: 4px;
+        border-left: 1px solid #6a6c6e;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="id">
+        <img src="https://cdn.springcraft.ai/design/sc-1.1/mwl4jqxo/assets/logo.svg" alt="" />
+        <h1>B-rep kernel leaderboard</h1>
+      </div>
+      <div class="board">
+        <div class="bar">
+          <i style="flex: 1000; background: var(--accent)"></i>
+        </div>
+        <div class="bar">
+          <i style="flex: 780; background: var(--g7)"></i
+          ><i style="flex: 12; background: var(--g5)"></i
+          ><i style="flex: 8; background: var(--g5)"></i
+          ><i style="flex: 6; background: var(--g3)"></i><i style="flex: 70" class="hatch"></i
+          ><i style="flex: 24; background: var(--none)"></i
+          ><i style="flex: 80; background: var(--fail)"></i>
+        </div>
+        <div class="bar">
+          <i style="flex: 600; background: var(--g7)"></i><i style="flex: 230" class="hatch"></i
+          ><i style="flex: 120; background: var(--none)"></i
+          ><i style="flex: 30; background: var(--fail)"></i>
+        </div>
+        <div class="bar">
+          <i style="flex: 500; background: var(--g7)"></i
+          ><i style="flex: 14; background: var(--g5)"></i><i style="flex: 250" class="hatch"></i
+          ><i style="flex: 40; background: var(--none)"></i
+          ><i style="flex: 160; background: var(--fail)"></i>
+        </div>
+        <div class="ruler">
+          <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

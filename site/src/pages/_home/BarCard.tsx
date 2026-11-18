@@ -1,127 +1,112 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { fmt, GradeMark, groupLabel, markGroups } from '@/components'
+import { useEffect, useState, type ReactNode } from 'react'
+import { fmt, groupLabel, markGroups } from '@/components'
 import { GRADES, type Grade } from '@/data/results'
-import type { Counts } from './model'
+import { drawn, type Counts } from './model'
 
-// Keyed by the first grade of each group that shares a mark.
+// What a band means, in a few words. Keyed by the first grade of each group that shares a mark.
 const MEANING: Partial<Record<Grade, string>> = {
   '1e-7': 'every check held at 1e-7 mm',
-  '1e-6': 'held at 1e-6 mm, not at 1e-7',
-  '1e-5': 'held at 1e-5 mm, not tighter',
+  '1e-6': 'held at 1e-6 mm, not 1e-7',
+  '1e-5': 'held at 1e-5 mm, not 1e-7',
   '1e-3': 'held at 1e-3 mm, not tighter',
-  unsupported: 'needs an operation the kernel does not offer',
-  refused: 'an operation declined, or was still running at the time limit',
-  fail: 'a check held at no tier, or an operation crashed',
+  unsupported: 'an operation the kernel does not offer',
+  refused: 'declined, or out of time',
+  fail: 'a wrong answer, or a crash',
 }
 
-const GAP = 8
-const EDGE = 16
+// The tip sits below and right of the pointer, as a cursor tip does, kept inside the window.
+export const tipAt = (x: number, y: number) => ({
+  left: Math.max(16, Math.min(x + 14, window.innerWidth - 300)),
+  top: y + 18,
+})
 
-interface Place {
-  left: number
-  top: number
-  // Below the bar unless the card would run off the bottom of the window.
-  above: boolean
-  anchor: DOMRect
+interface Tip {
+  group: Grade[]
+  x: number
+  y: number
 }
 
-// The bar's counts as a card on hover, or on focus of one of its links, that grade marked. It is
-// fixed to the window, since the leaderboard scrolls sideways and would clip a card inside it. Each
-// link's own label carries its counts, so the card is for the eye only.
-export function BarCard({
-  title,
-  counts,
-  children,
-}: {
-  title: string
-  counts: Counts
-  children: ReactNode
-}) {
-  const [place, setPlace] = useState<Place | null>(null)
-  const [grade, setGrade] = useState<Grade | null>(null)
-  const card = useRef<HTMLDivElement>(null)
+// The band nearest the pointer across the bar, so a gap between bands or a band thinner than the
+// pointer still picks one. The others dim.
+function pick(wrap: HTMLElement, x: number): Grade[] | null {
+  const segs = [...wrap.querySelectorAll<HTMLElement>('.hm-bar__seg')]
+  let hot: HTMLElement | null = null
+  let best = Infinity
+  for (const s of segs) {
+    const r = s.getBoundingClientRect()
+    const d = x < r.left ? r.left - x : x > r.right ? x - r.right : 0
+    if (d < best) {
+      best = d
+      hot = s
+    }
+  }
+  const grade = hot?.dataset.grade as Grade | undefined
+  const group = grade ? (markGroups().find(g => g.includes(grade)) ?? [grade]) : null
+  wrap.querySelector('.hm-bar')?.classList.toggle('is-picking', group !== null)
+  for (const s of segs) s.classList.toggle('is-hot', !!group?.includes(s.dataset.grade as Grade))
+  return group
+}
+
+function unpick(wrap: HTMLElement) {
+  wrap.querySelector('.hm-bar')?.classList.remove('is-picking')
+  for (const s of wrap.querySelectorAll('.hm-bar__seg')) s.classList.remove('is-hot')
+}
+
+// A small tip at the pointer for the one band it is on: its cases, their share, what the band
+// means, and that a click lists them. Fixed to the window, since the leaderboard scrolls sideways
+// and would clip it. Each band's link label carries the same counts, so the tip is
+// for the eye only.
+export function BarCard({ counts, children }: { counts: Counts; children: ReactNode }) {
+  const [tip, setTip] = useState<Tip | null>(null)
+  counts = drawn(counts)
   const total = counts.reduce((a, b) => a + b, 0)
 
-  const open = (el: HTMLElement) => {
-    const anchor = el.getBoundingClientRect()
-    setPlace({ left: anchor.left, top: anchor.bottom + GAP, above: false, anchor })
-  }
-
-  useLayoutEffect(() => {
-    if (!place || !card.current) return
-    const { width, height } = card.current.getBoundingClientRect()
-    const left = Math.max(EDGE, Math.min(place.left, window.innerWidth - width - EDGE))
-    const above = place.anchor.bottom + GAP + height > window.innerHeight - EDGE
-    const top = above ? place.anchor.top - GAP - height : place.anchor.bottom + GAP
-    if (left !== place.left || above !== place.above || top !== place.top)
-      setPlace({ ...place, left, top, above })
-  }, [place])
-
   useEffect(() => {
-    if (!place) return
-    const close = () => setPlace(null)
+    if (!tip) return
+    const close = () => setTip(null)
     window.addEventListener('scroll', close, { capture: true, passive: true })
     window.addEventListener('resize', close)
     return () => {
       window.removeEventListener('scroll', close, { capture: true })
       window.removeEventListener('resize', close)
     }
-  }, [place])
+  }, [tip])
 
+  const show = (wrap: HTMLElement, x: number, y: number) => {
+    const group = pick(wrap, x)
+    if (!group) return setTip(null)
+    setTip({ group, x, y })
+  }
+
+  const n = tip ? tip.group.reduce((sum, g) => sum + counts[GRADES.indexOf(g)]!, 0) : 0
   return (
     <span
       className="hm-barcard"
-      onMouseEnter={e => open(e.currentTarget)}
-      onMouseLeave={() => {
-        setPlace(null)
-        setGrade(null)
-      }}
-      onMouseOver={e => {
-        const g = (e.target as HTMLElement).closest<HTMLElement>('[data-grade]')?.dataset.grade
-        setGrade((g as Grade | undefined) ?? null)
+      onMouseMove={e => show(e.currentTarget, e.clientX, e.clientY)}
+      onMouseLeave={e => {
+        setTip(null)
+        unpick(e.currentTarget)
       }}
       onFocus={e => {
-        open(e.currentTarget)
-        setGrade(((e.target as HTMLElement).dataset.grade as Grade | undefined) ?? null)
+        const r = (e.target as HTMLElement).getBoundingClientRect()
+        show(e.currentTarget, r.left + r.width / 2, r.bottom - 10)
       }}
       onBlur={e => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPlace(null)
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setTip(null)
+          unpick(e.currentTarget)
+        }
       }}
     >
       {children}
-      {place && (
-        <div
-          ref={card}
-          className="hm-barcard__card"
-          aria-hidden="true"
-          style={{ left: place.left, top: place.top }}
-        >
-          <div className="hm-barcard__head">
-            <span>{title}</span>
-            <span>{total.toLocaleString('en-US')} cases</span>
-          </div>
-          <table>
-            <tbody>
-              {markGroups().map(group => {
-                const n = group.reduce((sum, g) => sum + counts[GRADES.indexOf(g)]!, 0)
-                if (!n) return null
-                const on = grade !== null && group.includes(grade)
-                return (
-                  <tr key={group[0]} className={on ? 'hm-barcard__on' : undefined}>
-                    <td>
-                      <GradeMark grade={group[0]!} />
-                    </td>
-                    <td className="hm-barcard__grade">{groupLabel(group)}</td>
-                    <td className="hm-barcard__num">{n.toLocaleString('en-US')}</td>
-                    <td className="hm-barcard__num">{fmt.pct(n / total)}</td>
-                    <td className="hm-barcard__why">{MEANING[group[0]!]}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          <div className="hm-barcard__foot">Click a part of the bar to list its cases</div>
-        </div>
+      {tip && (
+        <span className="hm-tip" aria-hidden="true" style={tipAt(tip.x, tip.y)}>
+          {groupLabel(tip.group)}
+          <small>
+            {n.toLocaleString('en-US')} of {total.toLocaleString('en-US')} cases (
+            {fmt.pct(n / total)}): {MEANING[tip.group[0]!]}. Click to list them.
+          </small>
+        </span>
       )}
     </span>
   )

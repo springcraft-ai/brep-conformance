@@ -53,6 +53,12 @@ npm test        # data and routing tests, and a render of every route
 npm run check   # types, tests, formatting and the build
 ```
 
+`public/og.png` is the image a link to the site previews with, and every page's share tags point to
+it, absolute under `SITE_URL` (the Pages build sets it). It is the leaderboard's look, not its
+results, so it never names a kernel. It is not committed: the Pages build draws it from
+[`scripts/og.html`](scripts/og.html) with headless Chrome, and `node scripts/og.mjs` draws it
+locally (set `CHROME` where it is not in the usual place).
+
 The site reads `<suite>/<kernel>/<version>/report.json` under `BREP_REPORTS_DIR`, and has no results
 when it is unset. The tests read two reports for invented kernels in
 [`src/fixtures/reports/`](src/fixtures/reports/). `SITE_BASE` sets the path the site is served

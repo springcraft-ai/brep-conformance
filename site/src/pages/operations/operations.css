@@ -87,34 +87,59 @@
   font: inherit;
 }
 
+/* An operation's own page uses the width it has: prose to a long but readable measure, and its
+   examples and tables across the page, an example wrapping rather than scrolling sideways. */
+.bc-op-page .bc-op-prose {
+  max-width: none;
+}
+.bc-op-page .bc-op-prose :is(p, ul, ol) {
+  max-width: 100ch;
+}
+.bc-op-page .bc-op-code {
+  overflow-x: visible;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-read-4);
+}
+.bc-op-page .bc-op-table {
+  width: 100%;
+}
+
 /* ---- the functions table: a column per kernel, a group's functions under its heading ---- */
 
+/* The title stands close to the table it names, with no rule between, as the leaderboard's does. */
+.fn-page .bc-head {
+  margin: var(--sp-8) 0 var(--sp-6);
+  padding-bottom: 0;
+  border-bottom: none;
+}
+/* One row above the table: what it shows on the left, the key on the right. */
 .fn-tools {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-3) var(--sp-5);
+  gap: var(--sp-4) var(--sp-6);
   align-items: center;
-  margin-bottom: var(--sp-5);
+  padding-bottom: var(--sp-4);
+  border-bottom: var(--hairline-void-soft);
 }
-.fn-filter {
-  flex: 0 1 320px;
-  min-width: 0;
-  padding: 8px 12px;
-  border: var(--hairline-void-soft);
-  background: transparent;
+.fn-lede {
+  margin: 0;
+  max-width: 72ch;
+  font: var(--fw-voice-light) 13px / 1.45 var(--font-voice);
   color: var(--void-ink-1);
-  font: var(--fw-machine) var(--fs-read-4) / 1.2 var(--font-machine);
 }
-.fn-filter::placeholder {
-  color: var(--void-ink-3);
+.fn-lede a {
+  color: var(--void-ink-2);
 }
 .fn-key {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-2) var(--sp-5);
+  gap: var(--sp-2) 18px;
   align-items: center;
   margin-left: auto;
-  font: var(--fw-voice) var(--fs-voice-2) / 1.3 var(--font-voice);
+  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--void-ink-2);
 }
 .fn-key > span {
@@ -150,7 +175,7 @@
 }
 .fn-table th,
 .fn-table td {
-  padding: 7px 0;
+  padding: 9px 0;
   border-bottom: var(--hairline-void-soft);
   text-align: center;
   vertical-align: middle;
@@ -171,11 +196,84 @@
   z-index: 2;
   background: var(--ground-void);
 }
+/* The head is the leaderboard's: a small-caps label over each column, here with what the kernel
+   offers set under its name, so the figures belong to the column they head. */
 .fn-table thead th {
-  font: var(--fw-annot) var(--fs-micro-3) / 1 var(--font-annot);
-  letter-spacing: var(--ls-micro);
+  padding: 22px 0 14px;
+  border-bottom: var(--hair) solid var(--void-ink-1);
+  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--void-ink-2);
+  vertical-align: bottom;
+}
+.fn-table thead .fn-pair {
+  margin-top: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.fn-kernel > a,
+.fn-kernel > .fn-pair {
+  display: grid;
+}
+.fn-kernel > a {
+  border-bottom: none;
+}
+/* The run a column comes from, the version it ran and the day, in a tip under the kernel's name,
+   drawn as the leaderboard's tips are. */
+.fn-kernel > a {
+  position: relative;
+}
+.fn-run {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  z-index: 3;
+  padding: 8px 10px;
+  background: #111214;
+  border: var(--hairline-void-soft);
+  pointer-events: none;
+  font: var(--fw-machine) 12px / 1.45 var(--font-machine);
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  color: var(--void-ink-1);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -2px);
+  transition:
+    opacity var(--dur-2) var(--ease-mech),
+    transform var(--dur-2) var(--ease-mech),
+    visibility 0s var(--dur-2);
+}
+.fn-run small {
+  display: block;
+  font-size: 11px;
+  color: var(--void-ink-2);
+}
+.fn-kernel > a:hover .fn-run,
+.fn-kernel > a:focus-visible .fn-run {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  transition-delay: 0s;
+}
+/* A group's figures sit a step below the head's, under the kernels' totals. */
+.fn-group .fn-pair__n {
+  font-size: var(--fs-read-3);
+}
+/* The key sits in the head's first cell, over the operations it explains; its stand-in sample is
+   set off as a swatch, so the mono text reads as a cell's value and not as part of the label. */
+.fn-table thead .fn-key {
+  margin-left: 0;
+  gap: var(--sp-2) 18px;
+}
+.fn-key .fn-standin {
+  padding: 2px 5px;
+  border: var(--hairline-void-soft);
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1;
 }
 .fn-kernel a {
   color: var(--void-ink-1);
@@ -190,35 +288,24 @@
   font-variant-numeric: tabular-nums;
 }
 .fn-pair__n {
-  font: var(--fw-machine) var(--fs-read-3) / 1 var(--font-machine);
+  font: var(--fw-machine) 18px / 1 var(--font-machine);
   color: var(--void-ink-1);
 }
 .fn-pair__of {
-  font: var(--fw-machine) var(--fs-micro-1) / 1 var(--font-machine);
+  font: var(--fw-machine) 11px / 1 var(--font-machine);
   color: var(--void-ink-2);
 }
-.fn-narrow {
-  display: none;
-}
-/* The pinned head ends in a full rule, so what scrolls under it reads as under it. */
-.fn-table .fn-totals > * {
-  padding-bottom: var(--sp-3);
-  border-bottom: var(--hair) solid var(--void-ink-1);
-}
-/* A group opens with clear air above it and a band of its own, its name in the display face: a
-   heading over its operations, not one more row among them. */
+/* A group opens with clear air above it and its name in the display face over a rule: a heading
+   over its operations, not one more row among them. */
 .fn-table tbody[data-group]::before {
   content: '';
   display: table-row;
   height: var(--sp-7);
 }
 .fn-table .fn-group > * {
-  padding: var(--sp-4) 0;
-  border-bottom: var(--hairline-void);
-  background: rgb(255 255 255 / 0.07);
-}
-.fn-table .fn-group > th {
-  padding-left: var(--sp-4);
+  padding: var(--sp-4) 0 var(--sp-3);
+  border-bottom: var(--hair) solid var(--void-ink-3);
+  vertical-align: bottom;
 }
 /* A cell stays a table cell, so a row's rules meet; what it holds is laid out inside it. */
 .fn-cell {
@@ -232,13 +319,13 @@
   gap: 4px var(--sp-4);
 }
 .fn-group__name {
-  font: var(--fw-display) var(--fs-read-2) / 1 var(--font-display);
+  font: var(--fw-display) 18px / 1 var(--font-display);
   letter-spacing: var(--ls-display);
   text-transform: uppercase;
   color: var(--void-ink-1);
 }
 .fn-table tbody tr[data-fn] th {
-  font: var(--fw-machine) var(--fs-read-4) / 1.3 var(--font-machine);
+  font: var(--fw-machine) 12px / 1.3 var(--font-machine);
 }
 .fn-table tbody tr[data-fn] th > a {
   flex: none;
@@ -271,6 +358,9 @@
     position: relative;
     height: 84px;
   }
+  .fn-run {
+    display: none;
+  }
   .fn-kernel a {
     position: absolute;
     bottom: 8px;
@@ -284,12 +374,6 @@
   }
   .fn-standin {
     font-size: 9px;
-  }
-  .fn-wide {
-    display: none;
-  }
-  .fn-narrow {
-    display: inline;
   }
   .fn-pair__n {
     font-size: var(--fs-read-4);

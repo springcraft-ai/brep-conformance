@@ -1,20 +1,53 @@
 /* The home page's own pieces. Shared ones live in src/styles/site.css. */
 
-/* ---- tier bar: proportional segments on the grade scale ---- */
+/* ---- tier bar: proportional blocks on the grade scale, a gap between each ---- */
 
 .hm-bar {
   display: flex;
+  gap: 3px;
   width: 100%;
   min-width: 80px;
-  height: 12px;
-  border: var(--hairline-void-soft);
+  height: 22px;
 }
 .hm-bar--thin {
+  gap: 2px;
   min-width: 0;
   height: 8px;
 }
 .hm-bar__seg {
-  min-width: 1px;
+  min-width: 3px;
+  transition: opacity var(--dur-2) linear;
+}
+.hm-bar--thin .hm-bar__seg {
+  min-width: 2px;
+}
+/* The leaderboard's bars fill from the left: each block eases in over the whole fill time, starting
+   where the blocks before it start, so a bar sweeps on quickly and settles. */
+.hm-board--tiers .hm-bar__seg {
+  animation: hm-fill 1100ms var(--ease-mech) var(--fill-at, 0ms) both;
+}
+@keyframes hm-fill {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hm-board--tiers .hm-bar__seg {
+    animation: none;
+  }
+}
+/* The test grid's bars wait for their row to come into view, then fill as the leaderboard's do. */
+.hm-grid--play .hm-row:not(.is-done) .hm-bar__seg {
+  clip-path: inset(0 100% 0 0);
+}
+.hm-grid--play .hm-row.is-lit .hm-bar__seg {
+  animation: hm-fill 1100ms var(--ease-mech) var(--fill-at, 0ms) both;
+}
+.hm-bar.is-picking .hm-bar__seg:not(.is-hot) {
+  opacity: 0.35;
 }
 .hm-bar__seg[data-grade='1e-7'] {
   background: var(--grade-1e-7);
@@ -29,20 +62,17 @@
   background: var(--grade-1e-3);
 }
 .hm-bar__seg[data-grade='unsupported'] {
-  background: repeating-linear-gradient(135deg, var(--void-ink-3) 0 1px, transparent 1px 4px);
+  background: repeating-linear-gradient(135deg, var(--void-ink-3) 0 1px, transparent 1px 5px);
+  box-shadow: inset 0 0 0 var(--hair) var(--void-ink-3);
 }
-/* Red as a mark, not a fill, and the error ink sits too near the 1e-6 orange to be told from it as
-   one: an empty box in the error ink. */
 .hm-bar__seg[data-grade='fail'],
 .hm-bar__seg[data-grade='crash'] {
-  outline: var(--hair) solid var(--grade-fail);
-  outline-offset: calc(-1 * var(--hair));
+  background: var(--grade-fail);
 }
+/* Ran, but no check to grade. */
 .hm-bar__seg[data-grade='refused'],
 .hm-bar__seg[data-grade='timeout'] {
-  /* An empty boxed segment, as the legend's empty square: ran, but no check to grade. */
-  outline: var(--hair) solid var(--void-ink-2);
-  outline-offset: calc(-1 * var(--hair));
+  background: var(--grade-none);
 }
 
 /* ---- leaderboard ---- */
@@ -54,16 +84,27 @@
 }
 /* The open place under the last rank: an invitation, not a result. */
 .hm-slot {
-  display: block;
-  margin-bottom: var(--sp-4);
-  padding: var(--sp-4) var(--sp-3) var(--sp-4) 32px;
-  border-bottom: var(--hair) dashed var(--void-ink-3);
+  border-bottom: none;
   font: var(--fw-machine) var(--fs-read-4) / 1 var(--font-machine);
   color: var(--void-ink-2);
 }
 .hm-slot:hover {
   color: var(--accent);
-  border-bottom-color: var(--accent);
+}
+/* Under the leaderboard: the open place for a kernel on the left, the suite and how it scores on the
+   right. */
+.hm-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-4) var(--sp-6);
+  padding: var(--sp-5) 0;
+}
+.hm-foot__meta {
+  display: flex;
+  gap: var(--sp-5);
+  align-items: center;
 }
 .hm-board {
   overflow-x: auto;
@@ -76,24 +117,6 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-.hm-kernel {
-  display: inline-grid;
-  justify-items: start;
-  gap: 4px;
-}
-.hm-license {
-  font: var(--fw-machine) var(--fs-micro-1) / 1.3 var(--font-machine);
-  color: var(--void-ink-2);
-  border-bottom: none;
-  white-space: nowrap;
-}
-.hm-license a {
-  border-bottom: none;
-  color: inherit;
-}
-.hm-license a:hover {
-  color: var(--accent);
 }
 .hm-pick {
   padding: 2px;
@@ -117,13 +140,6 @@
 
 /* ---- the tolerance table: tier bars with a hover card ---- */
 
-.hm-board--tiers table {
-  min-width: 1040px;
-}
-.hm-tiers {
-  display: grid;
-  gap: 3px;
-}
 .hm-ruler {
   display: flex;
   justify-content: space-between;
@@ -134,40 +150,6 @@
   padding-left: 3px;
   border-left: var(--hair) solid var(--void-ink-3);
 }
-.hm-rate--same .hm-rate__pct {
-  color: var(--void-ink-2);
-}
-.hm-more {
-  display: inline-flex;
-  gap: 5px;
-  align-items: center;
-  font: var(--fw-machine) var(--fs-micro-1) / 1 var(--font-machine);
-  font-variant-numeric: tabular-nums;
-  color: var(--void-ink-1);
-}
-.hm-more--none {
-  color: var(--void-ink-3);
-}
-.hm-more > .bc-mark {
-  width: 8px;
-  height: 8px;
-}
-.hm-rate {
-  display: inline-grid;
-  justify-items: end;
-  gap: 2px;
-}
-.hm-rate__pct {
-  font: var(--fw-machine) var(--fs-read-3) / 1 var(--font-machine);
-  font-variant-numeric: tabular-nums;
-  color: var(--void-ink-1);
-}
-.hm-rate__of {
-  font: var(--fw-machine) var(--fs-micro-1) / 1 var(--font-machine);
-  font-variant-numeric: tabular-nums;
-  color: var(--void-ink-2);
-}
-
 /* ---- grid: every test × kernel ---- */
 
 .hm-grid {
@@ -181,6 +163,8 @@
 }
 .hm-grid__count {
   align-self: center;
+  margin-left: auto;
+  text-align: right;
 }
 .hm-grid__tools {
   display: flex;
@@ -196,26 +180,6 @@
   align-items: end;
   gap: var(--sp-4);
 }
-.hm-grid__toggle {
-  display: inline-flex;
-  border: var(--hairline-void-soft);
-}
-.hm-grid__toggle button {
-  padding: 7px 12px 6px;
-  border: none;
-  background: transparent;
-  color: var(--void-ink-2);
-  font: var(--fw-annot) var(--fs-micro-2) / 1.25 var(--font-annot);
-  letter-spacing: var(--ls-micro);
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.hm-grid__toggle button + button {
-  border-left: var(--hairline-void-soft);
-}
-.hm-grid__toggle button:hover {
-  color: var(--void-ink-1);
-}
 .hm-grid__head,
 .hm-row {
   display: grid;
@@ -229,10 +193,17 @@
 }
 .hm-grid__kernel {
   overflow: hidden;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--void-ink-2);
+  text-align: left;
   text-overflow: ellipsis;
-  border-bottom: none;
+  white-space: nowrap;
+  cursor: pointer;
 }
-a.hm-grid__kernel:hover {
+.hm-grid__kernel:hover,
+.hm-grid__kernel.is-on {
   color: var(--accent);
 }
 .hm-row {
@@ -271,6 +242,29 @@ a.hm-grid__kernel:hover {
 }
 .hm-op[open] > .hm-row--op .hm-op__name::before {
   content: '−';
+}
+/* An operation's tests slide open and shut, where the browser can animate a <details> body; where
+   it cannot they still open, at once. */
+.hm-op::details-content {
+  block-size: 0;
+  overflow: clip;
+  transition:
+    block-size 280ms var(--ease-mech),
+    content-visibility 280ms allow-discrete;
+}
+.hm-op[open]::details-content {
+  block-size: auto;
+}
+.hm-op[open] > .hm-row:not(summary) {
+  animation: hm-rise 280ms var(--ease-mech) both;
+}
+@keyframes hm-rise {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .hm-op__count {
   margin-left: 8px;
@@ -426,7 +420,7 @@ a.hm-cell:focus-visible .hm-bar {
   }
 }
 
-/* ---- the cases bar's hover card ---- */
+/* ---- the cases bar's tip: the band under the pointer ---- */
 
 .hm-barcard {
   display: block;
@@ -437,72 +431,175 @@ a.hm-cell:focus-visible .hm-bar {
 a.hm-bar__seg {
   border-bottom: none;
 }
-a.hm-bar__seg:hover {
-  box-shadow: inset 0 0 0 1px var(--void-ink-1);
-}
-.hm-barcard__card {
+/* A cursor tip: below and right of the pointer, its first line the subject, then the detail. */
+.hm-tip {
   position: fixed;
   z-index: 20;
-  width: max-content;
-  max-width: min(520px, calc(100vw - 32px));
-  padding: var(--sp-3) var(--sp-2);
-  background: var(--ground-void);
-  border: var(--hairline-void);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.6);
+  max-width: 280px;
+  padding: 8px 10px;
+  background: #111214;
+  border: var(--hairline-void-soft);
   pointer-events: none;
-  font: var(--fw-machine) var(--fs-micro-1) / 1.4 var(--font-machine);
-  color: var(--void-ink-2);
-  white-space: normal;
-  text-align: left;
-}
-.hm-barcard__head {
-  display: flex;
-  padding: 0 6px;
-  justify-content: space-between;
-  gap: var(--sp-4);
-  margin-bottom: var(--sp-2);
-  color: var(--void-ink-1);
-}
-.hm-barcard__card table {
-  min-width: 0;
-  border-collapse: collapse;
-}
-.hm-barcard__card td {
-  padding: 3px 0 3px var(--sp-3);
-  border: none;
-  vertical-align: middle;
-}
-.hm-barcard__card td:first-child {
-  padding: 3px 6px;
-  line-height: 0;
-}
-.hm-barcard__grade {
-  color: var(--void-ink-1);
-}
-.hm-barcard__num {
-  text-align: right;
+  font: var(--fw-machine) 12px / 1.45 var(--font-machine);
   font-variant-numeric: tabular-nums;
   color: var(--void-ink-1);
+  text-align: left;
+  white-space: normal;
+  animation: sc-fade-in var(--dur-2) var(--ease-mech) both;
 }
-.hm-barcard__why {
-  padding-right: 6px;
-}
-.hm-barcard__on td {
-  background: rgb(255 255 255 / 0.1);
-  color: var(--void-ink-1);
-}
-.hm-barcard__on td:first-child {
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.hm-barcard__foot {
-  margin-top: var(--sp-2);
-  padding: 0 6px;
+.hm-tip small {
+  display: block;
+  font-size: 11px;
   color: var(--void-ink-2);
 }
 
-.hm-board--tiers .hm-rate__of {
+/* ---- the leaderboard: one row per kernel, the cases bar beside its rates and speed ---- */
+
+.hm-board__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-5) var(--sp-6);
+  padding-bottom: var(--sp-4);
+  border-bottom: var(--hairline-void-soft);
+}
+.hm-lede {
+  margin: 0;
+  font: var(--fw-voice-light) 12px / 1.4 var(--font-voice);
+  color: var(--void-ink-1);
+}
+/* The home page's title stands closer to the board it names, with no rule between. */
+.hm-home .bc-head {
+  margin: var(--sp-8) 0 var(--sp-6);
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.hm-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hm-key li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--void-ink-2);
+}
+.hm-key .bc-mark {
+  width: 10px;
+  height: 10px;
+}
+.hm-board--tiers > table {
+  width: 100%;
+  min-width: 960px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.hm-board--tiers > table > thead > tr > th {
+  padding: 22px 0 14px 20px;
+  border-bottom: var(--hairline-void-soft);
+  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--void-ink-2);
+  text-align: right;
+  vertical-align: bottom;
   white-space: nowrap;
 }
-.hm-rules {
-  margin: var(--sp-4) 0 0;
+.hm-board--tiers > table > tbody > tr > td {
+  padding: 18px 0 18px 20px;
+  border-bottom: var(--hairline-void-soft);
+  text-align: right;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.hm-board--tiers > table > * > tr > :first-child {
+  padding-left: 0;
+}
+.hm-board--tiers > table > * > tr > :is(.hm-th--left, .hm-td--kernel, .hm-td--bar) {
+  text-align: left;
+}
+/* The kernel column takes only its names' width; the bars take what is left. */
+.hm-board--tiers > table > tbody > tr > .hm-td--kernel {
+  width: 1%;
+}
+.hm-th__sub {
+  display: block;
+  margin-top: 6px;
+  color: var(--void-ink-3);
+}
+.hm-num {
+  text-transform: none;
+}
+.hm-th--pick,
+.hm-td--pick {
+  width: 28px;
+}
+.hm-kname {
+  display: block;
+  width: max-content;
+  border-bottom: none;
+  color: var(--void-ink-1);
+  font: var(--fw-display) 18px / 1 var(--font-display);
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+.hm-kname:hover {
+  color: var(--accent);
+}
+.hm-license {
+  display: block;
+  margin-top: 6px;
+  font: var(--fw-machine) 11px / 1 var(--font-machine);
+  color: var(--void-ink-2);
+}
+.hm-license a {
+  border-bottom: none;
+  color: inherit;
+}
+.hm-license a:hover {
+  color: var(--accent);
+}
+.hm-board--tiers > table > tbody > tr > .hm-td--bar {
+  width: 52%;
+  min-width: 320px;
+}
+.hm-td--bar .hm-ruler {
+  margin-top: 4px;
+}
+/* One size for every figure, the names' size; the 1e-7 pass rate, which ranks the board, bold. */
+.hm-fig {
+  font: var(--fw-machine) 18px / 1 var(--font-machine);
+  color: var(--void-ink-1);
+}
+.hm-fig--lead {
+  font-weight: 700;
+}
+.hm-fig--none {
+  color: var(--void-ink-3);
+}
+.hm-speed {
+  border-bottom: var(--hair) dotted var(--void-ink-3);
+  cursor: default;
+}
+.hm-speed > small {
+  margin-left: 4px;
+  font: var(--fw-machine) 11px / 1 var(--font-machine);
+  color: var(--void-ink-2);
+}
+/* The best value in each column, whichever kernel has it, in the accent; so is the 1e-7 block of
+   the kernel with the best pass rate. */
+.hm-fig.is-best,
+.hm-frac.is-best {
+  color: var(--accent);
+}
+.hm-bar--top .hm-bar__seg[data-grade='1e-7'] {
+  background: var(--accent);
 }

@@ -26,9 +26,7 @@ describe('the functions page', () => {
     })
   })
 
-  it('gives a group a pass rate only where a test area exercises it', () => {
-    for (const g of p.groups)
-      for (const r of g.rates) expect(r === null || (r >= 0 && r <= 1)).toBe(true)
+  it('names the test areas that exercise a group', () => {
     expect(p.groups.find(g => g.group === 'Booleans')?.areas).toEqual(['booleans'])
     expect(p.groups.find(g => g.group === 'Blends')?.areas.sort()).toEqual(['chamfers', 'fillets'])
   })
