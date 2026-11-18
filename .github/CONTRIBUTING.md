@@ -13,8 +13,9 @@ included, and nothing reaches `main` without that review.
   needs it, its result is decidable, and two kernels implement it. Open an issue first.
 - **The runner, the report and the documents.**
 
-A problem with how a kernel is driven belongs in that kernel's adapter repository. A problem in a
-kernel belongs with the kernel.
+A problem with how a kernel is driven can be opened here: a maintainer moves it to that kernel's
+adapter repository, which [kernels.json](../kernels.json) names, if the fault is there. A fix to an
+adapter is a pull request in its repository. A problem in a kernel belongs with the kernel.
 
 ## Where the work comes from
 

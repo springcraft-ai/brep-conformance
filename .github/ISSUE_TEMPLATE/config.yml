@@ -1,17 +1,1 @@
 blank_issues_enabled: true
-contact_links:
-  - name: arris is driven wrongly
-    url: https://github.com/springcraft-ai/brep-conformance-arris/issues
-    about: A problem with how the suite drives arris belongs in its adapter's repository.
-  - name: OpenCascade is driven wrongly
-    url: https://github.com/springcraft-ai/brep-conformance-occt/issues
-    about: A problem with how the suite drives OpenCascade belongs in its adapter's repository.
-  - name: solidcore is driven wrongly
-    url: https://github.com/springcraft-ai/brep-conformance-solidcore/issues
-    about: A problem with how the suite drives solidcore belongs in its adapter's repository.
-  - name: springrep is driven wrongly
-    url: https://github.com/springcraft-ai/brep-conformance-springrep/issues
-    about: A problem with how the suite drives springrep belongs in its adapter's repository.
-  - name: A bug in springrep
-    url: https://github.com/springcraft-ai/springrep/issues
-    about: A problem in the springrep kernel itself belongs in its repository.

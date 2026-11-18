@@ -1,0 +1,36 @@
+name: A kernel is driven wrongly
+description: A result that comes from how the suite calls a kernel, not from the kernel itself.
+labels: [adapter]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Each kernel is called through an adapter, which [kernels.json](https://github.com/springcraft-ai/brep-conformance/blob/main/kernels.json)
+        names. Not sure where the fault is? Open it here all the same: a maintainer moves it to the
+        adapter's repository if it belongs there.
+  - type: dropdown
+    id: kernel
+    attributes:
+      label: Kernel
+      options:
+        - arris
+        - opencascade
+        - solidcore
+        - springrep
+    validations:
+      required: true
+  - type: input
+    id: case
+    attributes:
+      label: Case
+      description: The test's path and the case's id, if one case shows it.
+      placeholder: booleans/touching/sphere-in-a-cone, box-box-1a2b3c4d5e6f7a8b
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What the adapter does wrong
+      description: >
+        The call it makes, or the answer it gives, and what the kernel's own call would give
+        instead.
+    validations:
+      required: true
