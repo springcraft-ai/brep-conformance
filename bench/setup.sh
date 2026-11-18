@@ -9,7 +9,14 @@ root=$PWD
 # libgl1 is for OpenCascade's Python package, which fails to import without it.
 sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential pkg-config util-linux \
-    libgl1 git python3
+    libgl1 git python3 unzip
+
+# The session's shape files leave the machine through the staging bucket.
+if ! command -v aws >/dev/null; then
+    curl -sSfo /tmp/awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+    unzip -q -o /tmp/awscliv2.zip -d /tmp
+    sudo /tmp/aws/install --update
+fi
 
 if ! command -v cargo >/dev/null && [ ! -x "$HOME/.cargo/bin/cargo" ]; then
     curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
@@ -42,6 +49,7 @@ done < results/adapters.txt
     echo "rustc=$(rustc --version)"
     echo "cargo=$(cargo --version)"
     echo "uv=$(uv --version)"
+    echo "aws=$(aws --version | cut -d' ' -f1)"
     echo "python=$(adapters/opencascade/.venv/bin/python -I --version)"
     echo "cc=$(cc --version | head -1)"
     echo "rustflags=${RUSTFLAGS:-}"

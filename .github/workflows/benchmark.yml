@@ -197,14 +197,24 @@ jobs:
           path: results
           if-no-files-found: ignore
 
-      - name: Keep the shape files
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: assets
-          path: assets
-          # Already packed; GLBs and STEP text compress little more and would take long to zip.
-          compression-level: 0
-          if-no-files-found: error
+      # The machine's own role can put to the staging bucket and nothing else: it cannot read,
+      # list or delete there, and it cannot reach the CDN. `cp` and not `sync`, which would list.
+      - name: Send the shape files to staging
+        env:
+          STAGING: ${{ secrets.BENCHMARK_STAGING_BUCKET }}
+          AWS_DEFAULT_REGION: us-west-2
+        run: |
+          if [ -z "$(find assets -type f -print -quit)" ]; then
+              echo "the session wrote no shape files"
+              exit 1
+          fi
+          for kind in "glb model/gltf-binary" "step model/step"; do
+              read -r ext type <<<"$kind"
+              aws s3 cp assets "s3://$STAGING/$RUNNER_LABEL/" --recursive \
+                  --exclude '*' --include "*.$ext" --content-type "$type" \
+                  --no-progress --only-show-errors
+          done
+          echo "$(find assets -type f | wc -l) files, $(du -sh assets | cut -f1), sent to staging"
 
   # Runs no kernel code. The upload roles trust this repository's main branch and v* tags with the
   # default token subject, so this job declares no environment.
@@ -222,10 +232,6 @@ jobs:
         with:
           name: results
           path: results
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: assets
-          path: assets
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ inputs.publish == 'prod' && secrets.BREP_CONFORMANCE_ASSET_ROLE || secrets.BREP_CONFORMANCE_ASSET_ROLE_DEV }}
@@ -233,30 +239,33 @@ jobs:
           mask-aws-account-id: true
       # Under brep-conformance/<suite>/<kernel>/<version>/, the folder each report names as `assets`.
       # A file's name changes whenever what it shows does, so one already there is skipped, never
-      # rewritten, and a second run uploads nothing.
+      # rewritten, and a second run copies nothing. The copy is from the staging bucket to the CDN's,
+      # inside S3: nothing is downloaded here.
       - name: Publish the files the CDN lacks
         env:
           BUCKET: ${{ inputs.publish == 'prod' && secrets.BREP_CONFORMANCE_ASSET_BUCKET || secrets.BREP_CONFORMANCE_ASSET_BUCKET_DEV }}
+          STAGING: ${{ secrets.BENCHMARK_STAGING_BUCKET }}
         run: |
           immutable="public, max-age=31536000, immutable"
           for pass in springrep arris solidcore opencascade; do
+              staged="s3://$STAGING/$RUNNER_LABEL/$pass/"
+              count=$(aws s3 ls "$staged" --recursive | wc -l)
               # A kernel that can neither draw nor write STEP has no files.
-              [ -f "assets/$pass.tar" ] || continue
-              mkdir -p "files/$pass"
-              tar -xf "assets/$pass.tar" -C "files/$pass"
+              [ "$count" -gt 0 ] || continue
               folder=$(jq -r '"\(.suite)/\(.kernel.name)/\(.kernel.version)"' "results/$pass.json")
               if ! [[ "$folder" =~ ^[A-Za-z0-9._+-]+/[A-Za-z0-9._+-]+/[A-Za-z0-9._+-]+$ ]]; then
                   echo "$pass: $folder cannot name a folder"
                   exit 1
               fi
+              # --copy-props none: the type and the cache lifetime are set here, and a copy of the
+              # source's tags would need rights the upload role does not have.
               for kind in "glb model/gltf-binary" "step model/step"; do
                   read -r ext type <<<"$kind"
-                  aws s3 sync "files/$pass" "s3://$BUCKET/brep-conformance/$folder/" --size-only \
-                      --exclude '*' --include "*.$ext" --content-type "$type" \
+                  aws s3 sync "$staged" "s3://$BUCKET/brep-conformance/$folder/" --size-only \
+                      --exclude '*' --include "*.$ext" --copy-props none --content-type "$type" \
                       --cache-control "$immutable" --no-progress --only-show-errors
               done
-              echo "$pass: $(find "files/$pass" -type f | wc -l) files in brep-conformance/$folder/" \
-                  | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "$pass: $count files in brep-conformance/$folder/" | tee -a "$GITHUB_STEP_SUMMARY"
           done
 
   stop:

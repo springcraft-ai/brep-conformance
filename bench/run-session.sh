@@ -3,7 +3,7 @@
 # kernels, with the settings bench/README.md gives.
 # Every pass also writes its kernel's shape files, which the suite draws after judging each case,
 # outside every timed call; they go to a RAM disk, so no pass waits on the root volume, and are
-# packed into assets/ once the last pass ends.
+# moved to assets/<kernel>/ once the last pass ends.
 # Usage: run-session.sh <threads> [suite arguments, such as --family fillets/]
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -40,7 +40,7 @@ cp /etc/benchmark-runner/environment results/environment.txt
 } > results/session.txt
 
 # Any pass that did not finish cleanly, or is not of the pinned release, fails the session after
-# everything is packed, so its results are kept and nothing is published.
+# everything is moved, so its results are kept and nothing is published.
 failed=""
 
 one() {
@@ -89,11 +89,12 @@ echo "finished=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> results/session.txt
 
 for name in "${kernels[@]}"; do
     if [ -d "$shapes/$name" ]; then
-        tar -cf "assets/$name.tar" -C "$shapes/$name" .
+        mv "$shapes/$name" "assets/$name"
+        echo "assets_$name=$(find "assets/$name" -type f | wc -l) files, $(du -sh "assets/$name" | cut -f1)" \
+            | tee -a results/session.txt
     fi
 done
 rm -rf "$shapes"
-find assets -name "*.tar" -exec du -h {} + | tee -a results/session.txt
 cat results/session.txt
 if [ -n "$failed" ]; then
     echo "run-session: these passes did not finish cleanly:$failed" >&2
