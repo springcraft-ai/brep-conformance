@@ -78,11 +78,12 @@ registry says. `results/build.txt` records every commit and tool version.
 
 When the last pass ends, each kernel's files are moved to `assets/<kernel>/`. A pass that did not
 finish cleanly fails the job, after its results are kept, so nothing is staged or published.
-Otherwise `bench` sends the files to a private staging bucket, under a prefix that names the run.
-`publish` copies each pass's files from there to `brep-conformance/<suite>/<kernel>/<version>/` on
-the CDN, skipping those already there, with each file's type and an immutable cache lifetime. The
-copy is made inside the storage service, so the files do not pass through GitHub. Each report names
-that folder as `assets` ([formats.md](../doc/formats.md#assets)).
+Otherwise, unless `publish` is `none`, `bench` sends the files to a private staging bucket, under a
+prefix that names the run. `publish` copies each pass's files from there to
+`brep-conformance/<suite>/<kernel>/<version>/` on the CDN, skipping those already there, with each
+file's type and an immutable cache lifetime. The copy is made inside the storage service, so the
+files do not pass through GitHub. Each report names that folder as `assets`
+([formats.md](../doc/formats.md#assets)).
 
 The machine runs kernel code, which must never be able to write to the CDN. So the machine holds one
 cloud credential, and it can only write to staging: it cannot read, list or delete there, and it
@@ -91,8 +92,12 @@ cannot reach the CDN. The staging bucket deletes what it holds after a few days.
 ## What the bench job may not do
 
 The `bench` job runs kernel code, so it declares no environment and has no `id-token` permission. It
-cannot read the App's key, and nothing it starts can ask for a token that a cloud role would accept.
-The job fails if it finds that it can.
+cannot read the App's key, and nothing it starts can ask GitHub for a token that a cloud role would
+accept. The job fails if it finds that it can.
+
+The machine does hold one cloud credential, its own role, and anything running on it can use that
+role. The role can put files in the staging bucket and do nothing else. `bench` lists what it sent
+in `results/staged.txt`, and `publish` refuses to copy unless staging holds exactly that list.
 
 ## Setup
 

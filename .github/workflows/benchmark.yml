@@ -145,11 +145,15 @@ jobs:
           exit 1
 
   # Runs on the machine, and runs kernel code. It declares no environment and has no identity
-  # token, so nothing it starts can reach the App's key or an AWS role.
+  # token, so nothing it starts can reach the App's key or take a role through GitHub. The machine
+  # has one role of its own, which anything on it can use: it can put to the staging bucket and
+  # nothing else.
   bench:
     needs: start
     runs-on: ${{ needs.start.outputs.label }}
     timeout-minutes: 420
+    outputs:
+      staged: ${{ steps.stage.outputs.prefix }}
     permissions:
       contents: read
     steps:
@@ -189,6 +193,27 @@ jobs:
           # shellcheck disable=SC2086
           bench/run-session.sh 24 $SUITE_ARGS
 
+      # The machine's own role can put to the staging bucket and nothing else: it cannot read,
+      # list or delete there, and it cannot reach the CDN. `cp` and not `sync`, which would list.
+      # results/staged.txt lists exactly what was sent, and publish copies nothing else.
+      - name: Send the shape files to staging
+        id: stage
+        if: inputs.publish != 'none'
+        env:
+          STAGING: ${{ secrets.BENCHMARK_STAGING_BUCKET }}
+          AWS_DEFAULT_REGION: us-west-2
+        run: |
+          (cd assets && find . -type f \( -name '*.glb' -o -name '*.step' \) -printf '%P\n') \
+              | LC_ALL=C sort > results/staged.txt
+          if [ ! -s results/staged.txt ]; then
+              echo "the session wrote no shape files"
+              exit 1
+          fi
+          aws s3 cp assets "s3://$STAGING/$RUNNER_LABEL/" --recursive --no-follow-symlinks \
+              --exclude '*' --include '*.glb' --include '*.step' --no-progress --only-show-errors
+          echo "prefix=$RUNNER_LABEL" >> "$GITHUB_OUTPUT"
+          echo "$(wc -l < results/staged.txt) files, $(du -sh assets | cut -f1), sent to staging"
+
       - name: Keep the results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -196,25 +221,6 @@ jobs:
           name: results
           path: results
           if-no-files-found: ignore
-
-      # The machine's own role can put to the staging bucket and nothing else: it cannot read,
-      # list or delete there, and it cannot reach the CDN. `cp` and not `sync`, which would list.
-      - name: Send the shape files to staging
-        env:
-          STAGING: ${{ secrets.BENCHMARK_STAGING_BUCKET }}
-          AWS_DEFAULT_REGION: us-west-2
-        run: |
-          if [ -z "$(find assets -type f -print -quit)" ]; then
-              echo "the session wrote no shape files"
-              exit 1
-          fi
-          for kind in "glb model/gltf-binary" "step model/step"; do
-              read -r ext type <<<"$kind"
-              aws s3 cp assets "s3://$STAGING/$RUNNER_LABEL/" --recursive \
-                  --exclude '*' --include "*.$ext" --content-type "$type" \
-                  --no-progress --only-show-errors
-          done
-          echo "$(find assets -type f | wc -l) files, $(du -sh assets | cut -f1), sent to staging"
 
   # Runs no kernel code. The upload roles trust this repository's main branch and v* tags with the
   # default token subject, so this job declares no environment.
@@ -245,11 +251,27 @@ jobs:
         env:
           BUCKET: ${{ inputs.publish == 'prod' && secrets.BREP_CONFORMANCE_ASSET_BUCKET || secrets.BREP_CONFORMANCE_ASSET_BUCKET_DEV }}
           STAGING: ${{ secrets.BENCHMARK_STAGING_BUCKET }}
+          # From bench, not this job's own label: a second attempt of this job alone has a new label.
+          PREFIX: ${{ needs.bench.outputs.staged }}
         run: |
+          set -o pipefail
+          if [ -z "$PREFIX" ] || [ ! -s results/staged.txt ]; then
+              echo "bench staged no shape files"
+              exit 1
+          fi
+          # Staging must hold exactly what bench listed: nothing missing, and nothing put there by
+          # anything else.
+          aws s3api list-objects-v2 --bucket "$STAGING" --prefix "$PREFIX/" \
+              --query 'Contents[].Key' --output text | tr '\t' '\n' \
+              | sed "s|^$PREFIX/||" | LC_ALL=C sort > found.txt
+          if ! diff <(LC_ALL=C sort results/staged.txt) found.txt > differences.txt; then
+              echo "staging does not hold exactly what bench sent:"
+              head -20 differences.txt
+              exit 1
+          fi
           immutable="public, max-age=31536000, immutable"
           for pass in springrep arris solidcore opencascade; do
-              staged="s3://$STAGING/$RUNNER_LABEL/$pass/"
-              count=$(aws s3 ls "$staged" --recursive | wc -l)
+              count=$(grep -c "^$pass/" results/staged.txt || true)
               # A kernel that can neither draw nor write STEP has no files.
               [ "$count" -gt 0 ] || continue
               folder=$(jq -r '"\(.suite)/\(.kernel.name)/\(.kernel.version)"' "results/$pass.json")
@@ -261,9 +283,10 @@ jobs:
               # source's tags would need rights the upload role does not have.
               for kind in "glb model/gltf-binary" "step model/step"; do
                   read -r ext type <<<"$kind"
-                  aws s3 sync "$staged" "s3://$BUCKET/brep-conformance/$folder/" --size-only \
-                      --exclude '*' --include "*.$ext" --copy-props none --content-type "$type" \
-                      --cache-control "$immutable" --no-progress --only-show-errors
+                  aws s3 sync "s3://$STAGING/$PREFIX/$pass/" "s3://$BUCKET/brep-conformance/$folder/" \
+                      --size-only --exclude '*' --include "*.$ext" --copy-props none \
+                      --content-type "$type" --cache-control "$immutable" \
+                      --no-progress --only-show-errors
               done
               echo "$pass: $count files in brep-conformance/$folder/" | tee -a "$GITHUB_STEP_SUMMARY"
           done
