@@ -4,7 +4,7 @@ import { Annot } from '@/components'
 import { zoomKeyOf } from './format'
 import type { Mark, ScanHandle } from './scan'
 import type { Loaded } from './viewer'
-import { firstView, ghostsOf, operandsLabel, subjectOf, tonesOf } from './views'
+import { firstView, ghostsOf, keysOf, operandsLabel, subjectOf, tonesOf } from './views'
 
 type Status = 'loading' | 'ready' | 'missing' | 'unreadable' | 'undrawn'
 
@@ -57,12 +57,23 @@ export function ScanView({
   const [viewName, setViewName] = useState<string | null>(null)
   const [operands, setOperands] = useState(true)
   const [points, setPoints] = useState(true)
-  const hasPoints = !!loaded?.overlay.points.length
-  // The case's overlay, its points left out when they are turned off.
+  const o = loaded?.overlay
+  const hasPoints = !!(
+    o?.points.length ||
+    o?.closest.length ||
+    o?.sides.length ||
+    o?.normals.length
+  )
+  // The case's overlay, its points and the answers drawn at them left out when they are off.
   const overlay = useMemo(
-    () => loaded && (points ? loaded.overlay : { ...loaded.overlay, points: [] }),
+    () =>
+      loaded &&
+      (points
+        ? loaded.overlay
+        : { ...loaded.overlay, points: [], closest: [], sides: [], normals: [] }),
     [loaded, points],
   )
+  const keys = useMemo(() => (loaded ? keysOf(loaded.overlay, points) : []), [loaded, points])
 
   const views = loaded?.views ?? []
   const shown = useMemo(() => {
@@ -259,6 +270,11 @@ export function ScanView({
       </p>
       <div className="bc-shape__foot">
         <div className="bc-shape__legend">
+          {keys.map(k => (
+            <span key={k.label}>
+              <i className={`bc-key bc-key--${k.mark}`} /> {k.label}
+            </span>
+          ))}
           {marks.some(m => m.held) && (
             <span>
               <i className="bc-key bc-key--held" /> placed inside, belongs outside

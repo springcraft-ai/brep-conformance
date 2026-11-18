@@ -9,6 +9,11 @@ use crate::generate::Case;
 use crate::model::{Frame, Op, Primitive, Shape, Vec3};
 use crate::oracle;
 
+/// The keys of what a case's views lay over its drawing, which the export copies into the file.
+pub const OVERLAY: &[&str] = &[
+    "points", "box", "plane", "lines", "look", "clashes", "closest", "sides", "normals",
+];
+
 thread_local! {
     /// The shapes of the case whose views are being drawn up, each once, by its JSON's text.
     static TABLE: std::cell::RefCell<Vec<(String, Value)>> = const { std::cell::RefCell::new(Vec::new()) };
@@ -514,18 +519,21 @@ pub fn views(c: &Case) -> Value {
             ),
         ]
     } else if let Some(asm) = &c.exact.assembly {
+        let pairs: Vec<[usize; 2]> = asm.clashes.iter().map(|x| [x.i, x.j]).collect();
         let parts: Vec<Value> = asm
             .parts
             .iter()
             .enumerate()
             .map(|(k, (i, place))| {
-                let role = if k % 2 == 0 { "main" } else { "alt" };
+                let clashes = pairs.iter().any(|p| p.contains(&k));
+                let role = if clashes { "alt" } else { "main" };
                 solid(role, &Shape::Prim(asm.shapes[*i].clone()), Some(*place))
             })
             .collect();
+        extra["clashes"] = json!(pairs);
         vec![noted(
             "parts",
-            "The parts at their placements; the kernel must find which pairs clash.",
+            "The parts at their placements; those in the second tone clash with another, which the kernel must find.",
             parts,
         )]
     } else if let Some(l) = &c.exact.loft {
@@ -628,7 +636,7 @@ pub fn views(c: &Case) -> Value {
         vec![
             noted(
                 "loose faces",
-                "Each face is written on its own, apart from its neighbours by up to 0.0001 mm; gold faces are written inside out. Drawn pulled apart.",
+                "Each face is written on its own, apart from its neighbours by up to 0.0001 mm; faces in the second tone are written inside out. Drawn pulled apart.",
                 plates,
             ),
             noted(
@@ -646,9 +654,82 @@ pub fn views(c: &Case) -> Value {
 }
 
 fn finish_views(c: &Case, mut extra: Value, v: Vec<Value>) -> Value {
+    // The answers a point query is checked against, laid over whichever view the case draws.
+    let e = &c.exact;
+    if !e.closest.is_empty() {
+        let at = |(p, d, foot): &(Vec3, f64, Option<Vec3>)| json!({"at": p, "distance": d, "foot": foot});
+        extra["closest"] = e.closest.iter().map(at).collect();
+    }
+    if !e.sides.is_empty() {
+        let at = |(p, side): &(Vec3, crate::model::Side)| json!({"at": p, "side": side.word()});
+        extra["sides"] = e.sides.iter().map(at).collect();
+    }
+    if let Some(n) = &e.normals {
+        let at = |(p, normal): &(Vec3, Option<Vec3>)| json!({"at": p, "n": normal});
+        extra["normals"] = n.points.iter().map(at).collect();
+    }
     extra["cell"] = json!(cell(&c.a, &c.b, c));
     extra["views"] = Value::Array(v);
     extra["shapes"] =
         TABLE.with(|t| Value::Array(t.borrow_mut().drain(..).map(|(_, v)| v).collect()));
     extra
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn views_lay_over_every_query_answer_the_case_holds() {
+        let mut seen = [0; 4];
+        for c in crate::generate::cases(1) {
+            let spec = views(&c);
+            let e = &c.exact;
+            if !e.closest.is_empty() {
+                seen[0] += 1;
+                let got = spec["closest"].as_array().expect(&c.id);
+                assert_eq!(got.len(), e.closest.len(), "{}", c.id);
+                for (g, (at, d, foot)) in got.iter().zip(&e.closest) {
+                    assert_eq!(g["at"], json!(at), "{}", c.id);
+                    assert_eq!(g["distance"], json!(d), "{}", c.id);
+                    assert_eq!(g["foot"], json!(foot), "{}", c.id);
+                }
+            }
+            if !e.sides.is_empty() {
+                seen[1] += 1;
+                let got = spec["sides"].as_array().expect(&c.id);
+                assert_eq!(got.len(), e.sides.len(), "{}", c.id);
+                for (g, (at, side)) in got.iter().zip(&e.sides) {
+                    assert_eq!(g["at"], json!(at), "{}", c.id);
+                    assert_eq!(g["side"], side.word(), "{}", c.id);
+                }
+            }
+            if let Some(n) = &e.normals {
+                seen[2] += 1;
+                let got = spec["normals"].as_array().expect(&c.id);
+                assert_eq!(got.len(), n.points.len(), "{}", c.id);
+                for (g, (at, normal)) in got.iter().zip(&n.points) {
+                    assert_eq!(g["at"], json!(at), "{}", c.id);
+                    assert_eq!(g["n"], json!(normal), "{}", c.id);
+                }
+            }
+            if let Some(asm) = &e.assembly {
+                seen[3] += 1;
+                let pairs: Vec<[usize; 2]> = asm.clashes.iter().map(|x| [x.i, x.j]).collect();
+                assert_eq!(spec["clashes"], json!(pairs), "{}", c.id);
+                // Only a part that clashes with another is drawn in the second tone.
+                let parts = spec["views"][0]["solids"].as_array().unwrap();
+                for (k, s) in parts.iter().enumerate() {
+                    let clashes = pairs.iter().any(|p| p.contains(&k));
+                    assert_eq!(
+                        s["role"],
+                        if clashes { "alt" } else { "main" },
+                        "{} {k}",
+                        c.id
+                    );
+                }
+            }
+        }
+        assert!(seen.iter().all(|&n| n > 0), "{seen:?}");
+    }
 }

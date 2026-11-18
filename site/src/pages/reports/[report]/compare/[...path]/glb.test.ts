@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { box, glbOf, Z_UP_TO_Y_UP } from './fixture'
-import { parseGlb } from './glb'
+import { overlayOf, parseGlb } from './glb'
 
 // A triangle and one edge as the suite writes them: positions as SHORT padded to 8 bytes, normals
 // as normalized BYTE, and the node's translation and scale taking them back.
@@ -121,5 +121,70 @@ describe('parseGlb', () => {
 
   it('refuses what is not a GLB', () => {
     expect(() => parseGlb(new ArrayBuffer(32))).toThrow(/not a GLB/)
+  })
+})
+
+describe('overlayOf', () => {
+  it('reads the answers a query is checked against, and the direction a drawing looks from', () => {
+    const o = overlayOf({
+      lines: [
+        {
+          seen: false,
+          pts: [
+            [0, 0, 0],
+            [1, 0, 0],
+          ],
+        },
+      ],
+      look: [0, 0, 1],
+      closest: [{ at: [1, 2, 3], foot: null, distance: 2 }],
+      sides: [{ at: [0, 0, 0], side: 'on' }],
+      normals: [{ at: [0, 0, 0], n: [0, 1, 0] }],
+    })
+    expect(o.lines).toEqual([
+      {
+        seen: false,
+        pts: [
+          [0, 0, 0],
+          [1, 0, 0],
+        ],
+      },
+    ])
+    expect(o.look).toEqual([0, 0, 1])
+    expect(o.closest).toEqual([{ at: [1, 2, 3], foot: null, distance: 2 }])
+    expect(o.sides).toEqual([{ at: [0, 0, 0], side: 'on' }])
+    expect(o.normals).toEqual([{ at: [0, 0, 0], n: [0, 1, 0] }])
+  })
+
+  it('leaves out what is malformed, and gives empty lists where the file has nothing', () => {
+    const o = overlayOf({
+      lines: [
+        { seen: 'yes', pts: [[0, 0, 0]] },
+        {
+          seen: true,
+          pts: [
+            [0, 0],
+            [1, 1, 1],
+          ],
+        },
+      ],
+      look: [0, 0],
+      sides: [{ at: [0, 0, 0], side: 'beside' }],
+      normals: [{ at: [0, 0, 0], n: 'up' }],
+    })
+    expect(o.lines).toEqual([])
+    expect(o.look).toBeNull()
+    expect(o.sides).toEqual([])
+    expect(o.normals).toEqual([])
+    expect(overlayOf(undefined)).toEqual({
+      points: [],
+      box: null,
+      plane: null,
+      lines: [],
+      look: null,
+      closest: [],
+      sides: [],
+      normals: [],
+    })
   })
 })

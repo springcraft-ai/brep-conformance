@@ -149,33 +149,69 @@ function read(gltf: Gltf, bin: DataView, index: number, want: string): number[] 
 
 type Xyz = [number, number, number]
 
+export type Side = 'in' | 'on' | 'out'
+
 // What the suite lays over every view of a case, in its own millimetres, z up: the points the case
-// asks about or the edges and faces its steps name, a box, or a plane.
+// asks about or the edges and faces its steps name, a box, or a plane; a hidden-line drawing and
+// the direction it looks from; and the answers a point query is checked against.
 export interface Overlay {
   points: Xyz[]
   box: [Xyz, Xyz] | null
   plane: { origin: Xyz; normal: Xyz } | null
+  lines: { seen: boolean; pts: Xyz[] }[]
+  // From the solid toward the viewer.
+  look: Xyz | null
+  closest: { at: Xyz; foot: Xyz | null; distance: number }[]
+  sides: { at: Xyz; side: Side }[]
+  normals: { at: Xyz; n: Xyz | null }[]
 }
 
 const xyz = (v: unknown): v is Xyz =>
   Array.isArray(v) && v.length === 3 && v.every(x => typeof x === 'number' && Number.isFinite(x))
 
-// The overlay the file's extras carry; whatever is missing or malformed is left out.
-export function parseOverlay(buf: ArrayBuffer): Overlay {
-  const extras = ((chunks(buf).gltf as { extras?: Record<string, unknown> }).extras ?? {}) as {
-    points?: unknown
-    box?: unknown
-    plane?: { origin?: unknown; normal?: unknown }
-  }
-  const points = Array.isArray(extras.points) ? extras.points.filter(xyz) : []
-  const b = extras.box
+// The entries of a list that `read` makes something of.
+function each<T>(list: unknown, read: (v: Record<string, unknown>) => T | null): T[] {
+  if (!Array.isArray(list)) return []
+  return list.flatMap(v => {
+    const got = v && typeof v === 'object' ? read(v as Record<string, unknown>) : null
+    return got === null ? [] : [got]
+  })
+}
+
+// The overlay a file's root extras carry; whatever is missing or malformed is left out.
+export function overlayOf(extras: unknown): Overlay {
+  const e = (extras && typeof extras === 'object' ? extras : {}) as Record<string, unknown>
+  const points = Array.isArray(e.points) ? e.points.filter(xyz) : []
+  const b = e.box
   const box =
     Array.isArray(b) && b.length === 2 && xyz(b[0]) && xyz(b[1])
       ? ([b[0], b[1]] as [Xyz, Xyz])
       : null
-  const p = extras.plane
+  const p = e.plane as { origin?: unknown; normal?: unknown } | undefined
   const plane = p && xyz(p.origin) && xyz(p.normal) ? { origin: p.origin, normal: p.normal } : null
-  return { points, box, plane }
+  const lines = each(e.lines, l =>
+    typeof l.seen === 'boolean' && Array.isArray(l.pts) && l.pts.length >= 2 && l.pts.every(xyz)
+      ? { seen: l.seen, pts: l.pts as Xyz[] }
+      : null,
+  )
+  const closest = each(e.closest, c =>
+    xyz(c.at) && (c.foot === null || xyz(c.foot)) && typeof c.distance === 'number'
+      ? { at: c.at, foot: c.foot as Xyz | null, distance: c.distance }
+      : null,
+  )
+  const sides = each(e.sides, s =>
+    xyz(s.at) && (s.side === 'in' || s.side === 'on' || s.side === 'out')
+      ? { at: s.at, side: s.side as Side }
+      : null,
+  )
+  const normals = each(e.normals, n =>
+    xyz(n.at) && (n.n === null || xyz(n.n)) ? { at: n.at, n: n.n as Xyz | null } : null,
+  )
+  return { points, box, plane, lines, look: xyz(e.look) ? e.look : null, closest, sides, normals }
+}
+
+export function parseOverlay(buf: ArrayBuffer): Overlay {
+  return overlayOf((chunks(buf).gltf as { extras?: unknown }).extras)
 }
 
 // One view of a case as its file draws it: a scene, and its solids merged by role.

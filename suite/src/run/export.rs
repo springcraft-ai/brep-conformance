@@ -357,7 +357,7 @@ pub(super) fn export_case<K: Kernel<Solid: Clone + 'static>>(
         let mut extras = json!({"id": c.id, "test": c.test, "hash": hash, "unit": "mm",
             "kernel": {"name": k.name(), "version": k.version()},
             "outcome": v["outcome"], "result": v["result"]});
-        for key in ["points", "box", "plane"] {
+        for &key in crate::views::OVERLAY {
             if !spec[key].is_null() {
                 extras[key] = spec[key].clone();
             }
@@ -424,5 +424,22 @@ mod tests {
             }
         }
         assert!(checked > 10_000, "{checked}");
+    }
+
+    #[test]
+    fn every_extra_a_view_lays_over_its_drawing_reaches_the_file() {
+        for c in crate::generate::cases(1) {
+            let spec = crate::views::views(&c);
+            for key in spec.as_object().unwrap().keys() {
+                if ["views", "cell", "shapes"].contains(&key.as_str()) {
+                    continue;
+                }
+                assert!(
+                    crate::views::OVERLAY.contains(&key.as_str()),
+                    "{}: {key}",
+                    c.id
+                );
+            }
+        }
     }
 }

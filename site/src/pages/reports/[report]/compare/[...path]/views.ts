@@ -1,5 +1,5 @@
 // Which solids a view shows: its subjects, and the operands drawn faint behind them.
-import type { GlbView, Shape } from './glb'
+import type { GlbView, Overlay, Shape } from './glb'
 import type { Ghost } from './scan'
 
 const EMPTY: Shape = {
@@ -87,4 +87,26 @@ export function operandsLabel(views: GlbView[], v: GlbView): string | null {
 export function firstView(views: GlbView[]): number {
   const i = views.findIndex(v => subjectOf(v).triangles.length > 0)
   return i < 0 ? 0 : i
+}
+
+export type Mark = 'dot' | 'inside' | 'quiet' | 'seen' | 'hidden'
+
+// The key to the marks the overlay is drawn with, each once: a drawing's lines always, the
+// answers of a point query only while its points are shown.
+export function keysOf(o: Overlay, points: boolean): { mark: Mark; label: string }[] {
+  const keys: { mark: Mark; label: string }[] = []
+  const add = (mark: Mark, label: string) => {
+    if (!keys.some(k => k.label === label)) keys.push({ mark, label })
+  }
+  if (o.lines.some(l => l.seen)) add('seen', 'seen')
+  if (o.lines.some(l => !l.seen)) add('hidden', 'hidden')
+  if (!points) return keys
+  if (o.closest.length) add('dot', 'point asked about')
+  if (o.closest.some(c => c.foot)) add('inside', 'nearest point')
+  if (o.sides.some(s => s.side === 'in')) add('inside', 'inside')
+  if (o.sides.some(s => s.side === 'on')) add('dot', 'on the boundary')
+  if (o.sides.some(s => s.side === 'out')) add('quiet', 'outside')
+  if (o.normals.some(n => n.n)) add('dot', 'point and its normal')
+  if (o.normals.some(n => !n.n)) add('quiet', 'no normal: on a crease')
+  return keys
 }

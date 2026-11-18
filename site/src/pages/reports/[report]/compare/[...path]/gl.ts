@@ -35,9 +35,10 @@ export interface Look {
   faceAlt: Rgb
   edge: Rgb
   ghost: [Rgb, Rgb]
-  // The overlay's plane and box, and its points.
+  // The overlay's plane, box and lines; its points; and those outside or with no answer.
   guide: Rgb
   dot: Rgb
+  quiet: Rgb
 }
 
 // The share of a face's light that does not depend on its turn to the light: low for the subject,
@@ -124,16 +125,22 @@ void main() {
 }`
 
 // The overlay as the GPU draws it, in model units: a plane as two triangles and its outline, a box
-// as its twelve edges, the points as points.
+// as its twelve edges, guide lines and the dashes of what a drawing hides, and points in three
+// colours.
 export interface OverlayGeometry {
   plane: Float32Array
   planeEdges: Float32Array
   box: Float32Array
   points: Float32Array
+  lines: Float32Array
+  dashes: Float32Array
+  inside: Float32Array
+  quiet: Float32Array
 }
 
 const PLANE_ALPHA = 0.16
 const GUIDE_ALPHA = 0.85
+const HIDDEN_ALPHA = 0.35
 // A point marker's diameter in CSS pixels.
 const POINT_SIZE = 9
 
@@ -223,14 +230,15 @@ export class Renderer {
     this.points = compile(gl, POINT_VERTEX, POINTS)
   }
 
-  // The overlay's plane, plane outline, box and points, in that order.
+  // The overlay's parts, in the order `OverlayGeometry` lists them.
   setOverlay(o: OverlayGeometry) {
     const gl = this.gl
     for (const part of this.overlay) {
       gl.deleteVertexArray(part.vao)
       gl.deleteBuffer(part.buffer)
     }
-    this.overlay = [o.plane, o.planeEdges, o.box, o.points].map(data => {
+    const parts = [o.plane, o.planeEdges, o.box, o.points, o.lines, o.dashes, o.inside, o.quiet]
+    this.overlay = parts.map(data => {
       const vao = gl.createVertexArray()
       gl.bindVertexArray(vao)
       const buffer = gl.createBuffer()!
@@ -399,8 +407,9 @@ export class Renderer {
     if (this.alt) stroke(this.alt)
 
     // The overlay, depth-tested and writing no depth: the plane faint where nothing of the solid
-    // is in front of it, then its outline and the box, then the points.
-    const [plane, planeEdges, box, points] = this.overlay
+    // is in front of it, then its outline and the box. A drawing's hidden stretches are behind the
+    // solid by definition, so their dashes skip the test.
+    const [plane, planeEdges, box, points, lines, dashes, inside, quiet] = this.overlay
     const draw = (part: (typeof this.overlay)[number] | undefined, mode: number) => {
       if (!part?.count) return
       gl.bindVertexArray(part.vao)
@@ -411,12 +420,35 @@ export class Renderer {
     gl.uniform4f(color, ...rgba(look.guide, GUIDE_ALPHA))
     draw(planeEdges, gl.LINES)
     draw(box, gl.LINES)
-    if (points?.count) {
+    if (dashes?.count) {
+      gl.disable(gl.DEPTH_TEST)
+      draw(dashes, gl.LINES)
+      gl.enable(gl.DEPTH_TEST)
+    }
+    // The guide lines and points, twice: faint where the solid hides them, as CAD draws hidden
+    // geometry, since a query's points sit inside the solid or on its faces; then in full where
+    // nothing does.
+    const marks = !!(lines?.count || points?.count || inside?.count || quiet?.count)
+    for (const [test, k] of [
+      [gl.GREATER, HIDDEN_ALPHA],
+      [gl.LEQUAL, 1],
+    ] as const) {
+      if (!marks) break
+      gl.depthFunc(test)
+      gl.uniform4f(uniforms(this.lines), ...rgba(look.guide, GUIDE_ALPHA * k))
+      draw(lines, gl.LINES)
       const p = uniforms(this.points)
       gl.uniform1f(gl.getUniformLocation(this.points, 'u_size'), POINT_SIZE * v.dpr)
-      gl.uniform4f(p, ...rgba(look.dot, 1))
-      draw(points, gl.POINTS)
+      for (const [part, rgb] of [
+        [quiet, look.quiet],
+        [inside, look.guide],
+        [points, look.dot],
+      ] as const) {
+        gl.uniform4f(p, ...rgba(rgb, k))
+        draw(part, gl.POINTS)
+      }
     }
+    gl.depthFunc(gl.LEQUAL)
     gl.depthMask(true)
     gl.bindVertexArray(null)
   }

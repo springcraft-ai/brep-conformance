@@ -46,6 +46,11 @@ export const HOME: View = { yaw: -Math.PI / 4 - 0.35, pitch: 0.5, zoom: 1, pan: 
 const ALONG_PLANE = 0.12
 
 export function homeOf(o: Overlay | undefined): View {
+  const look = o?.look
+  const ll = look ? Math.hypot(...look) : 0
+  if (look && ll) {
+    return { ...HOME, yaw: Math.atan2(look[1], look[0]), pitch: Math.asin(look[2] / ll) }
+  }
   const n = o?.plane?.normal
   const len = n ? Math.hypot(...n) : 0
   if (!n || !len) return { ...HOME }
@@ -135,9 +140,10 @@ interface Colors {
   faceAlt: Rgb
   ghost: [Rgb, Rgb]
   fail: string
-  // The overlay's dots, and its box and plane.
+  // The overlay's dots; its box, plane and lines; and its points outside or with no answer.
   dot: Rgb
   guide: Rgb
+  quiet: Rgb
   focus: string
   annot: string
 }
@@ -162,6 +168,7 @@ function colorsOf(el: Element): Colors {
     fail: v('--scan-fail', '#ff5a33'),
     dot: rgbOf(v('--scan-dot', '#f5a200')),
     guide: rgbOf(v('--scan-guide', '#a2a4a6')),
+    quiet: rgbOf(v('--scan-quiet', '#a2a4a6')),
     focus: v('--scan-focus', '#f5a200'),
     annot: v('--scan-annot', '#6a6c6e'),
   }
@@ -173,6 +180,18 @@ function grow(b: { lo: Vec3; hi: Vec3 }, xs: ArrayLike<number>) {
       b.lo[k] = Math.min(b.lo[k]!, xs[i + k]!)
       b.hi[k] = Math.max(b.hi[k]!, xs[i + k]!)
     }
+}
+
+// Every place the overlay marks: its points and the answers drawn at them, the box's corners, a
+// point of the plane, and the drawing's lines.
+export function overlayAt(o: Overlay): Vec3[] {
+  const at: Vec3[] = [...o.points, ...(o.box ?? [])]
+  if (o.plane) at.push(o.plane.origin)
+  for (const l of o.lines) at.push(...l.pts)
+  for (const c of o.closest) at.push(c.at, ...(c.foot ? [c.foot] : []))
+  for (const s of o.sides) at.push(s.at)
+  for (const n of o.normals) at.push(n.at)
+  return at
 }
 
 // The frame every view of a scene is fitted to: the shape, its ghosts, and the marks with it.
@@ -221,6 +240,49 @@ function overlay(
 
 // How far past the solid's box a plane is drawn, as a share of the box's size each way.
 const PLANE_MARGIN = 0.08
+// A hidden stretch's dash, and the gap after it; a normal's arrow and its barbs: each as a share of
+// the solid's size, so they read the same on a small part and a large one.
+const DASH = 0.012
+const ARROW = 0.08
+const BARB = 0.3
+
+// `ends` as dashes along the polyline `pts`, each `dash` long with as long a gap after it.
+function dashed(pts: readonly Vec3[], dash: number, ends: number[]) {
+  let on = true
+  let left = dash
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [a, b] = [pts[i]!, pts[i + 1]!]
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+    let t = 0
+    while (t < len) {
+      const step = Math.min(left, len - t)
+      if (on) {
+        const at = (s: number) => [0, 1, 2].map(k => a[k]! + ((b[k]! - a[k]!) * s) / len)
+        ends.push(...at(t), ...at(t + step))
+      }
+      t += step
+      left -= step
+      if (left <= 0) {
+        on = !on
+        left = dash
+      }
+    }
+  }
+}
+
+// An arrow from `at` along the unit `n`, `len` long, with two barbs back from its tip.
+function arrow(at: Vec3, n: Vec3, len: number, ends: number[]) {
+  const tip = [0, 1, 2].map(k => at[k]! + n[k]! * len)
+  ends.push(...at, ...tip)
+  const seed = Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]
+  const d = seed[0]! * n[0] + seed[1]! * n[1] + seed[2]! * n[2]
+  const u = seed.map((x, k) => x - d * n[k]!)
+  const ul = Math.hypot(...u)
+  for (const s of [1, -1]) {
+    const back = [0, 1, 2].map(k => tip[k]! + BARB * len * ((s * 0.6 * u[k]!) / ul - n[k]!))
+    ends.push(...tip, ...back)
+  }
+}
 
 // The case's overlay as the GPU draws it: a plane as the polygon it cuts from the box `within`
 // (the solid's, a little grown), which reaches past the solid on every side as an endless plane
@@ -230,7 +292,18 @@ export function overlayGeometry(
   within: { lo: Vec3; hi: Vec3 },
 ): OverlayGeometry {
   const none = new Float32Array(0)
-  if (!o) return { plane: none, planeEdges: none, box: none, points: none }
+  if (!o) {
+    return {
+      plane: none,
+      planeEdges: none,
+      box: none,
+      points: none,
+      lines: none,
+      dashes: none,
+      inside: none,
+      quiet: none,
+    }
+  }
   let plane = none
   let planeEdges = none
   if (o.plane) {
@@ -290,7 +363,47 @@ export function overlayGeometry(
       for (const bit of [1, 2, 4]) if (!(i & bit)) ends.push(...at(i), ...at(i | bit))
     box = Float32Array.from(ends)
   }
-  return { plane, planeEdges, box, points: Float32Array.from(o.points.flat()) }
+  const size = Math.hypot(...[0, 1, 2].map(k => within.hi[k]! - within.lo[k]!))
+  // Amber: the points asked about, a point on the boundary. Blue: a nearest point, a point inside.
+  // Grey: a point outside, a point with no normal.
+  const points: number[] = o.points.flat()
+  const inside: number[] = []
+  const quiet: number[] = []
+  const lines: number[] = []
+  const dashes: number[] = []
+  for (const l of o.lines) {
+    if (l.seen)
+      for (let i = 0; i + 1 < l.pts.length; i++) lines.push(...l.pts[i]!, ...l.pts[i + 1]!)
+    else dashed(l.pts, DASH * size, dashes)
+  }
+  for (const c of o.closest) {
+    points.push(...c.at)
+    if (c.foot) {
+      inside.push(...c.foot)
+      lines.push(...c.at, ...c.foot)
+    }
+  }
+  for (const s of o.sides)
+    (s.side === 'in' ? inside : s.side === 'on' ? points : quiet).push(...s.at)
+  for (const { at, n } of o.normals) {
+    const len = n ? Math.hypot(...n) : 0
+    if (!n || !len) {
+      quiet.push(...at)
+      continue
+    }
+    points.push(...at)
+    arrow(at, [n[0] / len, n[1] / len, n[2] / len], ARROW * size, lines)
+  }
+  return {
+    plane,
+    planeEdges,
+    box,
+    points: Float32Array.from(points),
+    lines: Float32Array.from(lines),
+    dashes: Float32Array.from(dashes),
+    inside: Float32Array.from(inside),
+    quiet: Float32Array.from(quiet),
+  }
 }
 
 // The lock-on reticle: four corner brackets round the focused point.
@@ -398,6 +511,7 @@ export function mountScan(
         ghost: colors.ghost,
         guide: colors.guide,
         dot: colors.dot,
+        quiet: colors.quiet,
       },
     )
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -532,9 +646,10 @@ export function mountScan(
 
   return {
     set(next) {
-      // A case about another plane opens on its own view; the same plane keeps the reader's.
-      if (JSON.stringify(next.overlay?.plane) !== JSON.stringify(scene.overlay?.plane))
-        view = homeOf(next.overlay)
+      // A case with another home, such as another plane or a drawing seen from elsewhere, opens on
+      // it; one with the same home keeps the reader's view.
+      const home = homeOf(next.overlay)
+      if (JSON.stringify(home) !== JSON.stringify(homeOf(scene.overlay))) view = home
       scene = next
       frame = frameOf(scene)
       focused = -1

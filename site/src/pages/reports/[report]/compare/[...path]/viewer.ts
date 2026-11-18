@@ -2,7 +2,7 @@
 // imports nothing the page itself imports: a module both share is bundled into the page's chunk,
 // which then has no manifest entry of its own and cannot be prerendered.
 import { parseOverlay, parseViews, type GlbView, type Overlay } from './glb'
-import { frameOf } from './scan'
+import { frameOf, overlayAt } from './scan'
 import type { Vec3 } from './vec'
 
 export { mountScan, type Ghost, type Mark, type Scene, type ScanHandle } from './scan'
@@ -29,8 +29,7 @@ export function loadViews(url: string): Promise<Loaded> {
       .then(buf => {
         const views = parseViews(buf)
         const overlay = parseOverlay(buf)
-        const at = [...overlay.points, ...(overlay.box ?? [])]
-        if (overlay.plane) at.push(overlay.plane.origin)
+        const at = overlayAt(overlay)
         const none = new Float32Array(0)
         const solids = views.flatMap(v =>
           v.solids
