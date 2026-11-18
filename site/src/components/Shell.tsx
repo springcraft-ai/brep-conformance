@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { Logo } from '@/ds'
 import { href } from '@/site/href'
 import { SUITE_URL } from '@/site/repo'
-import { SEARCH_ID, searchPlaceholder, searchTarget } from './search'
 
 export interface NavItem {
   label: string
@@ -37,17 +36,6 @@ export function Shell({ path, nav, suite, children }: ShellProps) {
           <Logo lockup="mark" size={18} title="Springcraft" />
           <span>brep-conformance</span>
         </a>
-        <form className="bc-search" role="search" action={href(searchTarget(path))} method="get">
-          <input
-            id={SEARCH_ID}
-            name="q"
-            type="search"
-            className="sc-focus"
-            placeholder={searchPlaceholder(path)}
-            aria-label="Search"
-            autoComplete="off"
-          />
-        </form>
         <nav className="bc-chrome__nav" aria-label="site">
           {nav.map(item => (
             <a

@@ -311,7 +311,7 @@ a.rp-dist__row:hover .rp-bar {
 
 .rp-filters {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 260px));
+  grid-template-columns: repeat(2, minmax(0, 260px)) minmax(0, 420px);
   gap: var(--sp-5);
   align-items: end;
 }

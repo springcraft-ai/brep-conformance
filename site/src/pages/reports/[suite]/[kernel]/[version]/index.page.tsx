@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState, type MouseEvent } from 'react'
 import type { ReactNode } from 'react'
 import { Annot, fmt, GradeLabel, PageHead, Section } from '@/components'
-import { useChromeSearch } from '@/components/search'
+import { useSearchBox } from '@/components/search'
 import { repoName } from '@/data/kernels'
 import { FAILURES, GRADES, KINDS, TIERS, type Grade } from '@/data/results'
 import { href, url } from '@/site/href'
@@ -50,7 +50,7 @@ export default function ReportPage(props: Props) {
     window.history.replaceState(null, '', pathname + filterToLocation(f, opening) + hash)
   }
 
-  useChromeSearch(filter.q, q => applyFilter({ ...filter, q }))
+  useSearchBox(filter.q, q => applyFilter({ ...filter, q }))
 
   const show = (e: MouseEvent, f: Filter) => {
     e.preventDefault()

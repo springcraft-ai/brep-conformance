@@ -1,5 +1,5 @@
 import type { DocEntry, DocGroup } from '@/docs/source'
-import { PageHead } from '@/components'
+import { PageHead, SearchBox } from '@/components'
 import { takeSearch } from '@/components/search'
 import { prettyJson } from '@/docs/example'
 import { Markdown, type DocLinks } from '@/pages/operations/Markdown'
@@ -21,6 +21,10 @@ export default function Docs({ parts, links }: Props) {
           contents
         </button>
         <nav className="dx-nav" aria-label="Contents">
+          <SearchBox label="search the docs" placeholder="e.g. tolerance" />
+          <p className="bc-annot dx-nav__none" id="dx-none" hidden>
+            no section matches
+          </p>
           <ul>
             {parts.map(p => (
               <li key={p.id} className="dx-nav__part">
@@ -181,9 +185,10 @@ export function enhance() {
     if (!finding) a?.scrollIntoView({ block: 'nearest' })
   }
 
-  // Finding a section with the header's search: only the headings that match stay in the list,
+  // Finding a section with the search box: only the headings that match stay in the list,
   // with what they sit under, and Enter goes to the first.
   let finding = false
+  const none = document.getElementById('dx-none')
   const items = [...nav.querySelectorAll<HTMLLIElement>('li')]
   const narrow = (q: string) => {
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
@@ -194,6 +199,7 @@ export function enhance() {
       return words.every(w => text.includes(w))
     }
     for (const li of items) li.hidden = finding && !hit(li)
+    if (none) none.hidden = !finding || items.some(hit)
     if (finding)
       for (const li of items.filter(hit))
         for (let up = li.parentElement?.closest('li'); up; up = up.parentElement?.closest('li'))

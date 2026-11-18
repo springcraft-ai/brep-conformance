@@ -86,27 +86,50 @@ body {
   font: var(--fw-voice) var(--fs-voice-1) / 1 var(--font-voice);
 }
 .bc-search {
-  flex: 1;
+  display: grid;
+  flex: 1 1 240px;
+  gap: 5px;
   min-width: 0;
   max-width: 420px;
-  margin-left: auto;
+}
+.bc-search label {
+  color: var(--void-ink-2);
+  font: var(--fw-annot) var(--fs-micro-3) / 1 var(--font-annot);
+  letter-spacing: var(--ls-micro);
+  text-transform: uppercase;
 }
 .bc-search input {
   width: 100%;
-  height: 28px;
-  padding: 0 12px;
+  padding: 8px 10px 7px;
   border: var(--hairline-void-soft);
   border-radius: 0;
   background: transparent;
   color: var(--void-ink-1);
-  font: var(--fw-machine) var(--fs-micro-1) / 1 var(--font-machine);
+  font: var(--fw-machine) var(--fs-read-4) / 1.2 var(--font-machine);
+  letter-spacing: var(--ls-read);
+  transition: border-color var(--dur-2) var(--ease-mech);
+}
+@supports (corner-shape: bevel) {
+  .bc-search input {
+    corner-shape: bevel;
+    border-radius: 0 0 var(--cut) 0;
+  }
 }
 .bc-search input::placeholder {
   color: var(--void-ink-2);
 }
+.bc-search input:hover,
+.bc-search input:focus {
+  border-color: var(--void-ink-2);
+}
+/* A query is an active filter, so it takes the accent as a select's chosen value does. */
+.bc-search input:not(:placeholder-shown) {
+  color: var(--accent);
+}
 .bc-chrome__nav {
   display: flex;
   flex: none;
+  margin-left: auto;
   align-self: stretch;
 }
 .bc-chrome__nav a {
@@ -200,8 +223,7 @@ body {
   .bc-main .bc-display {
     font-size: min(var(--fs-display-4), 11vw);
   }
-  /* One row: the mark, the pages, then search and GitHub as icons. The search icon opens into a
-     box across the row while it has focus or holds a query. */
+  /* One row: the mark, the pages, then GitHub as an icon. */
   .bc-chrome {
     gap: var(--sp-5);
   }
@@ -210,46 +232,6 @@ body {
   }
   .bc-chrome__nav {
     order: 2;
-  }
-  .bc-search {
-    order: 3;
-    flex: none;
-    width: 30px;
-  }
-  .bc-search input {
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    border-color: transparent;
-    color: transparent;
-    cursor: pointer;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23a3a3a3' stroke-width='1.5'%3E%3Ccircle cx='7' cy='7' r='4.5'/%3E%3Cpath d='M10.4 10.4 14 14'/%3E%3C/svg%3E")
-      center / 16px no-repeat;
-  }
-  .bc-search input::placeholder {
-    color: transparent;
-  }
-  .bc-search:focus-within,
-  .bc-search:has(input:not(:placeholder-shown)) {
-    position: absolute;
-    inset: 11px var(--grid-margin) auto;
-    z-index: 2;
-    width: auto;
-    max-width: none;
-  }
-  .bc-search:focus-within input,
-  .bc-search:has(input:not(:placeholder-shown)) input {
-    width: 100%;
-    padding: 0 12px 0 34px;
-    border-color: var(--void-ink-3);
-    color: var(--void-ink-1);
-    cursor: text;
-    background-color: var(--ground-void);
-    background-position: 10px center;
-  }
-  .bc-search:focus-within input::placeholder,
-  .bc-search:has(input:not(:placeholder-shown)) input::placeholder {
-    color: var(--void-ink-2);
   }
   .bc-chrome__gh {
     order: 4;
@@ -322,6 +304,9 @@ body {
   align-items: center;
   padding-bottom: var(--sp-4);
   border-bottom: var(--hairline-void-soft);
+}
+.fn-tools:has(.bc-search) {
+  align-items: end;
 }
 .fn-lede {
   margin: 0;

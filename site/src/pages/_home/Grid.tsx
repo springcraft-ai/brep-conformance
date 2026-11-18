@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Segmented } from '@/ds'
-import { fmt } from '@/components'
+import { fmt, SearchBox } from '@/components'
 import { url } from '@/site/href'
 import {
   caseTitle,
@@ -167,6 +167,7 @@ export function Grid({
             onChange={id => setFilter(id as Filter)}
           />
         </span>
+        <SearchBox label="search tests" placeholder="e.g. fillets or cylinders" />
         <span className="bc-annot hm-grid__count">
           showing {tests.length} of {allTests}
           {scope !== null &&

@@ -1,4 +1,4 @@
-import { fmt, GradeMark, PageHead } from '@/components'
+import { fmt, GradeMark, PageHead, SearchBox } from '@/components'
 import { takeSearch } from '@/components/search'
 import { href, url } from '@/site/href'
 import './operations.css'
@@ -9,7 +9,7 @@ export const nav = { label: 'operations', order: 2 }
 // Reference: every operation the suite specifies, and which kernels offer it, a column per kernel
 // so a kernel reads down the page. What a kernel offers is a fact of one run of one version, so
 // each column names its run and links to its report; how it does is the results page's, not this
-// one's. The page ships no data; `enhance` lets the header's search filter the rows already drawn.
+// one's. The page ships no data; `enhance` lets its search box filter the rows already drawn.
 export default function OperationsIndex({ total, suites, kernels, groups }: Props) {
   return (
     <>
@@ -20,6 +20,7 @@ export default function OperationsIndex({ total, suites, kernels, groups }: Prop
             Suite {suites.join(', ')} · {total} operations ·{' '}
             <a href={href('/docs/#constructors')}>how each is specified</a>
           </p>
+          <SearchBox label="search operations" placeholder="e.g. fillet" />
         </div>
         <table className="fn-table">
           <thead>

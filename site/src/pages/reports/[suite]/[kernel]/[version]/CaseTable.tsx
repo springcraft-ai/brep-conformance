@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { OutlineButton } from '@/ds'
 import { Select } from '@/ds'
-import { fmt, GradeLabel, GradeMark, gradeLabel, Table, type Column } from '@/components'
+import { fmt, GradeLabel, GradeMark, gradeLabel, SearchBox, Table, type Column } from '@/components'
 import { GRADES } from '@/data/results'
 import { url } from '@/site/href'
 import {
@@ -24,7 +24,7 @@ const PAGE_SIZE = 50
 
 // A report's cases, gathered by test: a test is one row saying what its cases came to and why, and
 // opens to the cases themselves. Most of a test's cases share one reason, which is then said once.
-// It filters by grade and area, which the bars above set too; the header's box searches it.
+// It filters by grade and area, which the bars above set too, and by its search box.
 export function CaseTable({
   rows,
   kernel,
@@ -134,6 +134,7 @@ export function CaseTable({
           value={filter.operation}
           onChange={id => set({ operation: id })}
         />
+        <SearchBox label="search cases" placeholder="e.g. fillets or a case id" />
       </div>
       <div className="rp-count" aria-live="polite">
         <span className="bc-machine">

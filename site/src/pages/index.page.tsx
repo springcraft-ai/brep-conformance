@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fmt, PageHead, Section } from '@/components'
-import { queryFromUrl, useChromeSearch } from '@/components/search'
+import { queryFromUrl, useSearchBox } from '@/components/search'
 import { EmptyState } from '@/ds'
 import { href, url } from '@/site/href'
 import { Grid } from './_home/Grid'
@@ -21,15 +21,11 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
   const [q, setQ] = useState('')
 
   useEffect(() => setQ(queryFromUrl()), [])
-  useChromeSearch(q, v => {
+  useSearchBox(q, v => {
     setQ(v)
     const { pathname, hash } = window.location
     const search = v.trim() ? `?q=${encodeURIComponent(v)}` : ''
     window.history.replaceState(null, '', pathname + search + hash)
-    // The search box is in the header and what it narrows is a screen below: bring that up.
-    const grid = document.getElementById('by-test')
-    if (v.trim() && grid && grid.getBoundingClientRect().top > window.innerHeight * 0.6)
-      grid.scrollIntoView({ block: 'start' })
   })
 
   const compare = (kernel: string) => setPicked(p => toggleCompare(p, kernel, kernels))
