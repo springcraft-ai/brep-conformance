@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 description = "The B-rep operations a conformance suite calls: their data types, the kernel trait, and its JSON-lines binding"
-publish = false
+publish = true
 
 # crates.io dependencies only: the protocol must build outside this repository.
 [dependencies]
