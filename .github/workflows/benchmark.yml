@@ -75,14 +75,15 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.BENCHMARK_ROLE_ARN }}
+          role-to-assume: ${{ secrets.BENCHMARK_ROLE_ARN }}
           aws-region: ${{ vars.BENCHMARK_AWS_REGION }}
+          mask-aws-account-id: true
 
       - name: Launch the machine
         id: launch
         env:
-          TEMPLATE: ${{ vars.BENCHMARK_LAUNCH_TEMPLATE }}
-          SUBNETS: ${{ vars.BENCHMARK_SUBNET_IDS }}
+          TEMPLATE: ${{ secrets.BENCHMARK_LAUNCH_TEMPLATE }}
+          SUBNETS: ${{ secrets.BENCHMARK_SUBNET_IDS }}
         run: |
           tags="{Key=Application,Value=benchmark-runner},{Key=Name,Value=benchmark-runner}"
           tags="$tags,{Key=CostCenter,Value=springcraft-engineering}"
@@ -109,6 +110,7 @@ jobs:
               echo "no zone has capacity for this instance type"
               exit 1
           fi
+          echo "::add-mask::$instance"
           echo "launched $instance"
           echo "instance=$instance" >> "$GITHUB_OUTPUT"
 
@@ -222,15 +224,16 @@ jobs:
           path: assets
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ inputs.publish == 'prod' && vars.BREP_CONFORMANCE_ASSET_ROLE || vars.BREP_CONFORMANCE_ASSET_ROLE_DEV }}
+          role-to-assume: ${{ inputs.publish == 'prod' && secrets.BREP_CONFORMANCE_ASSET_ROLE || secrets.BREP_CONFORMANCE_ASSET_ROLE_DEV }}
           aws-region: us-west-2
+          mask-aws-account-id: true
       # Each kernel's first pass; springrep's second is only the session's noise measure.
       # Under brep-conformance/<suite>/<kernel>/<version>/, the folder each report names as `assets`.
       # A file's name changes whenever what it shows does, so one already there is skipped, never
       # rewritten, and a second run uploads nothing.
       - name: Publish the files the CDN lacks
         env:
-          BUCKET: ${{ inputs.publish == 'prod' && vars.BREP_CONFORMANCE_ASSET_BUCKET || vars.BREP_CONFORMANCE_ASSET_BUCKET_DEV }}
+          BUCKET: ${{ inputs.publish == 'prod' && secrets.BREP_CONFORMANCE_ASSET_BUCKET || secrets.BREP_CONFORMANCE_ASSET_BUCKET_DEV }}
         run: |
           immutable="public, max-age=31536000, immutable"
           for pass in springrep-1 arris solidcore opencascade; do
@@ -267,8 +270,9 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.BENCHMARK_ROLE_ARN }}
+          role-to-assume: ${{ secrets.BENCHMARK_ROLE_ARN }}
           aws-region: ${{ vars.BENCHMARK_AWS_REGION }}
+          mask-aws-account-id: true
 
       # By tag and not by the start job's output: a start job cancelled after the launch has none.
       - name: Terminate the machine
@@ -281,6 +285,9 @@ jobs:
               echo "no machine is running for this run"
               exit 0
           fi
+          for id in $instances; do
+              echo "::add-mask::$id"
+          done
           # shellcheck disable=SC2086
           aws ec2 terminate-instances --instance-ids $instances --output text
           # shellcheck disable=SC2086

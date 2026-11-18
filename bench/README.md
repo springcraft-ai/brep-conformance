@@ -99,16 +99,19 @@ The workflow reads these from the `benchmark` environment, which allows only `ma
 | --------------------------- | -------- | --------------------------------------------- |
 | `BENCHMARK_APP_CLIENT_ID`   | Variable | The GitHub App that registers the runner      |
 | `BENCHMARK_APP_PRIVATE_KEY` | Secret   | That App's key                                |
-| `BENCHMARK_ROLE_ARN`        | Variable | The role that may launch and terminate        |
+| `BENCHMARK_ROLE_ARN`        | Secret   | The role that may launch and terminate        |
 | `BENCHMARK_AWS_REGION`      | Variable | The region of the machine                     |
-| `BENCHMARK_LAUNCH_TEMPLATE` | Variable | The launch template's name                    |
-| `BENCHMARK_SUBNET_IDS`      | Variable | Subnets to try, in order, separated by commas |
+| `BENCHMARK_LAUNCH_TEMPLATE` | Secret   | The launch template's name                    |
+| `BENCHMARK_SUBNET_IDS`      | Secret   | Subnets to try, in order, separated by commas |
 
 [`app-token.sh`](app-token.sh) turns the App's key into a token that can only manage this
 repository's runners.
 
-`publish` reads these repository variables. It declares no environment, because the upload roles
-trust this repository's `main` and `v*` tags with the default token subject:
+The AWS identifiers are secrets, not variables, so they are masked in the public run logs; the
+workflow also masks the account ID in any ARN it prints and the IDs of the instances it launches.
+
+`publish` reads these repository secrets. It declares no environment, because the upload roles trust
+this repository's `main` and `v*` tags with the default token subject:
 
 | Name                                | What it is                 |
 | ----------------------------------- | -------------------------- |
