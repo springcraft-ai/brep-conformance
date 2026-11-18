@@ -264,6 +264,32 @@ body {
   text-align: right;
 }
 
+/* ---- a page's head, as operations, docs and a test's page set it: a title, then a lede over a
+   rule, at the same place on each, so moving between them moves nothing above the content ---- */
+
+.fn-page .bc-head {
+  margin: var(--sp-8) 0 var(--sp-6);
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.fn-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4) var(--sp-6);
+  align-items: center;
+  padding-bottom: var(--sp-4);
+  border-bottom: var(--hairline-void-soft);
+}
+.fn-lede {
+  margin: 0;
+  max-width: 72ch;
+  font: var(--fw-voice-light) 13px / 1.45 var(--font-voice);
+  color: var(--void-ink-1);
+}
+.fn-lede a {
+  color: var(--void-ink-2);
+}
+
 /* ---- section: a ruled region with a micro-caps label ---- */
 
 .bc-section {
@@ -357,7 +383,72 @@ a.bc-chip:hover {
   content: '×';
 }
 
-/* Beside a bar the mark is the bar's own block, not the table's ×. */
+/* In a table a pass is a tick in its tier's ink, as a failure is a ×: a filled square there reads
+   as a checkbox. */
+.bc-mark:is([data-grade='1e-7'], [data-grade='1e-6'], [data-grade='1e-5'], [data-grade='1e-3']) {
+  position: relative;
+  background: none;
+  border: none;
+}
+.bc-mark:is(
+    [data-grade='1e-7'],
+    [data-grade='1e-6'],
+    [data-grade='1e-5'],
+    [data-grade='1e-3']
+  )::before {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: 0.5px;
+  width: 4px;
+  height: 8px;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.bc-mark[data-grade='1e-7'] {
+  color: var(--grade-1e-7);
+}
+.bc-mark[data-grade='1e-6'] {
+  color: var(--grade-1e-6);
+}
+.bc-mark[data-grade='1e-5'] {
+  color: var(--grade-1e-5);
+}
+.bc-mark[data-grade='1e-3'] {
+  color: var(--grade-1e-3);
+}
+
+/* A case that ran no check, refused or out of time, is a short dash in quiet ink: an empty square
+   would read as a box to tick. */
+.bc-mark:is([data-grade='refused'], [data-grade='timeout']) {
+  position: relative;
+  border: none;
+}
+.bc-mark:is([data-grade='refused'], [data-grade='timeout'])::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: calc(50% - 1px);
+  height: 2px;
+  background: var(--void-ink-2);
+}
+
+/* Beside a bar the mark is the bar's own block, not the table's tick or ×. */
+:is(.bc-legend:not(.bc-legend--table), .hm-key)
+  .bc-mark:is([data-grade='1e-7'], [data-grade='1e-6'], [data-grade='1e-5'], [data-grade='1e-3']) {
+  background: currentColor;
+}
+:is(.bc-legend:not(.bc-legend--table), .hm-key)
+  .bc-mark:is(
+    [data-grade='1e-7'],
+    [data-grade='1e-6'],
+    [data-grade='1e-5'],
+    [data-grade='1e-3']
+  )::before {
+  content: none;
+}
 :is(.bc-legend:not(.bc-legend--table), .hm-key)
   .bc-mark:is([data-grade='fail'], [data-grade='crash']) {
   background: var(--grade-fail);
@@ -370,6 +461,10 @@ a.bc-chip:hover {
   .bc-mark:is([data-grade='refused'], [data-grade='timeout']) {
   background: var(--grade-none);
   border-color: var(--grade-none);
+}
+:is(.bc-legend:not(.bc-legend--table), .hm-key)
+  .bc-mark:is([data-grade='refused'], [data-grade='timeout'])::before {
+  content: none;
 }
 :is(.bc-legend:not(.bc-legend--table), .hm-key) .bc-mark[data-grade='unsupported'] {
   border-color: var(--void-ink-3);

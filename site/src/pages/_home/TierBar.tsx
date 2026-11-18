@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { GRADES, type Grade } from '@/data/results'
 import { drawn, type Counts } from './model'
+import './bar.css'
 
 // A share of cases per grade, best first, as one bar of blocks. Blocks are proportional; the label
 // carries the counts for anyone not reading colour. Each block's fill starts after the share of

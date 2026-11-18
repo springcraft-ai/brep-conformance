@@ -1,8 +1,11 @@
-/* The docs page: contents left, definitions in the middle, each function's call on the right. */
+/* The docs page: contents left, definitions in the middle, each function's call on the right. Its
+   type, rules and boxes are the other pages': the leaderboard's micro-caps labels over hairlines,
+   the operations page's display headings, and the operation page's prose and code, set larger
+   for reading at length. Its title sits where the operations pages' does (fn-page). */
 
 .dx {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: 264px minmax(0, 1fr);
   gap: 0 var(--sp-6);
   align-items: start;
 }
@@ -15,7 +18,12 @@
   top: var(--chrome-h);
   max-height: calc(100vh - var(--chrome-h));
   overflow-y: auto;
-  padding: var(--sp-4) 0 var(--sp-8);
+  padding: var(--sp-4) var(--sp-3) var(--sp-8) 0;
+  /* It scrolls with the wheel and follows the section in view, so it needs no scrollbar. */
+  scrollbar-width: none;
+}
+.dx-nav::-webkit-scrollbar {
+  display: none;
 }
 .dx-nav ul {
   margin: 0;
@@ -33,6 +41,7 @@
   display: block;
   border-bottom: none;
   color: var(--void-ink-2);
+  box-shadow: inset 2px 0 0 transparent;
 }
 .dx-nav a:hover {
   color: var(--void-ink-1);
@@ -44,17 +53,14 @@
   padding-top: 0;
 }
 .dx-nav__part > a {
-  padding: 0 0 var(--sp-2) 10px;
-  color: var(--void-ink-1);
-  font: var(--fw-display) var(--fs-micro-2) / 1.2 var(--font-display);
-  letter-spacing: var(--ls-micro);
+  padding: 0 0 var(--sp-3) 12px;
+  font: var(--fw-annot) var(--fs-micro-1) / 1.2 var(--font-display);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 .dx-nav__g > a {
-  padding: 5px 10px;
-  font: var(--fw-annot) var(--fs-micro-2) / 1.3 var(--font-annot);
-  letter-spacing: var(--ls-micro);
-  text-transform: uppercase;
+  padding: 5px 12px;
+  font: var(--fw-voice) 15px / 1.35 var(--font-voice);
 }
 .dx-nav__g > ul {
   padding: 2px 0 var(--sp-3);
@@ -66,15 +72,15 @@
   display: block;
 }
 .dx-nav__g li a {
-  padding: 3px 10px 3px 22px;
-  font: var(--fw-voice) var(--fs-voice-2) / 1.4 var(--font-voice);
+  padding: 4px 12px 4px 24px;
+  font: var(--fw-voice) 14px / 1.4 var(--font-voice);
 }
 .dx-nav__g li a.dx-nav__fn {
-  font: var(--fw-machine) var(--fs-micro-1) / 1.6 var(--font-machine);
+  font: var(--fw-machine) 13px / 1.5 var(--font-machine);
 }
+/* Where the reader is, marked as the header marks the current page: the accent, on a hairline. */
 .dx-nav a.dx-on {
   color: var(--void-ink-1);
-  background: rgb(255 255 255 / 0.08);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 .dx-menu {
@@ -84,15 +90,14 @@
 /* ---- parts and entries ---- */
 
 .dx-part {
-  max-width: 780px;
-  padding: var(--sp-8) 0 0;
+  padding: var(--sp-9) 0 0;
   scroll-margin-top: calc(var(--chrome-h) + var(--sp-4));
 }
 .dx-main > div:first-child > .dx-part {
-  padding-top: var(--sp-4);
+  padding-top: var(--sp-6);
 }
 .dx-part h2 {
-  margin: 0 0 var(--sp-4);
+  margin: 0 0 var(--sp-5);
   font: var(--fw-display) var(--fs-display-5) / 1.05 var(--font-display);
   letter-spacing: var(--ls-display);
   text-transform: uppercase;
@@ -103,24 +108,35 @@
   gap: 0 var(--sp-4);
   scroll-margin-top: calc(var(--chrome-h) + var(--sp-4));
 }
-.dx-entry--wide {
+/* An entry with no call beside it, a type or a rule, takes the whole width. */
+.dx-entry--wide,
+.dx-entry:has(> .dx-ex:empty) {
   grid-template-columns: minmax(0, 1fr);
+}
+.dx-ex:empty {
+  display: none;
 }
 .dx-entry--head {
   margin-top: var(--sp-7);
 }
-.dx-entry--head h3::before {
-  content: '';
-  display: block;
-  width: 44px;
-  height: 1px;
-  margin-bottom: 18px;
-  background: var(--void-ink-2);
-}
 .dx-doc {
   min-width: 0;
-  max-width: 760px;
-  padding: var(--sp-5) 0 var(--sp-5);
+  padding: var(--sp-5) 0;
+}
+/* Prose keeps a readable measure; tables and code use the column. */
+.dx-doc.bc-op-prose {
+  max-width: none;
+  font-size: 16px;
+  line-height: 1.55;
+}
+.dx-doc .bc-op-sig code {
+  font-size: 16px;
+}
+.dx-doc .bc-op-code {
+  font-size: 13px;
+}
+.dx-doc :is(p, ul, ol) {
+  max-width: 72ch;
 }
 .dx-doc h3,
 .dx-doc h4 {
@@ -128,14 +144,14 @@
 }
 .dx-doc h3 {
   font: var(--fw-display) var(--fs-display-6) / 1.1 var(--font-display);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 .dx-doc h4.dx-fn {
-  font: var(--fw-machine) 18px / 1.2 var(--font-machine);
+  font: var(--fw-machine) 22px / 1.2 var(--font-machine);
 }
 .dx-doc h4.dx-sub {
-  font: var(--fw-display) var(--fs-body) / 1.2 var(--font-display);
+  font: var(--fw-display) 16px / 1.2 var(--font-display);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -148,37 +164,37 @@
 .dx-doc h4 a:hover {
   color: var(--accent);
 }
-.dx-doc .bc-op-sig {
-  padding: 6px 0 6px 12px;
-  border-left: var(--hair) solid var(--accent);
-}
-.dx-doc .bc-op-sig code {
-  font-size: var(--fs-read-4);
-}
+/* The accent marks where the reader is and who won, never a signature. */
 .dx-support {
-  font: var(--fw-annot) var(--fs-micro-2) / 1.25 var(--font-annot);
-  letter-spacing: var(--ls-micro);
+  font: var(--fw-annot) var(--fs-micro-1) / 1.25 var(--font-display);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 /* Tables read as the site's: micro-caps heads, hairline rows. */
 .dx .bc-op-table {
   width: 100%;
-  font-size: var(--fs-voice-2);
+  margin-bottom: var(--sp-5);
+  font-size: 15px;
 }
 .dx .bc-op-table th {
-  padding: 6px 14px 6px 0;
-  border-bottom: var(--hairline-void);
+  padding: 0 18px 10px 0;
+  border-bottom: var(--hair) solid var(--void-ink-1);
   text-align: left;
-  font: var(--fw-annot) var(--fs-micro-2) / 1.25 var(--font-annot);
-  letter-spacing: var(--ls-micro);
+  font: var(--fw-annot) var(--fs-micro-1) / 1.25 var(--font-display);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--void-ink-2);
 }
 .dx .bc-op-table td {
-  padding: 5px 14px 5px 0;
+  padding: 9px 18px 9px 0;
   border-bottom: var(--hairline-void-soft);
   color: var(--void-ink-1);
+}
+.dx .bc-op-table td:first-child,
+.dx .bc-op-table td:first-child code {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 .dx .bc-op-table td a:has(> code:only-child) {
   border-bottom: none;
@@ -199,33 +215,22 @@
 }
 .dx-box {
   padding: 12px 14px 14px;
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+  border: var(--hairline-void-soft);
 }
 .dx-box + .dx-box {
   margin-top: 10px;
 }
-.dx-box--req {
-  background: #0b1226;
-}
-.dx-box--res {
-  background: #08191a;
-}
 .dx-cap {
-  margin: 0 0 8px;
-  font: var(--fw-annot) var(--fs-micro-1) / 1 var(--font-annot);
+  margin: 0 0 10px;
+  font: var(--fw-annot) var(--fs-micro-1) / 1 var(--font-display);
   letter-spacing: 0.14em;
   text-transform: uppercase;
-}
-.dx-box--req .dx-cap {
-  color: #5b8cff;
-}
-.dx-box--res .dx-cap {
-  color: #7ce8d0;
+  color: var(--void-ink-2);
 }
 /* A long example shows its first lines and opens in place; it never scrolls inside itself, unless
    the page's script has not run to give it its button. */
 .dx--js .dx-box pre {
-  max-height: 236px;
+  max-height: 300px;
   overflow-y: hidden;
 }
 .dx--js .dx-box pre[data-long] {
@@ -236,14 +241,14 @@
   mask-image: none;
 }
 .dx-more {
-  margin-top: 8px;
+  margin-top: 10px;
   padding: 0;
   border: none;
   border-bottom: var(--hair) solid var(--void-ink-3);
   background: none;
   color: var(--void-ink-2);
-  font: var(--fw-annot) var(--fs-micro-1) / 1.3 var(--font-annot);
-  letter-spacing: var(--ls-micro);
+  font: var(--fw-annot) var(--fs-micro-2) / 1.3 var(--font-display);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   cursor: pointer;
 }
@@ -256,14 +261,14 @@
   overflow-y: auto;
   margin: 0;
   overflow-x: auto;
-  font: var(--fw-machine) var(--fs-read-4) / 1.6 var(--font-machine);
+  font: var(--fw-machine) 13px / 1.6 var(--font-machine);
   color: var(--void-ink-1);
   white-space: pre;
 }
 .dx-note {
-  margin: 12px 2px 0;
+  margin: 12px 0 0;
   color: var(--void-ink-2);
-  font: var(--fw-voice) var(--fs-voice-2) / 1.5 var(--font-voice);
+  font: var(--fw-voice) 15px / 1.5 var(--font-voice);
 }
 .dx-note p {
   margin: 0;
@@ -271,7 +276,7 @@
 .dx-none {
   margin: 0;
   color: var(--void-ink-2);
-  font: var(--fw-voice) var(--fs-voice-2) / 1.5 var(--font-voice);
+  font: var(--fw-voice) 15px / 1.5 var(--font-voice);
 }
 
 @media (max-width: 1180px) {
@@ -307,8 +312,8 @@
     background: var(--ground-void);
     color: var(--void-ink-1);
     text-align: left;
-    font: var(--fw-annot) var(--fs-micro-2) / 1.25 var(--font-annot);
-    letter-spacing: var(--ls-micro);
+    font: var(--fw-annot) var(--fs-micro-2) / 1.25 var(--font-display);
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     cursor: pointer;
   }

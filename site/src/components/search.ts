@@ -1,17 +1,24 @@
 import { useEffect, useRef } from 'react'
 
 // The chrome's search box: one box, and each page searches what it shows. The results page filters
-// its tests, operations its operations and the docs their sections, as the reader types; any other
-// page, and any page without JS, submits it to the results page as ?q=.
+// its tests, operations its operations and the docs their sections, as the reader types. A page
+// under one of those, and any page without JS, submits it to the page it belongs to as ?q=.
 export const SEARCH_ID = 'bc-search'
 
-const PLACEHOLDER: Record<string, string> = {
-  '/operations/': 'search operations, e.g. fillet',
-  '/docs/': 'search the docs, e.g. tolerance',
-}
+const SCOPES: { path: string; placeholder: string }[] = [
+  { path: '/operations/', placeholder: 'search operations, e.g. fillet' },
+  { path: '/docs/', placeholder: 'search the docs, e.g. tolerance' },
+]
+
+const scopeOf = (path: string) => SCOPES.find(s => path.startsWith(s.path))
 
 export function searchPlaceholder(path: string): string {
-  return PLACEHOLDER[path] ?? 'search tests, e.g. fillets or cylinders'
+  return scopeOf(path)?.placeholder ?? 'search tests, e.g. fillets or cylinders'
+}
+
+// Where a search from this page lands, before the site's base path.
+export function searchTarget(path: string): string {
+  return scopeOf(path)?.path ?? '/'
 }
 
 // Takes the box over on a page that searches in place without React: `apply` runs on each change,

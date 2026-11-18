@@ -65,7 +65,7 @@ function Count({ value, digits, suffix = '' }: { value: number; digits: number; 
     const t0 = performance.now()
     let frame = 0
     const step = (t: number) => {
-      const x = Math.min(1, (t - t0) / COUNT_MS)
+      const x = Math.min(1, Math.max(0, (t - t0) / COUNT_MS))
       setShown(value * (1 - Math.pow(1 - x, 3)))
       if (x < 1) frame = requestAnimationFrame(step)
     }

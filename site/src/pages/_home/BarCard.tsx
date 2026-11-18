@@ -2,16 +2,15 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { fmt, groupLabel, markGroups } from '@/components'
 import { GRADES, type Grade } from '@/data/results'
 import { drawn, type Counts } from './model'
+import './bar.css'
 
 // What a band means, in a few words. Keyed by the first grade of each group that shares a mark.
 const MEANING: Partial<Record<Grade, string>> = {
   '1e-7': 'every check held at 1e-7 mm',
-  '1e-6': 'held at 1e-6 mm, not 1e-7',
-  '1e-5': 'held at 1e-5 mm, not 1e-7',
-  '1e-3': 'held at 1e-3 mm, not tighter',
+  '1e-5': 'held at 1e-5 or 1e-6 mm, not 1e-7',
   unsupported: 'an operation the kernel does not offer',
   refused: 'declined, or out of time',
-  fail: 'a wrong answer, or a crash',
+  fail: 'a wrong answer, held only at 1e-3 mm, or a crash',
 }
 
 // The tip sits below and right of the pointer, as a cursor tip does, kept inside the window.

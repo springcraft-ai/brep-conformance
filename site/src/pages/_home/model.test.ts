@@ -5,6 +5,7 @@ import {
   boardRows,
   caseTitle,
   distinctFilters,
+  drawn,
   grid,
   keep,
   matchesQuery,
@@ -219,5 +220,19 @@ describe('matchesQuery', () => {
     expect(matchesQuery(t, 'booleans', 'sphere bool')).toBe(true)
     expect(matchesQuery(t, 'booleans', 'sphere fillet')).toBe(false)
     expect(matchesQuery(t, 'booleans', '  ')).toBe(true)
+  })
+})
+
+describe('drawn', () => {
+  const at = (g: Grade) => GRADES.indexOf(g)
+
+  it('draws 1e-6 with 1e-5 and 1e-3 with the failures, keeping every case', () => {
+    const counts = GRADES.map((_, i) => i + 1)
+    const out = drawn(counts)
+    expect(out[at('1e-6')]).toBe(0)
+    expect(out[at('1e-3')]).toBe(0)
+    expect(out[at('1e-5')]).toBe(counts[at('1e-5')]! + counts[at('1e-6')]!)
+    expect(out[at('fail')]).toBe(counts[at('fail')]! + counts[at('1e-3')]!)
+    expect(out.reduce((a, b) => a + b, 0)).toBe(counts.reduce((a, b) => a + b, 0))
   })
 })

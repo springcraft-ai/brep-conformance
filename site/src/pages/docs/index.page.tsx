@@ -1,8 +1,9 @@
 import type { DocEntry, DocGroup } from '@/docs/source'
+import { PageHead } from '@/components'
 import { takeSearch } from '@/components/search'
 import { prettyJson } from '@/docs/example'
 import { Markdown, type DocLinks } from '@/pages/operations/Markdown'
-import { url } from '@/site/href'
+import { href } from '@/site/href'
 import type { Props } from './index.data'
 import '../operations/operations.css'
 import './docs.css'
@@ -13,54 +14,56 @@ export const nav = { label: 'docs', order: 3 }
 // a real call and its reply.
 export default function Docs({ parts, links }: Props) {
   return (
-    <div className="dx">
-      <h1 className="bc-sr">Documentation</h1>
-      <button type="button" id="dx-menu" className="dx-menu sc-focus" aria-expanded="false">
-        contents
-      </button>
-      <nav className="dx-nav" aria-label="Contents">
-        <ul>
-          {parts.map(p => (
-            <li key={p.id} className="dx-nav__part">
-              <a href={`#${p.id}`}>{p.title}</a>
-              <ul>
-                {p.groups.map(g => (
-                  <li key={g.id} className="dx-nav__g" data-g={g.id}>
-                    <a href={`#${g.id}`}>{g.heading}</a>
-                    {g.entries.length > 0 && (
-                      <ul>
-                        {g.entries.map(e => (
-                          <li key={e.id}>
-                            <a href={`#${e.id}`} className={e.fn ? 'dx-nav__fn' : undefined}>
-                              {e.heading}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      <div className="dx-main">
-        {parts.map(p => (
-          <div key={p.id}>
-            <section className="dx-part" id={p.id} data-g={p.groups[0]?.id}>
-              <h2>{p.title}</h2>
-              {p.intro && (
-                <div className="bc-op-prose">
-                  <Markdown source={p.intro} links={links[p.file]!} />
-                </div>
-              )}
-            </section>
-            {p.groups.map(g => (
-              <Group key={g.id} group={g} links={links[p.file]!} />
+    <div className="fn-page dx-page">
+      <PageHead title="Docs" />
+      <div className="dx">
+        <button type="button" id="dx-menu" className="dx-menu sc-focus" aria-expanded="false">
+          contents
+        </button>
+        <nav className="dx-nav" aria-label="Contents">
+          <ul>
+            {parts.map(p => (
+              <li key={p.id} className="dx-nav__part">
+                <a href={`#${p.id}`}>{p.title}</a>
+                <ul>
+                  {p.groups.map(g => (
+                    <li key={g.id} className="dx-nav__g" data-g={g.id}>
+                      <a href={`#${g.id}`}>{g.heading}</a>
+                      {g.entries.length > 0 && (
+                        <ul>
+                          {g.entries.map(e => (
+                            <li key={e.id}>
+                              <a href={`#${e.id}`} className={e.fn ? 'dx-nav__fn' : undefined}>
+                                {e.heading}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </li>
             ))}
-          </div>
-        ))}
+          </ul>
+        </nav>
+        <div className="dx-main">
+          {parts.map(p => (
+            <div key={p.id}>
+              <section className="dx-part" id={p.id} data-g={p.groups[0]?.id}>
+                <h2>{p.title}</h2>
+                {p.intro && (
+                  <div className="bc-op-prose">
+                    <Markdown source={p.intro} links={links[p.file]!} />
+                  </div>
+                )}
+              </section>
+              {p.groups.map(g => (
+                <Group key={g.id} group={g} links={links[p.file]!} />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -104,7 +107,10 @@ function Entry({
         </h4>
         {e.body && <Markdown source={e.body} links={links} />}
         {e.fn && (
-          <a className="dx-support" href={url.operation(e.heading)}>
+          <a
+            className="dx-support"
+            href={`${href('/operations/')}?q=${encodeURIComponent(e.heading)}`}
+          >
             which kernels offer it
           </a>
         )}

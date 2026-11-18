@@ -1,38 +1,10 @@
-/* The home page's own pieces. Shared ones live in src/styles/site.css. */
+/* The home page's own pieces. Shared ones live in src/styles/site.css, and the cases bar and its
+   tip in _home/bar.css, which those components import. */
 
-/* ---- tier bar: proportional blocks on the grade scale, a gap between each ---- */
-
-.hm-bar {
-  display: flex;
-  gap: 3px;
-  width: 100%;
-  min-width: 80px;
-  height: 22px;
-}
-.hm-bar--thin {
-  gap: 2px;
-  min-width: 0;
-  height: 8px;
-}
-.hm-bar__seg {
-  min-width: 3px;
-  transition: opacity var(--dur-2) linear;
-}
-.hm-bar--thin .hm-bar__seg {
-  min-width: 2px;
-}
 /* The leaderboard's bars fill from the left: each block eases in over the whole fill time, starting
    where the blocks before it start, so a bar sweeps on quickly and settles. */
 .hm-board--tiers .hm-bar__seg {
   animation: hm-fill 1100ms var(--ease-mech) var(--fill-at, 0ms) both;
-}
-@keyframes hm-fill {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-  to {
-    clip-path: inset(0);
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .hm-board--tiers .hm-bar__seg {
@@ -45,34 +17,6 @@
 }
 .hm-grid--play .hm-row.is-lit .hm-bar__seg {
   animation: hm-fill 1100ms var(--ease-mech) var(--fill-at, 0ms) both;
-}
-.hm-bar.is-picking .hm-bar__seg:not(.is-hot) {
-  opacity: 0.35;
-}
-.hm-bar__seg[data-grade='1e-7'] {
-  background: var(--grade-1e-7);
-}
-.hm-bar__seg[data-grade='1e-6'] {
-  background: var(--grade-1e-6);
-}
-.hm-bar__seg[data-grade='1e-5'] {
-  background: var(--grade-1e-5);
-}
-.hm-bar__seg[data-grade='1e-3'] {
-  background: var(--grade-1e-3);
-}
-.hm-bar__seg[data-grade='unsupported'] {
-  background: repeating-linear-gradient(135deg, var(--void-ink-3) 0 1px, transparent 1px 5px);
-  box-shadow: inset 0 0 0 var(--hair) var(--void-ink-3);
-}
-.hm-bar__seg[data-grade='fail'],
-.hm-bar__seg[data-grade='crash'] {
-  background: var(--grade-fail);
-}
-/* Ran, but no check to grade. */
-.hm-bar__seg[data-grade='refused'],
-.hm-bar__seg[data-grade='timeout'] {
-  background: var(--grade-none);
 }
 
 /* ---- leaderboard ---- */
@@ -418,39 +362,6 @@ a.hm-cell:focus-visible .hm-bar {
   .hm-cards {
     display: block;
   }
-}
-
-/* ---- the cases bar's tip: the band under the pointer ---- */
-
-.hm-barcard {
-  display: block;
-}
-.hm-barcard a.hm-bar__seg:focus-visible {
-  outline-offset: 1px;
-}
-a.hm-bar__seg {
-  border-bottom: none;
-}
-/* A cursor tip: below and right of the pointer, its first line the subject, then the detail. */
-.hm-tip {
-  position: fixed;
-  z-index: 20;
-  max-width: 280px;
-  padding: 8px 10px;
-  background: #111214;
-  border: var(--hairline-void-soft);
-  pointer-events: none;
-  font: var(--fw-machine) 12px / 1.45 var(--font-machine);
-  font-variant-numeric: tabular-nums;
-  color: var(--void-ink-1);
-  text-align: left;
-  white-space: normal;
-  animation: sc-fade-in var(--dur-2) var(--ease-mech) both;
-}
-.hm-tip small {
-  display: block;
-  font-size: 11px;
-  color: var(--void-ink-2);
 }
 
 /* ---- the leaderboard: one row per kernel, the cases bar beside its rates and speed ---- */

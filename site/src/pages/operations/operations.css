@@ -107,30 +107,6 @@
 
 /* ---- the functions table: a column per kernel, a group's functions under its heading ---- */
 
-/* The title stands close to the table it names, with no rule between, as the leaderboard's does. */
-.fn-page .bc-head {
-  margin: var(--sp-8) 0 var(--sp-6);
-  padding-bottom: 0;
-  border-bottom: none;
-}
-/* One row above the table: what it shows on the left, the key on the right. */
-.fn-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-4) var(--sp-6);
-  align-items: center;
-  padding-bottom: var(--sp-4);
-  border-bottom: var(--hairline-void-soft);
-}
-.fn-lede {
-  margin: 0;
-  max-width: 72ch;
-  font: var(--fw-voice-light) 13px / 1.45 var(--font-voice);
-  color: var(--void-ink-1);
-}
-.fn-lede a {
-  color: var(--void-ink-2);
-}
 .fn-key {
   display: flex;
   flex-wrap: wrap;

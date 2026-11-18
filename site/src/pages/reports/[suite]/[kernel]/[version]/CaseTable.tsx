@@ -1,10 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { OutlineButton } from '@/ds'
-import { OutlineField } from '@/ds'
-import { Segmented } from '@/ds'
 import { Select } from '@/ds'
 import { fmt, GradeLabel, GradeMark, gradeLabel, Table, type Column } from '@/components'
-import { GRADES, KINDS } from '@/data/results'
+import { GRADES } from '@/data/results'
 import { url } from '@/site/href'
 import {
   filterToSearch,
@@ -18,21 +16,13 @@ import {
   type Filter,
   type Group,
   type Row,
-  type SortDir,
-  type SortKey,
 } from './cases'
 
 const PAGE_SIZE = 50
 
-const ORDERS: { id: string; label: string; key: SortKey; dir: SortDir }[] = [
-  { id: 'order', label: 'report order', key: 'order', dir: 'asc' },
-  { id: 'worst', label: 'worst grade first', key: 'grade', dir: 'desc' },
-  { id: 'slowest', label: 'slowest first', key: 'time', dir: 'desc' },
-  { id: 'test', label: 'test name', key: 'test', dir: 'asc' },
-]
-
 // A report's cases, gathered by test: a test is one row saying what its cases came to and why, and
 // opens to the cases themselves. Most of a test's cases share one reason, which is then said once.
+// It filters by grade and area, which the bars above set too; the header's box searches it.
 export function CaseTable({
   rows,
   kernel,
@@ -47,10 +37,9 @@ export function CaseTable({
   opening: Filter
   onFilter: (f: Filter) => void
 }) {
-  const [order, setOrder] = useState('order')
-  // The page belongs to one view: a filter or an order changed anywhere, in this table or outside
-  // it, starts the new view at its first page.
-  const view = `${filterToSearch(filter)}|${order}`
+  // The page belongs to one view: a filter changed anywhere, in this table or outside it, starts
+  // the new view at its first page.
+  const view = filterToSearch(filter)
   const [paged, setPaged] = useState({ view, page: 0 })
   const page = paged.view === view ? paged.page : 0
   const setPage = (n: number) => setPaged({ view, page: n })
@@ -67,14 +56,13 @@ export function CaseTable({
   }, [rows])
 
   const { shown, groups } = useMemo(() => {
-    const by = ORDERS.find(o => o.id === order) ?? ORDERS[0]!
     const shown = sortRows(
       rows.filter(r => matches(r, filter)),
-      by.key,
-      by.dir,
+      'order',
+      'asc',
     )
     return { shown, groups: groupByTest(shown, rows) }
-  }, [rows, filter, order])
+  }, [rows, filter])
 
   const pages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE))
   const at = Math.min(page, pages - 1)
@@ -118,16 +106,6 @@ export function CaseTable({
   return (
     <div>
       <div className="rp-filters" role="search" aria-label="filter cases">
-        <div className="rp-filters__q">
-          <OutlineField
-            id="rp-q"
-            label="search"
-            type="search"
-            placeholder="test, case or reason"
-            value={filter.q}
-            onChange={e => set({ q: e.target.value })}
-          />
-        </div>
         <Select
           id="rp-grade"
           label="grade"
@@ -142,22 +120,6 @@ export function CaseTable({
           value={filter.operation}
           onChange={id => set({ operation: id })}
         />
-        <Select
-          id="rp-order"
-          label="order"
-          options={ORDERS.map(o => ({ id: o.id, label: o.label }))}
-          value={order}
-          onChange={setOrder}
-        />
-        <div className="rp-filters__kind">
-          <span className="rp-filters__label">kind</span>
-          <Segmented
-            label="kind"
-            options={['all', ...KINDS]}
-            value={filter.kind}
-            onChange={id => set({ kind: id as Filter['kind'] })}
-          />
-        </div>
       </div>
       <div className="rp-count" aria-live="polite">
         <span className="bc-machine">
@@ -304,8 +266,9 @@ function TestGroup({
       }}
     >
       <summary className="rp-group__row">
-        <span className="rp-group__test">
-          <Breakable path={g.test} />
+        {/* Closed, a test is one line (<wbr> would break it even there); open, it may wrap. */}
+        <span className="rp-group__test" title={g.test}>
+          {open ? <Breakable path={g.test} /> : g.test}
         </span>
         <span className="rp-cell rp-num">
           <span className="bc-sr">cases </span>
@@ -320,7 +283,7 @@ function TestGroup({
             </span>
           ))}
         </span>
-        <span className="rp-why">
+        <span className="rp-why" title={fmt.condense(g.whys[0] ?? '') || undefined}>
           {g.whys.length > 0 && <span className="bc-sr">why </span>}
           {fmt.condense(g.whys[0] ?? '')}
           {g.whys.length > 1 && (
@@ -358,17 +321,14 @@ function TestGroup({
   )
 }
 
-// A test path breaks only after a slash when the column is narrow.
+// A test path breaks only after a slash when the column is narrow: each segment, its slash with
+// it, is kept whole, so a hyphen inside a name never breaks it.
 function Breakable({ path }: { path: string }) {
   const parts = path.split('/')
   return parts.map((p, i) => (
     <Fragment key={i}>
-      {p}
-      {i < parts.length - 1 && (
-        <>
-          /<wbr />
-        </>
-      )}
+      <span className="rp-seg">{i < parts.length - 1 ? `${p}/` : p}</span>
+      {i < parts.length - 1 && <wbr />}
     </Fragment>
   ))
 }

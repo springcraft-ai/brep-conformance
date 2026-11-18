@@ -7,7 +7,6 @@ import {
   gradeLabel,
   GradeLegend,
   GradeMark,
-  KernelChip,
   PageHead,
   Section,
   Table,
@@ -31,6 +30,18 @@ interface PointRow {
 }
 
 const placed = (inside: boolean) => (inside ? 'inside' : 'outside')
+
+// A kernel as the leaderboard names it: its name, linking to its report, over its version.
+function KernelName({ k }: { k: KernelView }) {
+  return (
+    <span className="tp-kernel">
+      <a className="tp-kernel__name" href={url.report(k.suite, k.kernel, k.version)}>
+        {k.kernel}
+      </a>
+      <span className="tp-kernel__version">{fmt.version(k.version)}</span>
+    </span>
+  )
+}
 
 // The kernels whose worst case has points to show, in report order.
 function withPoints(kernels: KernelView[]): KernelView[] {
@@ -86,11 +97,7 @@ function ChecksOf({ k }: { k: KernelView }) {
   return (
     <div className="bc-checks">
       <div className="bc-checks__head">
-        <KernelChip
-          kernel={k.kernel}
-          version={k.version}
-          href={url.report(k.suite, k.kernel, k.version)}
-        />
+        <KernelName k={k} />
         <GradeLabel grade={k.grade} />
         {k.failure && <Annot>{k.failure}</Annot>}
         <span className="bc-checks__case bc-machine">{worst.id}</span>
@@ -300,84 +307,65 @@ export default function TestPage(props: Props) {
   const checked = failed.filter(k => k.worst!.checks.length)
 
   return (
-    <>
-      <PageHead
-        title={testName(test)}
-        corner={[
-          <>
-            <a href={`${url.home()}#${operation}`} title={`All ${operation} tests`}>
-              {operation}
-            </a>
-            {test.slice(operation.length)}
-          </>,
-          `${operation} · ${kind}`,
-          `${cases} ${cases === 1 ? 'case' : 'cases'}`,
-        ]}
-      />
-      <Section
-        label="kernels"
-        aside={
-          failed.length
-            ? 'select a failing kernel to see its worst case'
-            : 'every kernel passes every case'
-        }
-      >
-        <div className="bc-kernels" role="table" aria-label="Each kernel on this test">
-          <div className="bc-kernels__row bc-kernels__head" role="row">
-            <span role="columnheader">kernel</span>
-            <span role="columnheader">result</span>
-            <span role="columnheader">cases at 1e-7</span>
-            <span role="columnheader">why, on its worst case</span>
-          </div>
-          {kernels.map(k => {
-            const on = onWorst && current?.kernel === k.kernel
-            return (
-              <div
-                key={k.kernel}
-                className="bc-kernels__row"
-                role="row"
-                aria-current={on || undefined}
-              >
-                <span role="rowheader">
-                  <KernelChip
-                    kernel={k.kernel}
-                    version={k.version}
-                    href={url.report(k.suite, k.kernel, k.version)}
-                  />
-                </span>
-                <span className="bc-kernels__result" role="cell">
-                  <GradeLabel grade={k.grade} />
-                  {k.failure && (
-                    <span className="bc-kernels__gloss">{FAILURE_GLOSS[k.failure]}</span>
-                  )}
-                </span>
-                <span className="bc-machine bc-kernels__n" role="cell">
-                  {k.passing} / {k.total}
-                </span>
-                <span className="bc-kernels__why" role="cell">
-                  {k.why ? <Why text={k.why} /> : '–'}
-                  {k.worst &&
-                    (on ? (
-                      <span className="bc-annot">showing its worst case</span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="bc-kernels__show sc-focus"
-                        onClick={() => choose(k.kernel)}
-                      >
-                        show its worst case
-                      </button>
-                    ))}
-                </span>
-              </div>
-            )
-          })}
+    <div className="fn-page tp">
+      <PageHead title={testName(test)} />
+      <div className="fn-tools">
+        <p className="fn-lede">
+          <a href={`${url.home()}#${operation}`} title={`All ${operation} tests`}>
+            {operation}
+          </a>{' '}
+          · {kind} test · {cases} {cases === 1 ? 'case' : 'cases'}
+        </p>
+      </div>
+      <div className="bc-kernels" role="table" aria-label="Each kernel on this test">
+        <div className="bc-kernels__row bc-kernels__head" role="row">
+          <span role="columnheader">kernel</span>
+          <span role="columnheader">result</span>
+          <span role="columnheader">cases at 1e-7</span>
+          <span role="columnheader">why, on its worst case</span>
         </div>
-      </Section>
+        {kernels.map(k => {
+          const on = onWorst && current?.kernel === k.kernel
+          return (
+            <div
+              key={k.kernel}
+              className="bc-kernels__row"
+              role="row"
+              aria-current={on || undefined}
+            >
+              <span role="rowheader">
+                <KernelName k={k} />
+              </span>
+              <span className="bc-kernels__result" role="cell">
+                <GradeLabel grade={k.grade} />
+                {k.failure && <span className="bc-kernels__gloss">{FAILURE_GLOSS[k.failure]}</span>}
+              </span>
+              <span className="bc-machine bc-kernels__n" role="cell">
+                {k.passing}/{k.total}
+              </span>
+              <span className="bc-kernels__why" role="cell">
+                {k.why ? <Why text={k.why} /> : '–'}
+                {k.worst &&
+                  (on ? (
+                    <span className="bc-annot">showing its worst case</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="bc-kernels__show sc-focus"
+                      onClick={() => choose(k.kernel)}
+                    >
+                      show its worst case
+                    </button>
+                  ))}
+              </span>
+            </div>
+          )
+        })}
+      </div>
 
       <Section
         label="cases"
-        aside={`${cases} ${cases === 1 ? 'case' : 'cases'} × ${kernels.length} kernels · expected shape`}
+        aside={`${cases} ${cases === 1 ? 'case' : 'cases'} × ${kernels.length} kernels`}
       >
         <div className="bc-cases">
           <div className="bc-cases__list">
@@ -476,6 +464,6 @@ export default function TestPage(props: Props) {
       )}
 
       <Definition {...props} />
-    </>
+    </div>
   )
 }

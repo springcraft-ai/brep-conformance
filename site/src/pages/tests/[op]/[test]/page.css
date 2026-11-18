@@ -1,14 +1,52 @@
+/* A test's page: the shared head, then each kernel's row as the leaderboard sets one, then the
+   cases beside the shape, the failing checks and the definition. Text is set at reading sizes;
+   micro caps are kept for labels alone. */
+
+/* A kernel named as the leaderboard names it. */
+.tp-kernel {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.tp-kernel__name {
+  border-bottom: none;
+  color: var(--void-ink-1);
+  font: var(--fw-display) 18px / 1 var(--font-display);
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+.tp-kernel__name:hover {
+  color: var(--accent);
+}
+.tp-kernel__version {
+  font: var(--fw-machine) 11px / 1 var(--font-machine);
+  color: var(--void-ink-2);
+}
+.tp .bc-grade {
+  font-size: 13px;
+}
+.tp .bc-section {
+  margin-top: var(--sp-9);
+}
+.tp .bc-section__label {
+  margin-bottom: var(--sp-5);
+}
+
 /* ---- definition: the spec quoted, signature in the machine face ---- */
 
 .bc-def {
   display: grid;
   gap: var(--sp-4);
+  max-width: 72ch;
+  font-size: 16px;
+  line-height: 1.55;
+}
+.bc-def .bc-body {
+  font: inherit;
 }
 .bc-def__sig {
   display: block;
-  padding-left: var(--sp-4);
-  border-left: var(--hairline-void-soft);
-  font-size: var(--fs-read-4);
+  font-size: 16px;
   line-height: 1.6;
   color: var(--void-ink-1);
   overflow-wrap: anywhere;
@@ -30,7 +68,7 @@
   border-top: var(--hairline-void-soft);
 }
 .bc-def__kindname {
-  font-size: var(--fs-read-4);
+  font-size: 14px;
   color: var(--void-ink-1);
 }
 
@@ -194,6 +232,7 @@
 .bc-points > p {
   margin: 0 0 var(--sp-4);
   color: var(--void-ink-2);
+  font-size: 15px;
 }
 
 /* ---- checks: one block per failing kernel ---- */
@@ -204,13 +243,13 @@
 .bc-checks__head {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-3) var(--sp-4);
+  gap: var(--sp-3) var(--sp-5);
   align-items: center;
-  margin-bottom: var(--sp-3);
+  margin-bottom: var(--sp-4);
 }
 .bc-checks__case {
   margin-left: auto;
-  font-size: var(--fs-read-4);
+  font-size: 12px;
   color: var(--void-ink-2);
 }
 .bc-checks > p {
@@ -225,7 +264,7 @@
 .bc-clause__promise {
   max-width: 48ch;
   color: var(--void-ink-2);
-  font: var(--fw-voice) var(--fs-voice-2) / 1.35 var(--font-voice);
+  font: var(--fw-voice) 13px / 1.4 var(--font-voice);
   white-space: normal;
 }
 
@@ -301,7 +340,7 @@
 .bc-cases {
   display: grid;
   grid-template-columns: fit-content(50%) minmax(0, 1fr);
-  gap: var(--sp-6);
+  gap: var(--sp-7);
   align-items: start;
 }
 .bc-cases__shape {
@@ -334,9 +373,9 @@
   background: var(--ground-void);
 }
 .bc-caselist thead th {
-  padding: 6px 4px;
-  font: var(--fw-annot, 500) var(--fs-micro-1) / 1 var(--font-annot);
-  letter-spacing: 0.08em;
+  padding: 8px 6px;
+  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   text-align: center;
   color: var(--void-ink-2);
@@ -345,8 +384,8 @@
    last name leans over an empty column kept for it, so the list never scrolls sideways. */
 .bc-caselist thead th.bc-caselist__kernel {
   position: relative;
-  width: 36px;
-  height: 88px;
+  width: 40px;
+  height: 96px;
   padding: 0;
 }
 .bc-caselist__kernel > span {
@@ -358,7 +397,7 @@
   white-space: nowrap;
 }
 .bc-caselist thead th.bc-caselist__lean {
-  width: 56px;
+  width: 64px;
   padding: 0;
 }
 .bc-caselist thead th:first-child {
@@ -378,10 +417,10 @@
 .bc-caselist tbody button {
   display: block;
   width: 100%;
-  padding: 7px 4px;
+  padding: 9px 6px 9px 12px;
   border: none;
   background: transparent;
-  font-size: var(--fs-micro-1);
+  font-size: 13px;
   text-align: left;
   color: var(--void-ink-2);
   cursor: pointer;
@@ -392,7 +431,6 @@
   color: var(--void-ink-1);
 }
 .bc-caselist tr[aria-selected='true'] {
-  background: rgb(255 255 255 / 0.08);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 .bc-caselist__n {
@@ -400,7 +438,7 @@
   color: var(--void-ink-3);
 }
 .bc-caselist td {
-  width: 36px;
+  width: 40px;
   padding: 0 4px;
   text-align: center;
   line-height: 0;
@@ -423,24 +461,27 @@
 }
 .bc-kernels__row {
   display: grid;
-  grid-template-columns: minmax(170px, 230px) minmax(120px, 170px) 96px minmax(0, 1fr);
-  gap: var(--sp-5);
-  align-items: baseline;
-  padding: var(--sp-3) 0;
+  grid-template-columns: minmax(180px, 240px) minmax(140px, 200px) 110px minmax(0, 1fr);
+  gap: var(--sp-6);
+  align-items: start;
+  padding: 18px 0;
   border-bottom: var(--hairline-void-soft);
+  transition: box-shadow var(--dur-2) var(--ease-mech);
 }
+/* The kernel whose worst case is shown, marked as the docs mark where the reader is. */
 .bc-kernels__row[aria-current='true'] {
-  background: rgb(255 255 255 / 0.06);
   box-shadow: inset 2px 0 0 var(--accent);
 }
-.bc-kernels__row[aria-current='true'] > :first-child {
-  padding-left: var(--sp-3);
+.bc-kernels__row > :first-child {
+  padding-left: var(--sp-4);
 }
 .bc-kernels__head {
-  font: var(--fw-annot) var(--fs-micro-3) / 1 var(--font-annot);
-  letter-spacing: var(--ls-micro);
+  padding: 22px 0 14px;
+  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--void-ink-2);
+  align-items: end;
 }
 .bc-kernels__head > :nth-child(3),
 .bc-kernels__n {
@@ -448,23 +489,30 @@
   font-variant-numeric: tabular-nums;
 }
 .bc-kernels__n {
-  font-size: var(--fs-read-4);
+  padding-top: 3px;
+  font: var(--fw-machine) 14px / 1 var(--font-machine);
+  color: var(--void-ink-1);
 }
 .bc-kernels__result {
   display: grid;
-  gap: 2px;
+  gap: 6px;
+  padding-top: 3px;
 }
 .bc-kernels__gloss {
-  font: var(--fw-voice) var(--fs-voice-2) / 1.3 var(--font-voice);
+  font: var(--fw-voice) 13px / 1.35 var(--font-voice);
   color: var(--void-ink-2);
 }
 .bc-kernels__why {
   display: grid;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
   justify-items: start;
   min-width: 0;
-  font: var(--fw-voice) var(--fs-voice-1) / 1.4 var(--font-voice);
+  padding-top: 1px;
+  font: var(--fw-voice) 15px / 1.45 var(--font-voice);
   color: var(--void-ink-1);
+}
+.bc-kernels__why > .bc-annot {
+  font-size: var(--fs-micro-1);
 }
 .bc-why {
   display: grid;
@@ -489,7 +537,7 @@
   border-bottom: var(--hair) solid var(--void-ink-3);
   background: none;
   color: var(--void-ink-2);
-  font: var(--fw-voice) var(--fs-voice-2) / 1.4 var(--font-voice);
+  font: var(--fw-voice) 13px / 1.4 var(--font-voice);
   cursor: pointer;
 }
 .bc-why__more:hover,
@@ -507,8 +555,8 @@
 }
 .bc-thiscase {
   display: grid;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-4);
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
 }
 .bc-thiscase__id {
   display: flex;
@@ -516,7 +564,7 @@
   gap: var(--sp-3);
   align-items: center;
   line-height: 1;
-  font-size: var(--fs-read-4);
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
 .bc-thiscase ul {
@@ -533,7 +581,7 @@
   display: inline-flex;
   gap: var(--sp-3);
   align-items: center;
-  font: var(--fw-voice) var(--fs-voice-2) / 1 var(--font-voice);
+  font: var(--fw-voice) 14px / 1 var(--font-voice);
 }
 .bc-thiscase li > * {
   line-height: 1;

@@ -1,4 +1,12 @@
-/* The report page. Grade colours come from site.css's --grade-* tokens. */
+/* The report page. Grade colours come from site.css's --grade-* tokens. Its head is the shared
+   one (fn-page); text is set at 13px, micro caps kept for labels. */
+
+.rp .bc-section__label {
+  margin-bottom: var(--sp-5);
+}
+#cases {
+  scroll-margin-top: calc(var(--chrome-h) + var(--sp-4));
+}
 
 .rp-version {
   color: var(--void-ink-2);
@@ -10,9 +18,9 @@
   flex-wrap: wrap;
   gap: var(--sp-3) var(--sp-4);
   align-items: baseline;
-  margin: calc(-1 * var(--sp-4)) 0 var(--sp-6);
+  margin: var(--sp-5) 0 0;
   color: var(--void-ink-2);
-  font: var(--fw-voice) var(--fs-voice-2) / 1.6 var(--font-voice);
+  font: var(--fw-voice) 13px / 1.6 var(--font-voice);
 }
 
 /* ---- result: headline left, counts, grade distribution right ---- */
@@ -36,7 +44,7 @@
 
 .rp-standing {
   justify-self: start;
-  font: var(--fw-machine) var(--fs-read-4) / 1.3 var(--font-machine);
+  font: var(--fw-voice) 14px / 1.3 var(--font-voice);
   color: var(--void-ink-1);
 }
 
@@ -49,15 +57,15 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--sp-4);
   align-items: baseline;
-  padding: 5px 0;
+  padding: 9px 0;
   border-bottom: var(--hairline-void-soft);
 }
 .rp-stat dt {
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 .rp-stat__gloss {
-  font: var(--fw-voice) var(--fs-voice-2) / 1.3 var(--font-voice);
+  font: var(--fw-voice) 13px / 1.3 var(--font-voice);
   color: var(--void-ink-2);
 }
 .rp-stat dd {
@@ -65,13 +73,13 @@
   text-align: right;
 }
 .rp-stat__value {
-  font: var(--fw-machine) var(--fs-read-4) / 1.2 var(--font-machine);
+  font: var(--fw-machine) 13px / 1.2 var(--font-machine);
   font-variant-numeric: tabular-nums;
   color: var(--void-ink-1);
 }
 .rp-stat__sub {
   margin-left: var(--sp-3);
-  font: var(--fw-machine) var(--fs-read-4) / 1.2 var(--font-machine);
+  font: var(--fw-machine) 13px / 1.2 var(--font-machine);
   font-variant-numeric: tabular-nums;
   color: var(--void-ink-2);
 }
@@ -81,12 +89,12 @@
 }
 .rp-dist__row {
   display: grid;
-  grid-template-columns: 110px minmax(0, 1fr) 4.5em 6em;
+  grid-template-columns: 130px minmax(0, 1fr) 4.5em 6em;
   gap: var(--sp-4);
   align-items: center;
-  padding: 5px 0;
+  padding: 8px 0;
   border-bottom: var(--hairline-void-soft);
-  font: var(--fw-machine) var(--fs-read-4) / 1.2 var(--font-machine);
+  font: var(--fw-machine) 13px / 1.2 var(--font-machine);
   font-variant-numeric: tabular-nums;
   color: var(--void-ink-1);
 }
@@ -94,13 +102,11 @@ a.rp-dist__row {
   border-bottom: var(--hairline-void-soft);
 }
 /* A row that lists its cases says so: an arrow at its end, lit with the row. */
-a.rp-dist__row .rp-dist__pct::after,
-a.rp-ops__row > :last-child::after {
+a.rp-dist__row .rp-dist__pct::after {
   content: ' →';
   color: var(--void-ink-3);
 }
-a.rp-dist__row:hover .rp-dist__pct::after,
-a.rp-ops__row:hover > :last-child::after {
+a.rp-dist__row:hover .rp-dist__pct::after {
   color: var(--accent);
 }
 a.rp-dist__row:hover .rp-dist__n,
@@ -183,36 +189,49 @@ a.rp-dist__row:hover .rp-bar {
   grid-template-columns: 150px 170px minmax(120px, 1fr) minmax(0, 1.2fr);
   gap: var(--sp-5);
   align-items: center;
-  padding: 6px 0;
+  padding: 10px 0;
   border-bottom: var(--hairline-void-soft);
-  font: var(--fw-machine) var(--fs-read-4) / 1.2 var(--font-machine);
+  font: var(--fw-machine) 13px / 1.2 var(--font-machine);
   font-variant-numeric: tabular-nums;
   color: var(--void-ink-1);
 }
 .rp-ops__head {
-  font: var(--fw-annot) var(--fs-micro-3) / 1 var(--font-annot);
-  letter-spacing: var(--ls-micro);
+  padding: 0 0 10px;
+  border-bottom-color: var(--void-ink-1);
+  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--void-ink-2);
 }
 .rp-ops__name {
-  font: var(--fw-voice) var(--fs-voice-1) / 1.3 var(--font-voice);
+  justify-self: start;
+  border-bottom: none;
+  color: var(--void-ink-1);
+  font: var(--fw-voice) 15px / 1.3 var(--font-voice);
 }
-a.rp-ops__row:hover .rp-ops__name {
+.rp-ops__name:hover {
   color: var(--accent);
+}
+/* The leaderboard's bar, a little lower, filling as the leaderboard's does. */
+.rp-ops__bar {
+  display: block;
+  min-width: 0;
+}
+.rp-ops__bar .hm-bar {
+  height: 14px;
+}
+.rp-ops__bar .hm-bar__seg {
+  animation: hm-fill 1100ms var(--ease-mech) var(--fill-at, 0ms) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rp-ops__bar .hm-bar__seg {
+    animation: none;
+  }
 }
 .rp-ops__short {
   color: var(--void-ink-2);
 }
-.rp-stack {
-  display: flex;
-  height: 10px;
-}
-.rp-stack > .rp-bar__fill {
-  min-width: 1px;
-}
 .rp-fold {
-  max-width: 720px;
   border-bottom: var(--hairline-void-soft);
 }
 .rp-fold > summary {
@@ -220,8 +239,8 @@ a.rp-ops__row:hover .rp-ops__name {
   justify-content: space-between;
   gap: var(--sp-4);
   align-items: baseline;
-  padding: var(--sp-3) 0;
-  font: var(--fw-voice) var(--fs-voice-1) / 1.3 var(--font-voice);
+  padding: 10px 0;
+  font: var(--fw-voice) 15px / 1.3 var(--font-voice);
   cursor: pointer;
   list-style: none;
 }
@@ -242,34 +261,21 @@ a.rp-ops__row:hover .rp-ops__name {
   margin: 0 0 var(--sp-4);
 }
 .rp-functions {
-  font: var(--fw-voice) var(--fs-voice-2) / 1.5 var(--font-voice);
+  font: var(--fw-voice) 13px / 1.6 var(--font-voice);
   color: var(--void-ink-2);
 }
 .rp-fold > summary .bc-machine {
   color: var(--void-ink-2);
-  font-size: var(--fs-read-4);
+  font-size: 13px;
 }
 
 /* ---- the case table ---- */
 
 .rp-filters {
   display: grid;
-  grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(150px, 1fr)) auto;
-  gap: var(--sp-4);
+  grid-template-columns: repeat(2, minmax(0, 260px));
+  gap: var(--sp-5);
   align-items: end;
-}
-.rp-filters__kind {
-  display: grid;
-  gap: 5px;
-}
-.rp-filters__label {
-  font: var(--fw-annot) var(--fs-micro-3) / 1 var(--font-annot);
-  letter-spacing: var(--ls-micro);
-  text-transform: uppercase;
-  color: var(--void-ink-2);
-}
-.rp-filters input[type='search']::-webkit-search-cancel-button {
-  filter: invert(0.6);
 }
 
 .rp-count {
@@ -279,7 +285,7 @@ a.rp-ops__row:hover .rp-ops__name {
   align-items: baseline;
   margin: var(--sp-5) 0 var(--sp-3);
   color: var(--void-ink-2);
-  font-size: var(--fs-read-4);
+  font-size: 13px;
 }
 .rp-clear {
   padding: 0;
@@ -287,7 +293,7 @@ a.rp-ops__row:hover .rp-ops__name {
   border-bottom: var(--hair) solid var(--void-ink-3);
   background: none;
   color: var(--void-ink-1);
-  font: var(--fw-voice) var(--fs-voice-2) / 1.4 var(--font-voice);
+  font: var(--fw-voice) 13px / 1.4 var(--font-voice);
   cursor: pointer;
 }
 .rp-only {
@@ -321,15 +327,15 @@ a.rp-ops__row:hover .rp-ops__name {
 .rp-group__head,
 .rp-group__row {
   display: grid;
-  grid-template-columns: minmax(260px, 1.6fr) 84px minmax(130px, 0.9fr) minmax(0, 2.4fr) 84px;
+  grid-template-columns: minmax(0, 1.6fr) 84px minmax(0, 0.9fr) minmax(0, 2.4fr) 84px;
   gap: var(--sp-5);
   align-items: baseline;
 }
 .rp-group__head {
-  padding: var(--sp-3) 0;
-  border-bottom: var(--hairline-void-soft);
-  font: var(--fw-annot) var(--fs-micro-3) / 1 var(--font-annot);
-  letter-spacing: var(--ls-micro);
+  padding: var(--sp-4) 0 10px;
+  border-bottom: var(--hair) solid var(--void-ink-1);
+  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--void-ink-2);
 }
@@ -343,15 +349,29 @@ a.rp-ops__row:hover .rp-ops__name {
   border-bottom: var(--hairline-void-soft);
 }
 .rp-group__row {
-  padding: 7px 0;
+  padding: 10px 0;
   cursor: pointer;
   list-style: none;
+}
+/* A closed test is one line: its name and reason cut short, whole in their titles and when open. */
+.rp-group:not([open]) > .rp-group__row > :is(.rp-group__test, .rp-why, .rp-group__grades) {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rp-group:not([open]) > .rp-group__row > .rp-group__grades {
+  flex-wrap: nowrap;
 }
 .rp-group__row::-webkit-details-marker {
   display: none;
 }
+.rp-seg {
+  white-space: nowrap;
+}
 .rp-group__test {
-  font: var(--fw-machine) var(--fs-read-4) / 1.3 var(--font-machine);
+  display: block;
+  min-width: 0;
+  font: var(--fw-machine) 13px / 1.4 var(--font-machine);
   color: var(--void-ink-1);
 }
 .rp-group__test::before {
@@ -368,7 +388,7 @@ a.rp-ops__row:hover .rp-ops__name {
   display: flex;
   flex-wrap: wrap;
   gap: 2px var(--sp-4);
-  font: var(--fw-machine) var(--fs-read-4) / 1.3 var(--font-machine);
+  font: var(--fw-machine) 13px / 1.4 var(--font-machine);
   font-variant-numeric: tabular-nums;
   color: var(--void-ink-1);
 }
@@ -385,16 +405,16 @@ a.rp-ops__row:hover .rp-ops__name {
 }
 .rp-group__link {
   justify-self: start;
-  font: var(--fw-voice) var(--fs-voice-2) / 1.3 var(--font-voice);
+  font: var(--fw-voice) 13px / 1.3 var(--font-voice);
 }
 .rp-groups__empty {
   padding: var(--sp-5) 0;
 }
 .rp-case {
-  font: var(--fw-machine) var(--fs-read-4) / 1.3 var(--font-machine);
+  font: var(--fw-machine) 13px / 1.3 var(--font-machine);
 }
 .rp-cell {
-  font: var(--fw-machine) var(--fs-read-4) / 1.3 var(--font-machine);
+  font: var(--fw-machine) 13px / 1.4 var(--font-machine);
   color: var(--void-ink-1);
   white-space: nowrap;
 }
@@ -403,8 +423,8 @@ a.rp-ops__row:hover .rp-ops__name {
 }
 .rp-why {
   display: block;
-  min-width: 16ch;
-  font: var(--fw-voice) var(--fs-voice-2) / 1.35 var(--font-voice);
+  min-width: 0;
+  font: var(--fw-voice) 13px / 1.45 var(--font-voice);
   color: var(--void-ink-2);
 }
 
@@ -418,7 +438,7 @@ a.rp-ops__row:hover .rp-ops__name {
   justify-content: flex-end;
   margin-top: var(--sp-5);
   color: var(--void-ink-2);
-  font-size: var(--fs-read-4);
+  font-size: 13px;
 }
 
 @media (max-width: 1100px) {
@@ -430,12 +450,6 @@ a.rp-ops__row:hover .rp-ops__name {
   }
   .rp-specs {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .rp-filters {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .rp-filters__q {
-    grid-column: 1 / -1;
   }
 }
 
@@ -453,9 +467,6 @@ a.rp-ops__row:hover .rp-ops__name {
   }
   .rp-filters {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .rp-filters__q {
-    grid-column: auto;
   }
   /* On a phone a test is a short stack: its name, then what its cases came to, then why. */
   .rp-group__head {
@@ -486,7 +497,7 @@ a.rp-ops__row:hover .rp-ops__name {
   .rp-ops__head {
     display: none;
   }
-  .rp-ops__row > .rp-stack,
+  .rp-ops__row > .rp-ops__bar,
   .rp-ops__row > .rp-ops__short {
     grid-column: 1 / -1;
   }

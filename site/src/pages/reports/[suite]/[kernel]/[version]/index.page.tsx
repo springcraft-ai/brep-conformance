@@ -5,6 +5,8 @@ import { useChromeSearch } from '@/components/search'
 import { repoName } from '@/data/kernels'
 import { FAILURES, GRADES, KINDS, TIERS, type Grade } from '@/data/results'
 import { href, url } from '@/site/href'
+import { BarCard } from '@/pages/_home/BarCard'
+import { TierBar } from '@/pages/_home/TierBar'
 import {
   byOperation,
   duration,
@@ -51,7 +53,7 @@ export default function ReportPage(props: Props) {
   const show = (e: MouseEvent, f: Filter) => {
     e.preventDefault()
     applyFilter(f)
-    document.getElementById('cases')?.scrollIntoView()
+    document.getElementById('cases')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
   const casesHref = (f: Filter) => `${filterToLocation(f, opening) || '?'}#cases`
 
@@ -60,21 +62,22 @@ export default function ReportPage(props: Props) {
   const m = methodology
 
   return (
-    <>
+    <div className="fn-page rp">
       <PageHead
         title={
           <>
-            {id.name} <span className="rp-version">{id.version}</span>
+            {id.name} <span className="rp-version">{fmt.version(id.version)}</span>
           </>
         }
-        corner={[
-          `suite ${m.suite}`,
-          `run ${fmt.date(env.date)}${env.verified ? '' : ' · unverified'}`,
-          ...(id.adapter
-            ? [`adapter ${repoName(id.adapter.repo)} ${id.adapter.commit.slice(0, 7)}`]
-            : []),
-        ]}
       />
+      <div className="fn-tools">
+        <p className="fn-lede">
+          suite {m.suite}
+          {env.date && ` · ${fmt.runs([fmt.date(env.date)])}`}
+          {!env.verified && ' · unverified'}
+          {id.adapter && ` · adapter ${repoName(id.adapter.repo)} ${id.adapter.commit.slice(0, 7)}`}
+        </p>
+      </div>
       {props.current && (
         <p className="rp-current">
           <Annot>not the release ranked</Annot>
@@ -160,39 +163,40 @@ export default function ReportPage(props: Props) {
               operation: o.operation,
               grade: o.passing < o.total ? 'below' : 'all',
             }
+            const band = (g: Grade): Filter => ({ ...NO_FILTER, operation: o.operation, grade: g })
             return (
-              <a
-                key={o.operation}
-                className="rp-ops__row sc-focus"
-                href={casesHref(f)}
-                onClick={e => show(e, f)}
-              >
-                <span className="rp-ops__name">{o.operation}</span>
+              <div key={o.operation} className="rp-ops__row">
+                <a className="rp-ops__name" href={casesHref(f)} onClick={e => show(e, f)}>
+                  {o.operation}
+                </a>
                 <span>
                   {fmt.pct(o.passing / o.total)}
                   <span className="rp-stat__sub">
                     {o.passing} of {o.total}
                   </span>
                 </span>
-                <span className="rp-stack" aria-hidden="true">
-                  {GRADES.map((g, i) =>
-                    o.counts[i] ? (
-                      <span
-                        key={g}
-                        className="rp-bar__fill"
-                        data-grade={g}
-                        title={`${o.counts[i]} ${g}`}
-                        style={{ flex: `${o.counts[i]} 0 1px` }}
-                      />
-                    ) : null,
-                  )}
+                {/* A band lists this area's cases of its grade, here, without leaving the page. */}
+                <span
+                  className="rp-ops__bar"
+                  onClick={e => {
+                    const seg = (e.target as Element).closest<HTMLElement>('a[data-grade]')
+                    if (seg) show(e, band(seg.dataset.grade as Grade))
+                  }}
+                >
+                  <BarCard counts={o.counts}>
+                    <TierBar
+                      counts={o.counts}
+                      label={`${o.operation}: ${o.passing} of ${o.total} cases at 1e-7`}
+                      href={g => casesHref(band(g))}
+                    />
+                  </BarCard>
                 </span>
                 <span className="rp-ops__short">
                   {GRADES.flatMap((g, i) =>
                     i > 0 && o.counts[i] ? [`${o.counts[i]} ${g}`] : [],
                   ).join(' · ') || '–'}
                 </span>
-              </a>
+              </div>
             )
           })}
         </div>
@@ -302,7 +306,7 @@ export default function ReportPage(props: Props) {
           </div>
         )}
       </Section>
-    </>
+    </div>
   )
 }
 

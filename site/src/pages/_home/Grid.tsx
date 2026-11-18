@@ -32,7 +32,7 @@ function countUp(row: Element) {
     const to = Number(el.dataset.to)
     const t0 = performance.now()
     const step = (t: number) => {
-      const x = Math.min(1, (t - t0) / COUNT_MS)
+      const x = Math.min(1, Math.max(0, (t - t0) / COUNT_MS))
       text.nodeValue = (to * (1 - Math.pow(1 - x, 3))).toFixed(1) + '%'
       if (x < 1) requestAnimationFrame(step)
     }

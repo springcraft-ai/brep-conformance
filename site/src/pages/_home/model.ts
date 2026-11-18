@@ -15,14 +15,19 @@ import { kernelInfo, repoName } from '@/data/kernels'
 // Case counts in GRADES order, best first.
 export type Counts = number[]
 
-// Counts as the page draws them: a case held at 1e-6 is drawn with those held at 1e-5, since the
-// board reads passes at 1e-7 and at 1e-5 and nothing between.
+// Counts as the page draws them. The board reads passes at 1e-7 and at 1e-5 and nothing else, so a
+// case held at 1e-6 is drawn with those held at 1e-5, and one held only at 1e-3 passes neither and
+// is drawn with the failures.
 export function drawn(counts: Counts): Counts {
-  const at6 = GRADES.indexOf('1e-6')
-  const at5 = GRADES.indexOf('1e-5')
   const out = counts.slice()
-  out[at5] = (out[at5] ?? 0) + (out[at6] ?? 0)
-  out[at6] = 0
+  const fold = (from: Grade, into: Grade) => {
+    const f = GRADES.indexOf(from)
+    const i = GRADES.indexOf(into)
+    out[i] = (out[i] ?? 0) + (out[f] ?? 0)
+    out[f] = 0
+  }
+  fold('1e-6', '1e-5')
+  fold('1e-3', 'fail')
   return out
 }
 
