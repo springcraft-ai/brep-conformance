@@ -90,20 +90,20 @@ describe('parseReport', () => {
     const cases = [
       { ...row('a', 't/x', 'pass', '1e-7'), exports: { glb: 't/x/a.abc.glb', step: [] } },
     ]
-    const named = { ...raw('k', '2.1', cases), assets: 'https://files.example/b/0.9.0/k/2.1/' }
-    expect(parseReport(named).methodology.assetBase).toBe('https://files.example/b/0.9.0/k/2.1')
-    expect(parseReport(named).cases[0]!.glb).toBe(
-      'https://files.example/b/0.9.0/k/2.1/t/x/a.abc.glb',
-    )
+    const named = { ...raw('k', '2.1', cases), assets: `${ASSET_BASE}/0.9.0/k/2.1/` }
+    expect(parseReport(named).methodology.assetBase).toBe(`${ASSET_BASE}/0.9.0/k/2.1`)
+    expect(parseReport(named).cases[0]!.glb).toBe(`${ASSET_BASE}/0.9.0/k/2.1/t/x/a.abc.glb`)
     const none = parseReport({ ...raw('k', '2.1', cases), assets: null })
     expect([none.methodology.assetBase, none.cases[0]!.glb]).toEqual([null, null])
   })
 
-  it('refuses `assets` that is not the report’s own folder over https', () => {
+  it('refuses `assets` that is not the report’s own folder on the suite’s CDN', () => {
     for (const assets of [
-      'https://files.example/b/0.9.0/other/2.1/',
-      'http://files.example/b/0.9.0/k/2.1/',
-      'https://files.example/b/0.9.0/k/2.1',
+      'https://files.example/brep-conformance/0.9.0/k/2.1/',
+      `${ASSET_BASE}.evil.example/0.9.0/k/2.1/`,
+      `${ASSET_BASE}/0.9.0/other/2.1/`,
+      `${ASSET_BASE.replace('https:', 'http:')}/0.9.0/k/2.1/`,
+      `${ASSET_BASE}/0.9.0/k/2.1`,
       7,
     ]) {
       const bad = { ...raw('k', '2.1', []), assets }

@@ -31,7 +31,8 @@ export function assetBaseOf(suite: string, kernel: string, version: string): str
 }
 
 // The folder a report's files are in, without its closing slash: null where the run wrote none.
-// A report is its kernel's own word, so `assets` must end in the report's own folder and no other.
+// A report is its kernel's own word, so `assets` must be the report's own folder on the suite's
+// CDN: no other host, and no other kernel's folder.
 function assetFolder(
   assets: unknown,
   suite: string,
@@ -41,10 +42,9 @@ function assetFolder(
 ): string | null {
   if (assets === undefined) return assetBaseOf(suite, kernel, version)
   if (assets === null) return null
-  const own = `/${suite}/${kernel}/${version}/`
-  if (typeof assets !== 'string' || !assets.startsWith('https://') || !assets.endsWith(own))
-    throw new Error(`${at}.assets: ${String(assets)} is not an https folder ending ${own}`)
-  return assets.slice(0, -1)
+  const own = `${ASSET_BASE}/${suite}/${kernel}/${version}/`
+  if (assets !== own) throw new Error(`${at}.assets: ${String(assets)} is not ${own}`)
+  return own.slice(0, -1)
 }
 
 export interface FailPoint {

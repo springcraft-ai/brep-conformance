@@ -31,11 +31,11 @@ names ending in `.glb` or `.step`, such as `<test>/<id>.<hash>.glb`, by the rule
 [`publish-assets.sh`](../../publish-assets.sh) holds it to; the site refuses a report with any
 other.
 
-A file's URL is the report's `assets`, its kernel's folder, followed by the key. `assets` must be an
-https address ending `/<suite>/<kernel>/<version>/`, the path the report has in the reports
-directory, so that no report names another's files; it is null where the run wrote none. A report
-written before `assets` existed takes the suite's compiled default,
-`https://cdn.springcraft.ai/brep-conformance`, with that path after it.
+A file's URL is the report's `assets`, its kernel's folder, followed by the key. `assets` must be
+`https://cdn.springcraft.ai/brep-conformance/<suite>/<kernel>/<version>/`: the suite's CDN, then the
+path the report has in the reports directory. The site refuses any other, so that no report names
+another host or another kernel's files. It is null where the run wrote none, and a report written
+before `assets` existed takes that same address.
 
 A test's page shows a case as the selected kernel drew it, and as the first kernel that drew it
 where that one wrote no drawing. Beside each kernel's result on the case it offers the files that
