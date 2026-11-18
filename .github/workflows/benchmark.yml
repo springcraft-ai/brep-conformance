@@ -224,13 +224,14 @@ jobs:
         with:
           role-to-assume: ${{ inputs.publish == 'prod' && vars.BREP_CONFORMANCE_ASSET_ROLE || vars.BREP_CONFORMANCE_ASSET_ROLE_DEV }}
           aws-region: us-west-2
+          mask-aws-account-id: true
       # Each kernel's first pass; springrep's second is only the session's noise measure.
       # Under brep-conformance/<suite>/<kernel>/<version>/, the folder each report names as `assets`.
       # A file's name changes whenever what it shows does, so one already there is skipped, never
       # rewritten, and a second run uploads nothing.
       - name: Publish the files the CDN lacks
         env:
-          BUCKET: ${{ inputs.publish == 'prod' && vars.BREP_CONFORMANCE_ASSET_BUCKET || vars.BREP_CONFORMANCE_ASSET_BUCKET_DEV }}
+          BUCKET: ${{ inputs.publish == 'prod' && secrets.BREP_CONFORMANCE_ASSET_BUCKET || secrets.BREP_CONFORMANCE_ASSET_BUCKET_DEV }}
         run: |
           immutable="public, max-age=31536000, immutable"
           for pass in springrep-1 arris solidcore opencascade; do

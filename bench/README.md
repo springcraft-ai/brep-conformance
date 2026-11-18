@@ -107,12 +107,13 @@ The workflow reads these from the `benchmark` environment, which allows only `ma
 [`app-token.sh`](app-token.sh) turns the App's key into a token that can only manage this
 repository's runners.
 
-`publish` reads these repository variables. It declares no environment, because the upload roles
-trust this repository's `main` and `v*` tags with the default token subject:
+`publish` reads these from the repository. It declares no environment, because the upload roles
+trust this repository's `main` and `v*` tags with the default token subject. The buckets are
+secrets, so the public logs mask them, and the job masks the CDN account's ID in the roles' ARNs:
 
-| Name                                | What it is                 |
-| ----------------------------------- | -------------------------- |
-| `BREP_CONFORMANCE_ASSET_ROLE`       | The prod CDN's upload role |
-| `BREP_CONFORMANCE_ASSET_BUCKET`     | The prod CDN's bucket      |
-| `BREP_CONFORMANCE_ASSET_ROLE_DEV`   | The dev CDN's upload role  |
-| `BREP_CONFORMANCE_ASSET_BUCKET_DEV` | The dev CDN's bucket       |
+| Name                                | Kind     | What it is                 |
+| ----------------------------------- | -------- | -------------------------- |
+| `BREP_CONFORMANCE_ASSET_ROLE`       | Variable | The prod CDN's upload role |
+| `BREP_CONFORMANCE_ASSET_BUCKET`     | Secret   | The prod CDN's bucket      |
+| `BREP_CONFORMANCE_ASSET_ROLE_DEV`   | Variable | The dev CDN's upload role  |
+| `BREP_CONFORMANCE_ASSET_BUCKET_DEV` | Secret   | The dev CDN's bucket       |
