@@ -126,7 +126,8 @@ function renderPage(module: string, entry: Entry, path: string, manifest: Manife
   const pageKey = 'src/' + module.slice(2)
   const head: string[] = []
   const tail: string[] = []
-  const boot = JSON.stringify({ module, props: mod.hydrate ? entry.props : undefined })
+  const props = mod.hydrate ? entry.props : mod.clientProps?.(entry.props)
+  const boot = JSON.stringify({ module, props })
   tail.push(
     `<script type="application/json" id="page-data">${boot.replace(/</g, '\\u003c')}</script>`,
   )

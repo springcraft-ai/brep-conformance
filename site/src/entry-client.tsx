@@ -17,7 +17,7 @@ const load = module ? pages[module] : undefined
 void (load ? load() : Promise.resolve(undefined))
   .then(mod => {
     if (mod?.hydrate && root) hydrateRoot(root, createElement(mod.default, props ?? {}))
-    else mod?.enhance?.()
+    else mod?.enhance?.(props as never)
   })
   .finally(() => {
     const hidden = document.getElementById('dev-hide')

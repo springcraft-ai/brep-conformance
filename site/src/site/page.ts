@@ -11,8 +11,10 @@ export interface PageModule<P = Record<string, unknown>> {
   // interaction stays plain HTML and CSS.
   hydrate?: boolean
   // Run in the browser on the server-rendered page, for a page that needs a little behaviour but
-  // not React: it ships the page's JS, not its props. Ignored when the page hydrates.
-  enhance?: () => void
+  // not React throughout: it ships the page's JS, and of its props only what `clientProps` picks.
+  // Ignored when the page hydrates.
+  enhance?: (props: never) => void
+  clientProps?: (props: P) => unknown
   // A static page that sets this joins the chrome's navigation.
   nav?: { label: string; order: number }
   // Title for a page with no data module.
