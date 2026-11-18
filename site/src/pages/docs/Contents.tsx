@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { SearchBox } from '@/components'
+import { useUrlQuery } from '@/components/search'
 
 export interface TocEntry {
   id: string
@@ -64,7 +65,7 @@ export function firstLeaf(toc: TocPart[]): string | null {
 // twice and not its sections. It marks the section in view, opens that section's group, and on a
 // phone is the menu the "contents" button opens.
 export function Contents({ toc }: { toc: TocPart[] }) {
-  const [q, setQ] = useState('')
+  const [q, setQ] = useUrlQuery()
   const [live, setLive] = useState(false)
   const [on, setOn] = useState<{ id: string; group: string | null } | null>(null)
   const [menu, setMenu] = useState(false)
