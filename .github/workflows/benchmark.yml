@@ -75,18 +75,23 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.BENCHMARK_ROLE_ARN }}
+          role-to-assume: ${{ secrets.BENCHMARK_ROLE_ARN }}
           aws-region: ${{ vars.BENCHMARK_AWS_REGION }}
+          mask-aws-account-id: true
 
       - name: Launch the machine
         id: launch
         env:
           TEMPLATE: ${{ vars.BENCHMARK_LAUNCH_TEMPLATE }}
-          SUBNETS: ${{ vars.BENCHMARK_SUBNET_IDS }}
+          SUBNETS: ${{ secrets.BENCHMARK_SUBNET_IDS }}
         run: |
           tags="{Key=Application,Value=benchmark-runner},{Key=Name,Value=benchmark-runner}"
           tags="$tags,{Key=CostCenter,Value=springcraft-engineering}"
           tags="$tags,{Key=Environment,Value=production},{Key=GitHubRun,Value=$RUNNER_LABEL}"
+          # GitHub masks a secret only as a whole, so each subnet is masked on its own.
+          for subnet in ${SUBNETS//,/ }; do
+              echo "::add-mask::$subnet"
+          done
           instance=""
           for subnet in ${SUBNETS//,/ }; do
               if instance=$(aws ec2 run-instances \
@@ -109,6 +114,7 @@ jobs:
               echo "no zone has capacity for this instance type"
               exit 1
           fi
+          echo "::add-mask::$instance"
           echo "launched $instance"
           echo "instance=$instance" >> "$GITHUB_OUTPUT"
 
@@ -222,7 +228,7 @@ jobs:
           path: assets
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ inputs.publish == 'prod' && vars.BREP_CONFORMANCE_ASSET_ROLE || vars.BREP_CONFORMANCE_ASSET_ROLE_DEV }}
+          role-to-assume: ${{ inputs.publish == 'prod' && secrets.BREP_CONFORMANCE_ASSET_ROLE || secrets.BREP_CONFORMANCE_ASSET_ROLE_DEV }}
           aws-region: us-west-2
           mask-aws-account-id: true
       # Under brep-conformance/<suite>/<kernel>/<version>/, the folder each report names as `assets`.
@@ -267,8 +273,9 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.BENCHMARK_ROLE_ARN }}
+          role-to-assume: ${{ secrets.BENCHMARK_ROLE_ARN }}
           aws-region: ${{ vars.BENCHMARK_AWS_REGION }}
+          mask-aws-account-id: true
 
       # By tag and not by the start job's output: a start job cancelled after the launch has none.
       - name: Terminate the machine
@@ -281,6 +288,9 @@ jobs:
               echo "no machine is running for this run"
               exit 0
           fi
+          for instance in $instances; do
+              echo "::add-mask::$instance"
+          done
           # shellcheck disable=SC2086
           aws ec2 terminate-instances --instance-ids $instances --output text
           # shellcheck disable=SC2086

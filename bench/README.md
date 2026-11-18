@@ -99,21 +99,25 @@ The workflow reads these from the `benchmark` environment, which allows only `ma
 | --------------------------- | -------- | --------------------------------------------- |
 | `BENCHMARK_APP_CLIENT_ID`   | Variable | The GitHub App that registers the runner      |
 | `BENCHMARK_APP_PRIVATE_KEY` | Secret   | That App's key                                |
-| `BENCHMARK_ROLE_ARN`        | Variable | The role that may launch and terminate        |
+| `BENCHMARK_ROLE_ARN`        | Secret   | The role that may launch and terminate        |
 | `BENCHMARK_AWS_REGION`      | Variable | The region of the machine                     |
 | `BENCHMARK_LAUNCH_TEMPLATE` | Variable | The launch template's name                    |
-| `BENCHMARK_SUBNET_IDS`      | Variable | Subnets to try, in order, separated by commas |
+| `BENCHMARK_SUBNET_IDS`      | Secret   | Subnets to try, in order, separated by commas |
+
+The role and the subnets are secrets so that the public logs mask them, and the account's ID with
+them. The jobs also mask the machine's instance ID, and the machine names itself
+`benchmark-runner` in place of its private IP, which the runner would print in the `bench` log.
 
 [`app-token.sh`](app-token.sh) turns the App's key into a token that can only manage this
 repository's runners.
 
 `publish` reads these from the repository. It declares no environment, because the upload roles
 trust this repository's `main` and `v*` tags with the default token subject. The buckets are
-secrets, so the public logs mask them, and the job masks the CDN account's ID in the roles' ARNs:
+secrets, so the public logs mask them:
 
 | Name                                | Kind     | What it is                 |
 | ----------------------------------- | -------- | -------------------------- |
-| `BREP_CONFORMANCE_ASSET_ROLE`       | Variable | The prod CDN's upload role |
+| `BREP_CONFORMANCE_ASSET_ROLE`       | Secret   | The prod CDN's upload role |
 | `BREP_CONFORMANCE_ASSET_BUCKET`     | Secret   | The prod CDN's bucket      |
-| `BREP_CONFORMANCE_ASSET_ROLE_DEV`   | Variable | The dev CDN's upload role  |
+| `BREP_CONFORMANCE_ASSET_ROLE_DEV`   | Secret   | The dev CDN's upload role  |
 | `BREP_CONFORMANCE_ASSET_BUCKET_DEV` | Secret   | The dev CDN's bucket       |

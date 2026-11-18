@@ -137,6 +137,12 @@ EOF
 systemctl daemon-reload
 systemctl enable benchmark-machine.service
 
+# The runner prints the host name in every job's public log, and the default one is the private IP.
+# cloud-init would set the default back on each boot.
+hostnamectl set-hostname benchmark-runner
+echo "127.0.1.1 benchmark-runner" >> /etc/hosts
+echo "preserve_hostname: true" > /etc/cloud/cloud.cfg.d/99-benchmark-runner.cfg
+
 # Background package work would run beside the cases being timed.
 systemctl mask --now apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service || true
 
