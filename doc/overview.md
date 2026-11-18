@@ -43,11 +43,39 @@ suite does not test them.
 
 ## Add your kernel
 
-1. Write an adapter: one program that reads a call on a line of input and writes the reply on a line
-   of output. [Calling a kernel](api.md#calling-a-kernel) is the whole of what it must do.
-2. Pass each call to your kernel's own function, and list the functions it does not have as
-   unsupported. [Refusals](api.md#refusals) says what to do with an input you cannot build.
-3. Run the suite against it, and read the report.
+An adapter is one program that reads a call on a line of input and writes the reply on a line of
+output. [Calling a kernel](api.md#calling-a-kernel) is the whole of what it must do.
+
+1. **Run the example.**
+   [`box_kernel.rs`](https://github.com/springcraft-ai/brep-conformance/blob/main/protocol/examples/box_kernel.rs)
+   is a complete adapter for a kernel that makes boxes and nothing else, in about a hundred lines of
+   Rust. From the repository's root:
+
+   ```bash
+   cargo build --release --example box_kernel -p brep-protocol
+   cargo run --release -p brep-conformance -- --adapter target/release/examples/box_kernel
+   ```
+
+   The summary says how many cases call only functions the adapter offers, and how many of those it
+   passes: every one, for these boxes. The suite runs only those cases, and scores the rest
+   unsupported.
+
+2. **Put your kernel's calls in.** Each method of the `Kernel` trait in
+   [`brep-protocol`](https://github.com/springcraft-ai/brep-conformance/tree/main/protocol) is one
+   function of [the API](api.md#constructors), and its body is your kernel's own call for it. An
+   adapter in another language answers the same lines of JSON without the crate.
+
+3. **Declare the rest unsupported.** `unsupported` lists the functions your kernel has no one call
+   for; `hello` reports the others, and the suite runs no case that needs a missing one. Never build
+   a function out of others: [the adapter rule](contract.md#what-an-adapter-may-do) says why.
+   [Refusals](api.md#refusals) says what to answer for an input you cannot build.
+
+4. **Run the suite, and read the report.** `--html report.html` writes a page with every case, its
+   checks and the shapes it drew. `--family` runs one area of the suite while you work on it.
+
+5. **Ask to be scored.** An official run uses an adapter at a commit the suite's maintainers have
+   reviewed against the adapter rule, listed in [the registry](process.md#the-registry). Open an
+   issue with your adapter's repository; once it is reviewed, a pull request adds it.
 
 ## Where to look
 
