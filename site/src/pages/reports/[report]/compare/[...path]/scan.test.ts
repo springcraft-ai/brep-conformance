@@ -192,7 +192,9 @@ describe('overlayGeometry, a query’s answers', () => {
     expect([ix, iy, ox, oy]).toEqual([5, 0, 5, 0])
     expect(iz!).toBeLessThan(-0.2)
     expect(oz!).toBeCloseTo(-iz!)
-    expect(segments(o.lines)).toEqual([
+    // The stick is part of the mark: faint where hidden like an arrow, never dashed.
+    expect(o.lines.length + o.hiddenLines.length).toBe(0)
+    expect(segments(o.sticks)).toEqual([
       [
         [5, 0, iz!],
         [5, 0, oz!],

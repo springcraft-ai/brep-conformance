@@ -182,6 +182,8 @@ export interface OverlayGeometry {
   points: Float32Array
   lines: Float32Array
   hiddenLines: Float32Array
+  // The sticks of classify probes: part of a mark, so faint where hidden, never dashed.
+  sticks: Float32Array
   // Each arrow as one segment, from its point to its tip.
   arrows: Float32Array
   dashes: Float32Array
@@ -212,6 +214,7 @@ type OverlayPart =
   | 'hiddenLines'
   | 'dashes'
   | 'arrows'
+  | 'sticks'
 
 interface Part {
   vao: WebGLVertexArrayObject | null
@@ -436,6 +439,7 @@ export class Renderer {
       hiddenLines: wide(wideOf(o.hiddenLines)),
       dashes: wide(wideOf(o.dashes)),
       arrows: wide(wideOf(o.arrows, true)),
+      sticks: wide(wideOf(o.sticks)),
     }
   }
 
@@ -648,10 +652,6 @@ export class Renderer {
       gl.stencilFunc(gl.EQUAL, 0, 0xff)
       gl.stencilOp(gl.KEEP, gl.KEEP, gl.INCR)
       const k = hidden ? HIDDEN_ALPHA : MARK_ALPHA
-      const r = uniforms(this.ribbon)
-      gl.uniform3f(gl.getUniformLocation(this.ribbon, 'u_shape'), ...ARROW_SHAPE)
-      gl.uniform4f(r, ...rgba(look.guide, k))
-      draw(P.arrows, gl.TRIANGLES)
       const c = uniforms(this.marks)
       gl.enable(gl.CULL_FACE)
       gl.cullFace(gl.BACK)
@@ -660,6 +660,13 @@ export class Renderer {
         draw(part, gl.TRIANGLES)
       }
       gl.disable(gl.CULL_FACE)
+      // After the balls, so a probe's stick runs behind its balls and does not cut through them.
+      gl.uniform4f(band(LINE_WIDTH), ...rgba(look.guide, k))
+      draw(P.sticks, gl.TRIANGLES)
+      const r = uniforms(this.ribbon)
+      gl.uniform3f(gl.getUniformLocation(this.ribbon, 'u_shape'), ...ARROW_SHAPE)
+      gl.uniform4f(r, ...rgba(look.guide, k))
+      draw(P.arrows, gl.TRIANGLES)
       gl.disable(gl.STENCIL_TEST)
     }
     gl.depthFunc(gl.LEQUAL)

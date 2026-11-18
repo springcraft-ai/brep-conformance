@@ -291,6 +291,7 @@ export function overlayGeometry(
       points: none,
       lines: none,
       hiddenLines: none,
+      sticks: none,
       arrows: none,
       dashes: none,
       inside: none,
@@ -365,6 +366,7 @@ export function overlayGeometry(
   const quiet: number[] = []
   const lines: number[] = []
   const arrows: number[] = []
+  const sticks: number[] = []
   const dashes: number[] = []
   for (const l of o.lines) {
     if (l.seen)
@@ -406,7 +408,7 @@ export function overlayGeometry(
       used.add(oi)
       quiet.push(...spread(1))
     }
-    lines.push(...(inner ? spread(-1) : s.at), ...(outer ? spread(1) : s.at))
+    sticks.push(...(inner ? spread(-1) : s.at), ...(outer ? spread(1) : s.at))
   })
   o.sides.forEach((s, i) => {
     if (!used.has(i)) (s.side === 'in' ? inside : s.side === 'on' ? points : quiet).push(...s.at)
@@ -438,6 +440,7 @@ export function overlayGeometry(
     points: Float32Array.from(points),
     lines: Float32Array.from(lines),
     hiddenLines: dashesOf(lines),
+    sticks: Float32Array.from(sticks),
     arrows: Float32Array.from(arrows),
     dashes: Float32Array.from(dashes),
     inside: Float32Array.from(inside),
