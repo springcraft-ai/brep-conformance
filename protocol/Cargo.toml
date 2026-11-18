@@ -12,6 +12,7 @@ keywords = ["brep", "cad", "geometry", "kernel", "conformance"]
 
 # crates.io dependencies only: the protocol must build outside this repository.
 [dependencies]
+gmp-mpfr-sys = "1"
 serde_json = "1"
 
 [target.'cfg(unix)'.dependencies]
