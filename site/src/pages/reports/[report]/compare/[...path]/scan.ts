@@ -175,13 +175,6 @@ function grow(b: { lo: Vec3; hi: Vec3 }, xs: ArrayLike<number>) {
     }
 }
 
-// How far an overlay's plane reaches each way from its origin, as a share of the frame's radius:
-// across the solid it cuts, without filling the view.
-const PLANE_SIZE = 0.6
-
-const radiusOf = (f: { lo: Vec3; hi: Vec3 }) =>
-  Math.hypot(...[0, 1, 2].map(k => f.hi[k]! - f.lo[k]!)) / 2
-
 // The frame every view of a scene is fitted to: the shape, its ghosts, and the marks with it.
 export function frameOf(scene: Scene): { lo: Vec3; hi: Vec3 } {
   if (scene.frame) return scene.frame
@@ -226,32 +219,67 @@ function overlay(
   triad(ctx, c, col.annot)
 }
 
-// The case's overlay as the GPU draws it: a plane as a square `size` across each way from its
-// origin, a box as its twelve edges, the points as they are.
-export function overlayGeometry(o: Overlay | undefined, size: number): OverlayGeometry {
+// How far past the solid's box a plane is drawn, as a share of the box's size each way.
+const PLANE_MARGIN = 0.08
+
+// The case's overlay as the GPU draws it: a plane as the polygon it cuts from the box `within`
+// (the solid's, a little grown), which reaches past the solid on every side as an endless plane
+// does without filling the view; a box as its twelve edges; the points as they are.
+export function overlayGeometry(
+  o: Overlay | undefined,
+  within: { lo: Vec3; hi: Vec3 },
+): OverlayGeometry {
   const none = new Float32Array(0)
   if (!o) return { plane: none, planeEdges: none, box: none, points: none }
   let plane = none
   let planeEdges = none
   if (o.plane) {
-    const n = o.plane.normal
-    const len = Math.hypot(...n) || 1
-    const z = n.map(x => x / len) as Vec3
-    const seed: Vec3 = Math.abs(z[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]
-    const d = seed[0] * z[0] + seed[1] * z[1] + seed[2] * z[2]
-    const u0 = seed.map((s, k) => s - d * z[k]!)
-    const ul = Math.hypot(...u0)
-    const u = u0.map(x => x / ul) as Vec3
-    const v: Vec3 = [
-      z[1] * u[2] - z[2] * u[1],
-      z[2] * u[0] - z[0] * u[2],
-      z[0] * u[1] - z[1] * u[0],
+    const { origin, normal: n } = o.plane
+    const grow = [0, 1, 2].map(k => PLANE_MARGIN * (within.hi[k]! - within.lo[k]!))
+    const lo = within.lo.map((x, k) => x - grow[k]!)
+    const hi = within.hi.map((x, k) => x + grow[k]!)
+    const corner = (i: number) => [
+      i & 1 ? hi[0]! : lo[0]!,
+      i & 2 ? hi[1]! : lo[1]!,
+      i & 4 ? hi[2]! : lo[2]!,
     ]
-    const corner = (a: number, b: number) =>
-      [0, 1, 2].map(k => o.plane!.origin[k]! + size * (a * u[k]! + b * v[k]!))
-    const [p, q, r, s] = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)]
-    plane = Float32Array.from([p, q, r, p, r, s].flat())
-    planeEdges = Float32Array.from([p, q, q, r, r, s, s, p].flat())
+    const side = (p: number[]) => [0, 1, 2].reduce((s, k) => s + n[k]! * (p[k]! - origin[k]!), 0)
+    // Where the plane crosses each of the box's edges.
+    const cut: number[][] = []
+    for (let i = 0; i < 8; i++)
+      for (const bit of [1, 2, 4]) {
+        if (i & bit) continue
+        const [a, b] = [corner(i), corner(i | bit)]
+        const [da, db] = [side(a), side(b)]
+        if (da < 0 === db < 0 || da === db) continue
+        const t = da / (da - db)
+        cut.push([0, 1, 2].map(k => a[k]! + t * (b[k]! - a[k]!)))
+      }
+    if (cut.length >= 3) {
+      // In order round their centre, by their angle in the plane.
+      const c = [0, 1, 2].map(k => cut.reduce((s, p) => s + p[k]!, 0) / cut.length)
+      const len = Math.hypot(...n) || 1
+      const z = n.map(x => x / len)
+      const seed = Math.abs(z[0]!) < 0.9 ? [1, 0, 0] : [0, 1, 0]
+      const dz = seed.reduce((s, x, k) => s + x * z[k]!, 0)
+      const u = seed.map((x, k) => x - dz * z[k]!)
+      const v = [
+        z[1]! * u[2]! - z[2]! * u[1]!,
+        z[2]! * u[0]! - z[0]! * u[2]!,
+        z[0]! * u[1]! - z[1]! * u[0]!,
+      ]
+      const angle = (p: number[]) => {
+        const d = p.map((x, k) => x - c[k]!)
+        return Math.atan2(
+          d.reduce((s, x, k) => s + x * v[k]!, 0),
+          d.reduce((s, x, k) => s + x * u[k]!, 0),
+        )
+      }
+      cut.sort((p, q) => angle(p) - angle(q))
+      const ring = cut.map((p, i) => [p, cut[(i + 1) % cut.length]!] as const)
+      plane = Float32Array.from(ring.flatMap(([p, q]) => [...c, ...p, ...q]))
+      planeEdges = Float32Array.from(ring.flatMap(([p, q]) => [...p, ...q]))
+    }
   }
   let box = none
   if (o.box) {
@@ -336,7 +364,7 @@ export function mountScan(
   let queued = 0
   const colors = colorsOf(canvas)
   renderer.set(scene, scene.alt, scene.ghosts)
-  renderer.setOverlay(overlayGeometry(scene.overlay, PLANE_SIZE * radiusOf(frame)))
+  renderer.setOverlay(overlayGeometry(scene.overlay, frame))
 
   const render = () => {
     queued = 0
@@ -511,7 +539,7 @@ export function mountScan(
       frame = frameOf(scene)
       focused = -1
       renderer.set(scene, scene.alt, scene.ghosts)
-      renderer.setOverlay(overlayGeometry(scene.overlay, PLANE_SIZE * radiusOf(frame)))
+      renderer.setOverlay(overlayGeometry(scene.overlay, frame))
       redraw()
     },
     focus(i) {

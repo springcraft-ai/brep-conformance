@@ -12,7 +12,7 @@ describe('overlayGeometry', () => {
         ],
         plane: null,
       },
-      1,
+      { lo: [0, 0, 0], hi: [1, 1, 1] },
     )
     expect(g.box.length / 6).toBe(12)
     for (let i = 0; i < g.box.length; i += 6) {
@@ -21,20 +21,35 @@ describe('overlayGeometry', () => {
     }
   })
 
-  it('draws a plane as a square through its origin, square to its normal, and its outline', () => {
+  it('draws a plane as the polygon it cuts from the solid’s box, grown a little, and its outline', () => {
+    const within = { lo: [-2, -2, 0], hi: [2, 2, 10] } as const
     const g = overlayGeometry(
-      { points: [[1, 2, 3]], box: null, plane: { origin: [0, 0, 5], normal: [0, 0, 2] } },
-      2,
+      {
+        points: [[1, 2, 3]],
+        box: null,
+        plane: { origin: [0, 0, 5], normal: [0, 0, 2] },
+      },
+      { lo: [...within.lo], hi: [...within.hi] },
     )
-    expect(g.plane.length / 3).toBe(6)
+    // A level plane through a box cuts a rectangle: four sides, drawn as four triangles.
     expect(g.planeEdges.length / 6).toBe(4)
+    expect(g.plane.length / 9).toBe(4)
     for (let i = 2; i < g.plane.length; i += 3) expect(g.plane[i]).toBeCloseTo(5)
-    expect(Math.max(...g.plane.filter((_, i) => i % 3 === 0))).toBeCloseTo(2)
+    // Past the box by 8% of its 4 mm width each way.
+    expect(Math.max(...g.planeEdges.filter((_, i) => i % 3 === 0))).toBeCloseTo(2.32)
     expect(Array.from(g.points)).toEqual([1, 2, 3])
   })
 
+  it('draws no plane that misses the solid’s box', () => {
+    const g = overlayGeometry(
+      { points: [], box: null, plane: { origin: [0, 0, 50], normal: [0, 0, 1] } },
+      { lo: [0, 0, 0], hi: [1, 1, 1] },
+    )
+    expect(g.plane.length + g.planeEdges.length).toBe(0)
+  })
+
   it('draws nothing where the case lays nothing over its views', () => {
-    const g = overlayGeometry(undefined, 1)
+    const g = overlayGeometry(undefined, { lo: [0, 0, 0], hi: [1, 1, 1] })
     expect(g.plane.length + g.planeEdges.length + g.box.length + g.points.length).toBe(0)
   })
 })
