@@ -184,6 +184,8 @@ export interface OverlayGeometry {
   hiddenLines: Float32Array
   // The sticks of classify probes: part of a mark, so faint where hidden, never dashed.
   sticks: Float32Array
+  // A drawing's seen stretches, drawn solid where visible and never dashed.
+  seen: Float32Array
   // Each arrow as one segment, from its point to its tip.
   arrows: Float32Array
   dashes: Float32Array
@@ -215,6 +217,7 @@ type OverlayPart =
   | 'dashes'
   | 'arrows'
   | 'sticks'
+  | 'seen'
 
 interface Part {
   vao: WebGLVertexArrayObject | null
@@ -440,6 +443,7 @@ export class Renderer {
       dashes: wide(wideOf(o.dashes)),
       arrows: wide(wideOf(o.arrows, true)),
       sticks: wide(wideOf(o.sticks)),
+      seen: wide(wideOf(o.seen)),
     }
   }
 
@@ -646,6 +650,7 @@ export class Renderer {
       gl.depthFunc(hidden ? gl.GREATER : gl.LEQUAL)
       gl.uniform4f(band(LINE_WIDTH), ...rgba(look.guide, GUIDE_ALPHA))
       draw(hidden ? P.hiddenLines : P.lines, gl.TRIANGLES)
+      if (!hidden) draw(P.seen, gl.TRIANGLES)
       // Each pixel takes one mark only, so where marks overlap they do not blend over each other.
       gl.clear(gl.STENCIL_BUFFER_BIT)
       gl.enable(gl.STENCIL_TEST)

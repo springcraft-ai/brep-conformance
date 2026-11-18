@@ -292,6 +292,7 @@ export function overlayGeometry(
       lines: none,
       hiddenLines: none,
       sticks: none,
+      seen: none,
       arrows: none,
       dashes: none,
       inside: none,
@@ -367,10 +368,11 @@ export function overlayGeometry(
   const lines: number[] = []
   const arrows: number[] = []
   const sticks: number[] = []
+  // A drawing's seen stretches: it names its hidden ones, so these get no dashed copy.
+  const seen: number[] = []
   const dashes: number[] = []
   for (const l of o.lines) {
-    if (l.seen)
-      for (let i = 0; i + 1 < l.pts.length; i++) lines.push(...l.pts[i]!, ...l.pts[i + 1]!)
+    if (l.seen) for (let i = 0; i + 1 < l.pts.length; i++) seen.push(...l.pts[i]!, ...l.pts[i + 1]!)
     else dashed(l.pts, DASH * size, dashes)
   }
   for (const c of o.closest) {
@@ -441,6 +443,7 @@ export function overlayGeometry(
     lines: Float32Array.from(lines),
     hiddenLines: dashesOf(lines),
     sticks: Float32Array.from(sticks),
+    seen: Float32Array.from(seen),
     arrows: Float32Array.from(arrows),
     dashes: Float32Array.from(dashes),
     inside: Float32Array.from(inside),

@@ -102,7 +102,9 @@ describe('overlayGeometry, a query’s answers', () => {
       },
       within,
     )
-    expect(segments(g.lines)).toEqual([
+    // Its seen stretches are its own part, which is never dashed: the drawing names its hidden ones.
+    expect(g.lines.length + g.hiddenLines.length).toBe(0)
+    expect(segments(g.seen)).toEqual([
       [
         [0, 0, 0],
         [0, 4, 0],
