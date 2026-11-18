@@ -85,8 +85,9 @@ A page module is loaded in the browser when it hydrates, so it never imports `so
 
 `npm run build` writes `dist/site`, which GitHub Pages serves as it is.
 [`pages.yml`](../.github/workflows/pages.yml) checks, builds and deploys it on every push to `main`.
-It builds with no `BREP_REPORTS_DIR` yet, so the site says no results are published. The reports,
-and a check that every asset a report names exists, are not set up yet.
+It builds from the reports in [`reports/`](../reports/), each written by
+`brep-conformance-report --flat --verified` from a [Benchmark](../.github/workflows/benchmark.yml)
+run's results. A check that every asset a report names exists is not set up yet.
 
 ## Additional Information
 
