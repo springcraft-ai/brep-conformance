@@ -1079,6 +1079,41 @@ impl Rng {
     }
 }
 
+/// `debug` with every float rounded to nine significant digits. The values a case holds come out of
+/// `sin`, `cos` and the like, whose last bit differs between platforms' maths libraries; rounded,
+/// they hash the same everywhere. A number with no point and no exponent is an integer, and is kept.
+fn rounded_floats(debug: &str) -> String {
+    let b = debug.as_bytes();
+    let mut out = String::with_capacity(debug.len());
+    let mut i = 0;
+    while i < b.len() {
+        let starts =
+            b[i].is_ascii_digit() || (b[i] == b'-' && b.get(i + 1).is_some_and(u8::is_ascii_digit));
+        let after_word = i > 0 && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_');
+        if !starts || after_word {
+            out.push(b[i] as char);
+            i += 1;
+            continue;
+        }
+        let mut j = i + 1;
+        while j < b.len()
+            && (b[j].is_ascii_digit()
+                || b[j] == b'.'
+                || b[j] == b'e'
+                || (b[j] == b'-' && b[j - 1] == b'e'))
+        {
+            j += 1;
+        }
+        let token = &debug[i..j];
+        match token.parse::<f64>() {
+            Ok(v) if token.contains(['.', 'e']) => out.push_str(&format!("{v:.8e}")),
+            _ => out.push_str(token),
+        }
+        i = j;
+    }
+    out
+}
+
 /// FNV-1a, for ids that are the same on every platform and Rust release.
 pub(crate) fn fnv(s: &str) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -2003,7 +2038,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 exact.chain.as_ref().map(|x| format!("{x:?}")),
             ];
             for h in held.into_iter().flatten() {
-                key = format!("{key}|{:016x}", fnv(&h));
+                key = format!("{key}|{:016x}", fnv(&rounded_floats(&h)));
             }
             out.push(Case {
                 id: format!("{}-{:016x}", f.name, fnv(&key)),
@@ -2111,7 +2146,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 exact.loft.as_ref().map(|x| format!("{x:?}")),
             ];
             for h in held.into_iter().flatten() {
-                key = format!("{key}|{:016x}", fnv(&h));
+                key = format!("{key}|{:016x}", fnv(&rounded_floats(&h)));
             }
             out.push(Case {
                 id: format!("{}-{:016x}", f.name, fnv(&key)),
@@ -7575,6 +7610,34 @@ fn invalid_point(r: &mut Rng) -> FeatureDraw {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Every id of the default seed, as one hash. Every platform must draw these ids; CI runs on
+    // another platform than most development, so a value that hashes differently fails here. A
+    // change that draws other cases updates the hash with its family's version.
+    #[test]
+    fn the_default_seed_draws_the_same_ids_on_every_platform() {
+        let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
+        assert_eq!(format!("{:016x}", fnv(&ids.join("\n"))), "b7506d6ac5027e9a");
+    }
+
+    #[test]
+    fn held_values_hash_the_same_whatever_their_last_bit() {
+        let a = 0.1_f64 + 0.2;
+        let b = f64::from_bits(a.to_bits() + 1);
+        assert_ne!(format!("{a:?}"), format!("{b:?}"));
+        assert_eq!(
+            rounded_floats(&format!("{a:?}")),
+            rounded_floats(&format!("{b:?}"))
+        );
+        assert_eq!(
+            rounded_floats("Clash { i: 3, j: 12, volume: 0.30000000000000004, gap: -1.5e-7 }"),
+            "Clash { i: 3, j: 12, volume: 3.00000000e-1, gap: -1.50000000e-7 }"
+        );
+        assert_eq!(
+            rounded_floats("[[1.0, -2.5], Some(4e3)]"),
+            "[[1.00000000e0, -2.50000000e0], Some(4.00000000e3)]"
+        );
+    }
 
     #[test]
     fn a_polygon_spline_round_a_unit_square_holds_one_and_runs_four() {

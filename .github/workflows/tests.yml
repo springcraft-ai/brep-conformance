@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: MIT
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # rust-toolchain.toml names the release; rustup installs it on first use.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # Also checks that the default seed draws the same case ids here as where they were made.
+      - name: The workspace's tests pass
+        run: cargo test --workspace
