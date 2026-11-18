@@ -44,10 +44,10 @@ cp /etc/benchmark-runner/environment results/environment.txt
 failed=""
 
 one() {
-    local name=$1 kernel=$2
-    shift 2
+    local name=$1
+    shift
     local adapter
-    adapter=$(python3 -I bench/adapters.py run "$root" "$kernel")
+    adapter=$(python3 -I bench/adapters.py run "$root" "$name")
     export BENCH_PIN_DIR
     BENCH_PIN_DIR=$(mktemp -d)
     echo "=== $name: started $(date -u '+%H:%M:%S')"
@@ -66,7 +66,7 @@ one() {
     fi
     # A pass is of the release the registry pins, or it is not an official number.
     local wrong
-    if ! wrong=$(python3 -I bench/adapters.py check "$root" "$kernel" "results/$name.json" 2>&1); then
+    if ! wrong=$(python3 -I bench/adapters.py check "$root" "$name" "results/$name.json" 2>&1); then
         echo "=== $name: INVALID, $wrong"
         rc="invalid(release: $wrong)"
     fi
@@ -77,20 +77,17 @@ one() {
     tail -4 "results/$name.log"
 }
 
-# springrep runs first and last: the two passes give the session's noise band. Each adapter is the
-# one kernels.json pins; OpenCascade's starts the environment's own Python, not `uv run`, so the
-# adapter is the suite's child and lets go of its core when the suite replaces it.
-one springrep-1 springrep "$@"
-one arris arris "$@"
-one solidcore solidcore "$@"
-one opencascade opencascade "$@"
-one springrep-2 springrep "$@"
+# One pass per kernel. Each adapter is the one kernels.json pins; OpenCascade's starts the
+# environment's own Python, not `uv run`, so the adapter is the suite's child and lets go of its core
+# when the suite replaces it.
+kernels=(springrep arris solidcore opencascade)
+for kernel in "${kernels[@]}"; do
+    one "$kernel" "$@"
+done
 
 echo "finished=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> results/session.txt
 
-# The published files are each kernel's from its first pass; springrep's second pass is only the
-# noise measure.
-for name in springrep-1 arris solidcore opencascade; do
+for name in "${kernels[@]}"; do
     if [ -d "$shapes/$name" ]; then
         tar -cf "assets/$name.tar" -C "$shapes/$name" .
     fi

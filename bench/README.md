@@ -69,18 +69,18 @@ registry says. `results/build.txt` records every commit and tool version.
 
 | Setting  | Value                                                                                                                      |
 | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Order    | springrep, arris, solidcore, OpenCascade, then springrep again as the noise measure                                        |
+| Order    | springrep, arris, solidcore, OpenCascade: one pass each                                                                    |
 | Workers  | 24, always passed                                                                                                          |
 | Cores    | The suite's runner on the housekeeping cores; each adapter on an isolated core of its own, through [`pin.sh`](pin.sh)      |
 | Adapters | Started by the registry's command, through [`adapters.py`](adapters.py)                                                    |
 | Release  | A pass whose adapter reports another release than `kernels.json` pins is invalid                                           |
 | Files    | Every pass runs with `--glb` and `--step` to a RAM disk; the suite draws a case after judging it, outside every timed call |
 
-When the last pass ends, each kernel's first-pass files are packed into `assets/<pass>.tar`. A pass
-that did not finish cleanly fails the job, after its results are kept, so nothing is published.
-`publish` uploads each pass's files under `brep-conformance/<suite>/<kernel>/<version>/`, skipping
-those already there, with each file's type and an immutable cache lifetime. Each report names that
-folder as `assets` ([formats.md](../doc/formats.md#assets)).
+When the last pass ends, each kernel's files are packed into `assets/<kernel>.tar`. A pass that did
+not finish cleanly fails the job, after its results are kept, so nothing is published. `publish`
+uploads each pass's files under `brep-conformance/<suite>/<kernel>/<version>/`, skipping those
+already there, with each file's type and an immutable cache lifetime. Each report names that folder
+as `assets` ([formats.md](../doc/formats.md#assets)).
 
 The files travel from the machine to `publish` as artifacts because the machine holds no cloud
 credentials: it runs kernel code, which must never be able to write to the CDN.
