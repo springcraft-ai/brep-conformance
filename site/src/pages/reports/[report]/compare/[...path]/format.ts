@@ -49,22 +49,11 @@ export function trailOf(suite: string, path: string): Crumb[] {
   ]
 }
 
-const SHORT_HASH = 6
-
-// Each case id as a list shows it: the id's hash cut short, after its family's name only where the
-// ids are of more than one family. The whole id stays the case's name everywhere else.
-export function shortCaseIds(ids: readonly string[]): string[] {
-  const parts = ids.map(id => {
-    const cut = id.lastIndexOf('-')
-    return cut < 0
-      ? { family: '', hash: id }
-      : { family: id.slice(0, cut), hash: id.slice(cut + 1) }
-  })
-  const mixed = new Set(parts.map(p => p.family)).size > 1
-  return parts.map(p => {
-    const hash = p.hash.slice(0, SHORT_HASH)
-    return mixed && p.family ? `${p.family} ${hash}` : hash
-  })
+// Each case id as a list shows it beside its number: its family's name where the ids are of more
+// than one family, and nothing where they share one. The whole id stays the case's name elsewhere.
+export function caseFamilies(ids: readonly string[]): string[] {
+  const families = ids.map(id => (id.includes('-') ? id.slice(0, id.lastIndexOf('-')) : ''))
+  return new Set(families).size > 1 ? families : families.map(() => '')
 }
 
 // A grade's place among the tiers, best first; anything but a pass after every tier.
@@ -96,19 +85,31 @@ export function kernelOrder(
   return ranks.map((_, k) => k).sort(better)
 }
 
-// Whose drawing of a case to show, as an index into the kernels, among those that drew it: the
-// reader's own kernel where it passed, else the best tier's, a tie going by `order`.
+// The grades under which a kernel made no result: a wrong result ('fail') is still a solid to see.
+const NO_RESULT = new Set<Grade>(['refused', 'crash', 'timeout', 'unsupported'])
+
+// Whether a grade is one of a kernel that made no result. Such a kernel's drawing holds only what
+// it made before it stopped, as an operand, or nothing.
+export function madeNoResult(grade: Grade | null): boolean {
+  return !!grade && NO_RESULT.has(grade)
+}
+
+// Whose drawing of a case to show, as an index into the kernels, among those that wrote one: the
+// kernel `asked` for wherever it wrote one, partial or not; else the best tier's, a kernel with a
+// result before one with none, a tie going by `order`.
 export function drawnBy(
   files: readonly ({ glb: string | null } | null)[],
   grades: readonly (Grade | null)[],
   order: readonly number[],
-  chosen: number,
+  asked = -1,
 ): number | null {
   const drew = files.flatMap((f, i) => (f?.glb ? [i] : []))
   if (!drew.length) return null
-  if (drew.includes(chosen) && tierOf(grades[chosen] ?? null) < TIERS.length) return chosen
-  const best = Math.min(...drew.map(i => tierOf(grades[i] ?? null)))
-  return order.find(i => drew.includes(i) && tierOf(grades[i] ?? null) === best) ?? drew[0]!
+  if (drew.includes(asked)) return asked
+  const whole = drew.filter(i => !madeNoResult(grades[i] ?? null))
+  const pool = whole.length ? whole : drew
+  const best = Math.min(...pool.map(i => tierOf(grades[i] ?? null)))
+  return order.find(i => pool.includes(i) && tierOf(grades[i] ?? null) === best) ?? pool[0]!
 }
 
 // What a STEP file's link says: a case of one solid has one file, <id>.<hash>.step, and a case of

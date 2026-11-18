@@ -12,11 +12,6 @@ const EMPTY = new Float32Array(0)
 const NO_TRIANGLES = new Uint32Array(0)
 
 // What a ghost of each tone is: a boolean's operands, or the solid a step or move started from.
-function ghostLabel(view: string | undefined, tone: 0 | 1): string {
-  if (view && /[∩∖]/.test(view)) return tone === 0 ? 'operand a' : 'operand b'
-  return view === 'after' ? 'before the steps' : 'the starting solid'
-}
-
 // A kernel's drawing of a case in Scan mode, with a kernel's misplaced points over it. The drawing
 // code loads after hydration; where no kernel drew the case, or the file is not published yet, the
 // points are drawn on their own.
@@ -73,8 +68,8 @@ export function ScanView({
   const shown = useMemo(() => {
     if (!views.length) return -1
     const i = viewName === null ? -1 : views.findIndex(v => v.name === viewName)
-    // A kernel that made no result opens on the result's view, which says so.
-    return i < 0 ? (missing ? 0 : firstView(views)) : i
+    // A drawing opens on its first view with a shape: a partial one may have shapes in no other.
+    return i < 0 ? firstView(views) : i
   }, [views, viewName, missing])
   const view = shown < 0 ? null : views[shown]!
   const subject = useMemo(() => (view ? subjectOf(view) : null), [view])
@@ -87,6 +82,21 @@ export function ScanView({
     [views, view, operands, noResult],
   )
   const toggle = view && !noResult ? operandsLabel(views, view) : null
+  // The controls under the frame stay as the last drawing set them while the next one loads, so
+  // what follows the frame does not move up and back on every case.
+  // A partial drawing's empty views cannot be chosen: there is nothing in them to see.
+  const row = {
+    views: views.map(v => ({
+      name: v.name,
+      empty: !!missing && !subjectOf(v).triangles.length,
+    })),
+    name: view?.name ?? '',
+    toggle,
+    hasPoints,
+  }
+  const kept = useRef(row)
+  if (status !== 'loading') kept.current = row
+  const shownRow = kept.current
 
   useEffect(() => {
     let live = true
@@ -170,13 +180,7 @@ export function ScanView({
     noGpu || (((status !== 'ready' && status !== 'loading') || hollow) && !marks.length && !ghosted)
   const state = {
     loading: 'loading shape',
-    ready: loaded
-      ? hollow
-        ? noResult
-          ? `no result · ${missing}`
-          : 'result · empty'
-        : `glb · ${triangles.toLocaleString('en')} triangles`
-      : '',
+    ready: loaded ? (hollow ? (noResult ? `no result · ${missing}` : 'result · empty') : '') : '',
     missing: 'shape not published yet',
     unreadable: 'shape file unreadable',
     undrawn: 'no kernel drew this case',
@@ -184,24 +188,6 @@ export function ScanView({
 
   return (
     <>
-      {views.length > 0 && (
-        <div className="bc-views">
-          {views.length > 1 && (
-            <Segmented
-              label="view"
-              options={views.map(v => ({ id: v.name, label: v.name }))}
-              value={view?.name ?? ''}
-              onChange={id => setViewName(id)}
-            />
-          )}
-          {toggle && (
-            <Checkbox tone="void" checked={operands} onChange={setOperands} label={toggle} />
-          )}
-          {hasPoints && (
-            <Checkbox tone="void" checked={points} onChange={setPoints} label="show points" />
-          )}
-        </div>
-      )}
       <div className="bc-scan" data-status={status} data-empty={empty || undefined}>
         <canvas ref={surface} className="bc-scan__canvas bc-scan__surface" aria-hidden="true" />
         <canvas
@@ -226,14 +212,12 @@ export function ScanView({
             </Annot>
           </div>
         )}
-        <div className="bc-scan__tl">
-          <Annot>scan</Annot>
-          <span className="bc-scan__case bc-machine">{caption}</span>
-          {by && <span className="bc-scan__by">{by}</span>}
-        </div>
-        <div className="bc-scan__tr">
-          <Annot>{state}</Annot>
-        </div>
+        <div className="bc-scan__tl">{by && <span className="bc-scan__by">{by}</span>}</div>
+        {state && (
+          <div className="bc-scan__tr">
+            <Annot>{state}</Annot>
+          </div>
+        )}
         {!empty && (
           <div className="bc-scan__bl">
             <Annot>
@@ -247,21 +231,34 @@ export function ScanView({
         <i className="bc-scan__corner" />
         <i className="bc-scan__corner" />
       </div>
+      {shownRow.views.length > 0 && (
+        <div className="bc-views">
+          {shownRow.views.length > 1 && (
+            <Segmented
+              label="view"
+              options={shownRow.views.map(v => ({ id: v.name, label: v.name, disabled: v.empty }))}
+              value={shownRow.name}
+              onChange={id => setViewName(id)}
+            />
+          )}
+          {shownRow.toggle && (
+            <Checkbox
+              tone="void"
+              checked={operands}
+              onChange={setOperands}
+              label={shownRow.toggle}
+            />
+          )}
+          {shownRow.hasPoints && (
+            <Checkbox tone="void" checked={points} onChange={setPoints} label="show points" />
+          )}
+        </div>
+      )}
       <p className="bc-shape__note" title={view?.note}>
         {view?.note ?? ' '}
       </p>
       <div className="bc-shape__foot">
         <div className="bc-shape__legend">
-          {ghosts.some(g => g.tone === 0 && g.triangles.length) && (
-            <span>
-              <i className="bc-key bc-key--ghost" /> {ghostLabel(view?.name, 0)}
-            </span>
-          )}
-          {ghosts.some(g => g.tone === 1 && g.triangles.length) && (
-            <span>
-              <i className="bc-key bc-key--ghost2" /> {ghostLabel(view?.name, 1)}
-            </span>
-          )}
           {marks.some(m => m.held) && (
             <span>
               <i className="bc-key bc-key--held" /> placed inside, belongs outside

@@ -32,46 +32,6 @@
   margin-bottom: var(--sp-5);
 }
 
-/* ---- definition: the spec quoted, signature in the machine face ---- */
-
-.bc-def {
-  display: grid;
-  gap: var(--sp-4);
-  max-width: 72ch;
-  font-size: 16px;
-  line-height: 1.55;
-}
-.bc-def .bc-body {
-  font: inherit;
-}
-.bc-def__sig {
-  display: block;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--void-ink-1);
-  overflow-wrap: break-word;
-}
-.bc-def p {
-  margin: 0;
-}
-.bc-def code.bc-machine:not(.bc-def__sig) {
-  font-size: 0.85em;
-  color: var(--void-ink-1);
-}
-.bc-def__kind {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  gap: var(--sp-4);
-  align-items: baseline;
-  margin-top: var(--sp-3);
-  padding-top: var(--sp-4);
-  border-top: var(--hairline-void-soft);
-}
-.bc-def__kindname {
-  font-size: 14px;
-  color: var(--void-ink-1);
-}
-
 /* ---- shape: the Scan view, night-graded straight on the void ---- */
 
 .bc-scan {
@@ -88,6 +48,8 @@
   position: relative;
   aspect-ratio: 16 / 9;
   min-height: 280px;
+  /* Without it the ratio turns the minimum height into a minimum width wider than a narrow column. */
+  min-width: 0;
   background: var(--ground-void);
 }
 .bc-scan__canvas {
@@ -138,16 +100,9 @@
   bottom: var(--sp-5);
   left: var(--sp-5);
 }
-.bc-scan__case {
-  font-size: var(--fs-micro-1);
-  color: var(--void-ink-2);
-}
+/* A warning: the drawing shown is not the selected kernel's. */
 .bc-scan__by {
   font-size: var(--fs-micro-1);
-  color: var(--void-ink-2);
-}
-.bc-scan__by b {
-  font-weight: inherit;
   color: var(--accent);
 }
 /* Corner brackets: register the frame without enclosing it. */
@@ -221,20 +176,12 @@
 .bc-key--missed {
   border: 1.5px solid var(--error-void);
 }
-.bc-key--ghost {
-  background: color-mix(in srgb, var(--series-1) 45%, transparent);
-  border: 1px solid var(--series-1);
-}
-.bc-key--ghost2 {
-  background: color-mix(in srgb, var(--series-3) 45%, transparent);
-  border: 1px solid var(--series-3);
-}
 .bc-views {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-3) var(--sp-6);
-  align-items: center;
-  margin-bottom: var(--sp-4);
+  align-items: end;
+  margin-top: var(--sp-4);
 }
 
 .bc-points {
@@ -291,11 +238,7 @@
   min-width: 24ch;
 }
 
-/* With nothing to draw, the frame is only as tall as its notice. */
-.bc-scan[data-empty] {
-  aspect-ratio: auto;
-  min-height: 200px;
-}
+/* With nothing to draw, the frame keeps the drawing's size, so moving between cases moves nothing. */
 .bc-scan[data-empty] .bc-scan__empty {
   inset: 56px var(--sp-5) var(--sp-5);
 }
@@ -316,19 +259,13 @@
     aspect-ratio: 1 / 1;
     min-height: 0;
   }
-  .bc-def__kind {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-  .bc-def__kind > p {
-    grid-column: 1 / -1;
-  }
   .bc-checks__case {
     margin-left: 0;
     flex-basis: 100%;
   }
 }
 
-/* The definition is the area's, not the test's own, so it waits closed at the foot. */
+/* The checks wait closed at the foot. */
 .bc-fold > summary {
   cursor: pointer;
   list-style: none;
@@ -350,7 +287,7 @@
 
 .bc-cases {
   display: grid;
-  grid-template-columns: fit-content(50%) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
   gap: var(--sp-7);
   align-items: start;
 }
@@ -458,7 +395,8 @@
   color: var(--void-ink-3);
 }
 
-@media (max-width: 860px) {
+/* Below this width the view beside the case list would be too narrow to read, so they stack. */
+@media (max-width: 1080px) {
   .bc-cases {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -467,65 +405,11 @@
   }
 }
 
-/* ---- kernels: a row each, the reason clamped; a phone stacks the reason under the rest ---- */
+/* ---- a kernel's reason, cut to its lines, with a button for the rest ---- */
 
-.bc-kernels {
-  display: grid;
-}
-.bc-kernels__row {
-  display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(140px, 200px) 110px minmax(0, 1fr);
-  gap: var(--sp-6);
-  align-items: start;
-  padding: 18px 0;
-  border-bottom: var(--hairline-void-soft);
-  transition: box-shadow var(--dur-2) var(--ease-mech);
-}
-/* The kernel whose worst case is shown, marked as the docs mark where the reader is. */
-.bc-kernels__row[aria-current='true'] {
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.bc-kernels__row {
-  padding-left: var(--sp-4);
-}
-.bc-kernels__head {
-  padding: 22px 0 14px;
-  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--void-ink-2);
-  align-items: end;
-}
-.bc-kernels__head > :nth-child(3),
-.bc-kernels__n {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.bc-kernels__n {
-  padding-top: 3px;
-  font: var(--fw-machine) 14px / 1 var(--font-machine);
-  color: var(--void-ink-1);
-}
-.bc-kernels__result {
-  display: grid;
-  gap: 6px;
-  padding-top: 3px;
-}
 .bc-kernels__gloss {
   font: var(--fw-voice) 13px / 1.35 var(--font-voice);
   color: var(--void-ink-2);
-}
-.bc-kernels__why {
-  display: grid;
-  gap: var(--sp-3);
-  justify-items: start;
-  min-width: 0;
-  padding-top: 1px;
-  font: var(--fw-voice) 15px / 1.45 var(--font-voice);
-  color: var(--void-ink-1);
-}
-.bc-kernels__why > .bc-annot {
-  font-size: var(--fs-micro-1);
 }
 .bc-why {
   display: grid;
@@ -540,11 +424,45 @@
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  -webkit-line-clamp: var(--why-lines, 3);
+  line-clamp: var(--why-lines, 3);
 }
-.bc-why__more,
-.bc-kernels__show {
+/* One line: the text runs out in an ellipsis beside its button, so the row keeps its height. */
+.bc-why--line {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: baseline;
+}
+.bc-why--line > .bc-why__text {
+  flex: 1;
+  min-width: 0;
+}
+.bc-why--line > .bc-why__text[data-clamp] {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bc-why--line > .bc-why__more {
+  flex: none;
+}
+/* Opened, the one line becomes running text: it wraps under what comes before it in its cell, and
+   its button follows its last word. */
+.bc-why--line[data-open],
+.bc-why--line[data-open] > .bc-why__text {
+  display: inline;
+}
+.bc-why--line[data-open] > .bc-why__more {
+  margin-left: var(--sp-3);
+}
+.bc-casekernels__status:has(> .bc-why[data-open]) {
+  display: block;
+}
+.bc-casekernels__status:has(> .bc-why[data-open]) > .bc-casekernels__result {
+  display: inline-flex;
+  margin-right: var(--sp-4);
+}
+.bc-why__more {
   padding: 0;
   border: none;
   border-bottom: var(--hair) solid var(--void-ink-3);
@@ -553,35 +471,59 @@
   font: var(--fw-voice) 13px / 1.4 var(--font-voice);
   cursor: pointer;
 }
-.bc-why__more:hover,
-.bc-kernels__show:hover {
+.bc-why__more:hover {
   color: var(--accent);
   border-bottom-color: var(--accent);
-}
-
-/* The summary opens from a button in the cases' label line, so closed it takes no row of its own. */
-.bc-summary__toggle {
-  padding: 0;
-  border: none;
-  border-bottom: var(--hair) solid var(--void-ink-3);
-  background: none;
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  cursor: pointer;
-}
-.bc-summary__toggle:hover {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-#tp-summary {
-  margin-bottom: var(--sp-6);
 }
 
 /* ---- the case shown: what each kernel made of it ---- */
 
+/* The kernel whose drawing the view shows, chosen from a menu above it. */
+.bc-version {
+  color: var(--void-ink-3);
+  font: var(--fw-machine) 12px / 1.2 var(--font-machine);
+}
+.bc-casekernels__kernel {
+  display: inline-flex;
+  gap: var(--sp-3);
+  align-items: baseline;
+  white-space: nowrap;
+}
+.bc-casekernels__name {
+  padding: 0;
+  border: none;
+  border-bottom: var(--hair) solid var(--void-ink-3);
+  background: none;
+  color: var(--void-ink-1);
+  font: inherit;
+  cursor: pointer;
+}
+.bc-casekernels__name:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.bc-casekernels__current {
+  color: var(--accent);
+}
+.bc-casekernels__name[data-none] {
+  color: var(--void-ink-3);
+}
+
+/* The case menu that stands in for the case list at phone width. */
+/* The points listed for one case can run to dozens; they scroll in their own box. */
+.bc-points__scroll {
+  max-height: 320px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--void-ink-4) transparent;
+}
+
 .bc-cases__list {
+  display: grid;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.bc-cases__table {
   display: grid;
   gap: var(--sp-4);
   min-width: 0;
@@ -589,16 +531,49 @@
 .bc-thiscase {
   display: grid;
   gap: var(--sp-4);
-  margin-bottom: var(--sp-5);
+  margin-top: var(--sp-6);
 }
-.bc-thiscase__id {
+/* At a phone's width the table keeps its columns and scrolls sideways in its own box. */
+.bc-casekernels {
+  overflow-x: auto;
+}
+.bc-casekernels table {
+  min-width: 620px;
+}
+/* Fixed columns, each cell at its top left, so a long reason in one row moves no other column. The
+   table sets its cells' alignment inline, which only !important overrides. */
+.bc-casekernels table {
+  width: 100%;
+  table-layout: fixed;
+}
+.bc-casekernels table th,
+.bc-casekernels table td {
+  text-align: left;
+  vertical-align: top !important;
+}
+/* Every row one height whatever its result holds, a grade alone or a grade and its reason, so moving
+   between cases moves no row; an opened reason still makes its row taller. */
+.bc-casekernels tbody tr {
+  height: 34px;
+}
+.bc-casekernels tbody td > * {
+  line-height: 20px;
+}
+.bc-casekernels__status {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-3);
-  align-items: center;
-  line-height: 1;
-  font-size: 14px;
-  overflow-wrap: anywhere;
+  gap: var(--sp-4);
+  align-items: baseline;
+  min-width: 0;
+  white-space: normal;
+}
+.bc-casekernels__status > .bc-casekernels__result {
+  flex: none;
+  flex-wrap: nowrap;
+}
+.bc-casekernels__status .bc-why {
+  flex: 1;
+  font: var(--fw-voice) 13px / 1.4 var(--font-voice);
+  color: var(--void-ink-2);
 }
 .bc-casekernels__result,
 .bc-casekernels__files {
@@ -610,53 +585,11 @@
 .bc-dl {
   font: var(--fw-machine) 12px / 1.4 var(--font-machine);
 }
-/* A file being asked about is a link drawn quietly, and one the CDN does not hold is struck text in
-   the same place, so nothing moves when the answer comes. */
-.bc-dl[data-state='checking'],
-.bc-dl[data-state='busy'],
-.bc-dl[data-state='missing'] {
-  color: var(--void-ink-3);
-}
-.bc-dl[data-state='missing'] {
-  text-decoration: line-through;
-}
+/* A file being fetched to save is drawn quietly until it is saved. */
 .bc-dl[data-state='busy'] {
+  color: var(--void-ink-3);
   cursor: progress;
-}
-/* The words under viewer change with what is known; the column holds their widest. */
-/* The accent of the viewer's "drawn by", so the row and the drawing read as one. */
-.bc-casekernels__shown .bc-annot {
-  color: var(--accent);
-}
-.bc-casekernels td:nth-child(3) {
-  min-width: 13ch;
 }
 .bc-points__none {
   margin: var(--sp-4) 0 0;
-}
-
-@media (max-width: 720px) {
-  .bc-kernels__head {
-    display: none;
-  }
-  .bc-kernels__row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      'name n'
-      'result result'
-      'why why';
-    gap: var(--sp-3) var(--sp-4);
-  }
-  .bc-kernels__row > :nth-child(1) {
-    grid-area: name;
-  }
-  .bc-kernels__row > :nth-child(2) {
-    grid-area: result;
-  }
-  .bc-kernels__row > :nth-child(3) {
-    grid-area: n;
-  }
-  .bc-kernels__row > :nth-child(4) {
-    grid-area: why;
-  }
 }

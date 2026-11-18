@@ -5,7 +5,7 @@ import {
   kernelOrder,
   point,
   stepLabel,
-  shortCaseIds,
+  caseFamilies,
   testName,
   titleOf,
   trailOf,
@@ -70,18 +70,18 @@ describe('testName', () => {
   })
 })
 
-describe('shortCaseIds', () => {
-  it('cuts the hash short and drops a family every id shares', () => {
-    expect(shortCaseIds(['separated-b201c5cb8261410a', 'separated-64253debd143b5c0'])).toEqual([
-      'b201c5',
-      '64253d',
+describe('caseFamilies', () => {
+  it('names no family every id shares, and drops the hash', () => {
+    expect(caseFamilies(['separated-b201c5cb8261410a', 'separated-64253debd143b5c0'])).toEqual([
+      '',
+      '',
     ])
   })
 
   it('keeps the family where the ids are of more than one', () => {
-    expect(shortCaseIds(['box-box-1a2b3c4d5e6f7a8b', 'box-sphere-0011223344556677'])).toEqual([
-      'box-box 1a2b3c',
-      'box-sphere 001122',
+    expect(caseFamilies(['box-box-1a2b3c4d5e6f7a8b', 'box-sphere-0011223344556677'])).toEqual([
+      'box-box',
+      'box-sphere',
     ])
   })
 })
@@ -106,27 +106,36 @@ describe('drawnBy', () => {
   const inOrder = [0, 1, 2]
 
   it('shows the drawing of the kernel that passed at the best tier', () => {
-    expect(drawnBy([drew, drew, drew], ['fail', '1e-5', '1e-7'], inOrder, -1)).toBe(2)
-    expect(drawnBy([drew, drew], ['refused', '1e-3'], [0, 1], -1)).toBe(1)
+    expect(drawnBy([drew, drew, drew], ['fail', '1e-5', '1e-7'], inOrder)).toBe(2)
+    expect(drawnBy([drew, drew], ['refused', '1e-3'], [0, 1])).toBe(1)
   })
 
   it('breaks a tie by the kernels’ order', () => {
-    expect(drawnBy([drew, drew, drew], ['1e-7', 'fail', '1e-7'], [2, 1, 0], -1)).toBe(2)
-    expect(drawnBy([drew, drew, drew], ['1e-7', 'fail', '1e-7'], inOrder, -1)).toBe(0)
+    expect(drawnBy([drew, drew, drew], ['1e-7', 'fail', '1e-7'], [2, 1, 0])).toBe(2)
+    expect(drawnBy([drew, drew, drew], ['1e-7', 'fail', '1e-7'], inOrder)).toBe(0)
   })
 
-  it('keeps the reader’s kernel wherever it passed, at any tier', () => {
+  it('shows the kernel asked for wherever it wrote a drawing, a failing or a partial one too', () => {
     expect(drawnBy([drew, drew], ['1e-7', '1e-5'], [0, 1], 1)).toBe(1)
-    expect(drawnBy([drew, drew], ['1e-7', 'fail'], [0, 1], 1)).toBe(0)
+    expect(drawnBy([drew, drew], ['1e-7', 'fail'], [0, 1], 1)).toBe(1)
+    expect(drawnBy([drew, drew], ['1e-5', 'refused'], [0, 1], 1)).toBe(1)
+  })
+
+  it('shows another kernel where the one asked for wrote no drawing', () => {
     expect(drawnBy([drew, null], ['1e-7', '1e-7'], [0, 1], 1)).toBe(0)
   })
 
-  it('shows a failing kernel’s drawing only where no kernel that passed drew the case', () => {
-    expect(drawnBy([drew, null], ['fail', '1e-7'], [0, 1], -1)).toBe(0)
-    expect(drawnBy([drew, drew], ['crash', 'fail'], [1, 0], -1)).toBe(1)
+  it('asked for nothing, shows a kernel with a result before a partial drawing', () => {
+    expect(drawnBy([drew, drew], ['refused', 'fail'], [0, 1])).toBe(1)
+    expect(drawnBy([drew, null], ['timeout', '1e-7'], [0, 1])).toBe(0)
   })
 
-  it('shows none where no kernel drew it', () => {
+  it('shows a failing kernel’s drawing only where no kernel that passed drew the case', () => {
+    expect(drawnBy([drew, null], ['fail', '1e-7'], [0, 1])).toBe(0)
+    expect(drawnBy([drew, drew], ['crash', 'fail'], [1, 0])).toBe(1)
+  })
+
+  it('shows none where no kernel wrote a drawing', () => {
     expect(drawnBy([null, { glb: null }], ['1e-7', '1e-7'], [0, 1], 0)).toBeNull()
   })
 })

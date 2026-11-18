@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { site } from '@/data/source'
-import { shortCaseIds, stepLabel } from './format'
+import { stepLabel } from './format'
 import { levelsOf, propsOf } from './index.data'
 
 describe('propsOf', () => {
@@ -21,6 +21,19 @@ describe('propsOf', () => {
             expect(step).toMatch(new RegExp(`${at}(\\.[a-z0-9-]+)?\\.step$`))
         })
     expect(seen).toBeGreaterThan(0)
+  })
+
+  it('gives each kernel its reason and failure on a case, and the worst case its test reason', () => {
+    for (const p of pages)
+      for (const c of p.caseList) {
+        expect(c.whys).toHaveLength(p.kernels.length)
+        expect(c.failures).toHaveLength(p.kernels.length)
+        p.kernels.forEach((k, i) => {
+          if (k.worst?.id !== c.id) return
+          expect(c.whys[i]).toBe(k.why)
+          expect(c.failures[i]).toBe(k.failure)
+        })
+      }
   })
 
   it('keeps the STEP files of a kernel that drew nothing', () => {
@@ -66,20 +79,8 @@ describe('propsOf', () => {
     }
   })
 
-  it('tells a test’s cases apart by their short ids', () => {
-    for (const p of pages) {
-      const short = shortCaseIds(p.caseList.map(c => c.id))
-      expect(new Set(short).size).toBe(short.length)
-    }
-  })
-
   it('opens every test’s path with its operation, as the page’s header link assumes', () => {
     for (const p of pages) expect(p.test.startsWith(`${p.operation}/`)).toBe(true)
-  })
-
-  it('quotes its area’s section of api.md on every page but a part’s', () => {
-    for (const p of pages.filter(p => p.operation !== 'parts'))
-      expect(p.definition?.signatures.length).toBeGreaterThan(0)
   })
 })
 

@@ -36,19 +36,21 @@ path the report has in the reports directory. The site refuses any other, so tha
 another host or another kernel's files. It is null where the run wrote none, and a report written
 before `assets` existed takes that same address.
 
-A test's page shows a case as the selected kernel drew it, and as the first kernel that drew it
-where that one wrote no drawing. A table under the case has a row for each kernel: its result,
-whether the viewer shows its drawing, and the files it wrote, which are its drawing and each STEP
-file, named by its solid's role where there are two. A kernel that wrote a STEP file and no drawing
-still has its STEP file offered, and no link waits on the viewer.
+A test's page shows a case as the selected kernel drew it: the kernel the address names, or with
+none named, the kernel that passed it at the best tier, a tie going to the higher on the
+leaderboard. A kernel that refused, crashed, timed out or does not offer the operation made no
+result, and its drawing holds only what it made before it stopped, such as one operand; the page
+shows it on its first view with a shape, and says it is partial. Where the selected kernel wrote no
+drawing at all, the best other drawing stands in, and the page says so. One address always shows one
+drawing. A table under the case has a row for each kernel: the files it wrote, which are its drawing
+and each STEP file, named by its solid's role where there are two; its result; and why it failed. A
+kernel's name shows its drawing. A kernel that wrote a STEP file and no drawing still has its STEP
+file offered.
 
-Every file is a link in the page's own HTML, so it works before the page's script runs. When a case
-is shown, the script asks the CDN for each of its files, once, and remembers the answer. Only a file
-the CDN says it does not hold stops being a link: it is struck through, and no click lands on the
-CDN's own error. A file the CDN could not be asked about, as where it allows no request from another
-origin, stays a link and opens in a new tab. Where the CDN has answered for a file, a click fetches
-it and saves it under its own name, since a browser will not download a file from another origin by
-a link alone.
+A file a report names is on the CDN: the run's publish step puts every file there before the report
+is published. Every file is a link in the page's own HTML, so it works before the page's script
+runs. A click fetches the file and saves it under its own name, since a browser will not download a
+file from another origin by a link alone; where the fetch fails, the file opens in a new tab.
 
 The report does not yet say who wrote a kernel's adapter, which functions a test calls, or a failed
 check's numbers and failing points, so the site shows none of them.

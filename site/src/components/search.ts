@@ -27,3 +27,19 @@ export function useUrlQuery(): [string, (q: string) => void] {
   }
   return [q, set]
 }
+
+const readSearch = () => window.location.search
+
+// The page's whole query string as state, for a page whose view is named by several parameters.
+// Setting it replaces the given parameters, in the order given, and leaves every other one.
+export function useUrlSearch(): [URLSearchParams, (next: [string, string | null][]) => void] {
+  const search = useSyncExternalStore(subscribe, readSearch, () => '')
+  const set = (next: [string, string | null][]) => {
+    const url = new URL(window.location.href)
+    for (const [k] of next) url.searchParams.delete(k)
+    for (const [k, v] of next) if (v !== null) url.searchParams.set(k, v)
+    window.history.replaceState(window.history.state, '', url)
+    window.dispatchEvent(new Event(CHANGED))
+  }
+  return [new URLSearchParams(search), set]
+}

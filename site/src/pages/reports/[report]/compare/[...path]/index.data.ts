@@ -20,7 +20,7 @@ import {
   underPrefix,
   type GridGroup,
 } from '../../../../_home/model'
-import { clausesOf, definitionOf, KIND_TEXT, type Definition } from './definition'
+import { clausesOf } from './definition'
 import { titleOf } from './format'
 
 // The failing points a page carries per check; the sample synthesizes at most a dozen.
@@ -48,6 +48,9 @@ export interface CaseOption {
   id: string
   grades: (Grade | null)[]
   files: (CaseFiles | null)[]
+  // Why each kernel got its grade on this case, '' where it says nothing, and how it failed.
+  whys: string[]
+  failures: (Failure | null)[]
 }
 
 export interface KernelView {
@@ -75,8 +78,6 @@ export interface TestProps {
   slug: string
   operation: string
   kind: Kind
-  kindText: string
-  definition: Definition | null
   cases: number
   kernels: KernelView[]
   caseList: CaseOption[]
@@ -98,9 +99,8 @@ export interface LevelProps {
 
 export type Props = TestProps | LevelProps
 
-let docs: { clauses: Record<string, string>; api: string } | undefined
-const specs = () =>
-  (docs ??= { clauses: clausesOf(readDoc('contract.md')), api: readDoc('api.md') })
+let docs: { clauses: Record<string, string> } | undefined
+const specs = () => (docs ??= { clauses: clausesOf(readDoc('contract.md')) })
 
 function caseView(c: CaseRow): CaseView {
   return {
@@ -146,6 +146,8 @@ export function propsOf(t: TestEntry, latest: Report[], all: Report[] = latest):
         id,
         grades: rows.map(c => c?.grade ?? null),
         files: rows.map(c => (c?.glb || c?.steps.length ? { glb: c.glb, steps: c.steps } : null)),
+        whys: rows.map(c => c?.why ?? ''),
+        failures: rows.map(c => c?.failure ?? null),
       },
     ]
   })
@@ -156,8 +158,6 @@ export function propsOf(t: TestEntry, latest: Report[], all: Report[] = latest):
     slug: t.slug,
     operation: t.operation,
     kind: t.kind,
-    kindText: KIND_TEXT[t.kind],
-    definition: definitionOf(t.operation, specs().api),
     cases: t.cases.length,
     kernels,
     caseList,
@@ -198,7 +198,7 @@ export function entries(): PageEntry<Props>[] {
       params: { report: v.suite, path: t.test },
       props: propsOf(t, v.latest, s.all),
       title: titleOf(t.test),
-      description: `${t.test}: its definition, checks and each kernel's result on it.`,
+      description: `${t.test}: each case, each kernel's result on it, and the checks it failed.`,
     })),
     ...levelsOf(v.tests.map(t => t.test)).map(level => ({
       params: { report: v.suite, path: level },
