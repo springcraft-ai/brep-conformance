@@ -75,6 +75,12 @@ describe('parseGlb', () => {
     expect(s.edges.length / 6).toBe(12)
   })
 
+  it('reads no normals from a file without them, and turns the ones a file has', () => {
+    expect(Array.from(parseGlb(glbOf(positions, triangles)).normals)).toEqual(new Array(24).fill(0))
+    const n = parseGlb(quantized(['KHR_mesh_quantization'])).normals
+    expect(Array.from(n)).toEqual([0, 0, 1, 0, 0, 1, 0, 0, 1])
+  })
+
   it('keeps the file’s own edges when it has them', () => {
     const s = parseGlb(glbOf(positions, triangles, [0, 1, 1, 3]))
     expect(Array.from(s.edges)).toEqual([0, 0, 0, 2, 0, 0, 2, 0, 0, 2, 3, 0])

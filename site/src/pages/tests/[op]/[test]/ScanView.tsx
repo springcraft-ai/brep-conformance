@@ -6,6 +6,7 @@ import type { Loaded } from './viewer'
 type Status = 'loading' | 'ready' | 'missing' | 'unreadable' | 'undrawn'
 
 const EMPTY = new Float32Array(0)
+const NO_TRIANGLES = new Uint32Array(0)
 
 // A kernel's drawing of a case in Scan mode, with a kernel's misplaced points over it. The drawing
 // code loads after hydration; where no kernel drew the case, or the file is not published yet, the
@@ -70,9 +71,11 @@ export function ScanView({
     void import('./viewer').then(v => {
       if (!live || !canvas.current) return
       const scene = {
+        positions: loaded?.shape.positions ?? EMPTY,
+        normals: loaded?.shape.normals ?? EMPTY,
+        triangles: loaded?.shape.triangles ?? NO_TRIANGLES,
         edges: loaded?.shape.edges ?? EMPTY,
         smooth: loaded?.shape.smooth ?? EMPTY,
-        cloud: loaded?.cloud ?? EMPTY,
         marks,
       }
       if (handle.current) handle.current.set(scene)
@@ -153,11 +156,6 @@ export function ScanView({
           {marks.some(m => !m.held) && (
             <span>
               <i className="bc-key bc-key--missed" /> placed outside, belongs inside
-            </span>
-          )}
-          {status === 'ready' && !hollow && (
-            <span>
-              <i className="bc-key bc-key--cloud" /> points the shape holds, from its mesh
             </span>
           )}
         </div>

@@ -1,7 +1,8 @@
-// The Scan view: the shape drawn by its own edges, see-through, with its point cloud and a kernel's
-// misplaced points over it. Orthographic, z up, turned by dragging. Canvas 2D: a few thousand
-// segments redraw well inside a frame, and the page ships no 3D library.
-import { bounds, type Vec3 } from './sample'
+// The Scan view: the shape as a shaded solid with the edges it shows, and a kernel's misplaced
+// points over it. Orthographic, z up, turned by dragging. Canvas 2D over solid.ts's rasterizer:
+// the suite's meshes redraw well inside a frame, and the page ships no 3D library.
+import { bounds, type Vec3 } from './vec'
+import { raster, rasterize, visibleRuns, type Mesh, type Raster } from './solid'
 
 export interface Mark {
   p: Vec3
@@ -9,11 +10,10 @@ export interface Mark {
   held: boolean
 }
 
-export interface Scene {
+export interface Scene extends Mesh {
   edges: Float32Array
   // Smooth edges with their faces' normals, as glb.ts's topology gives them.
   smooth: Float32Array
-  cloud: Float32Array
   marks: Mark[]
 }
 
@@ -60,10 +60,19 @@ export function project(c: Camera, x: number, y: number, z: number): [number, nu
 
 export interface Colors {
   edge: string
-  cloud: string
+  face: [number, number, number]
   fail: string
   focus: string
   annot: string
+}
+
+// Any CSS colour as the bytes the rasterizer writes, by painting it.
+function rgbOf(color: string): [number, number, number] {
+  const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!
+  ctx.fillStyle = color
+  ctx.fillRect(0, 0, 1, 1)
+  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
+  return [r!, g!, b!]
 }
 
 function colorsOf(el: Element): Colors {
@@ -71,7 +80,7 @@ function colorsOf(el: Element): Colors {
   const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback
   return {
     edge: v('--scan-edge', '#b98cff'),
-    cloud: v('--scan-cloud', '#a2a4a6'),
+    face: rgbOf(v('--scan-face', '#55575a')),
     fail: v('--scan-fail', '#ff5a33'),
     focus: v('--scan-focus', '#f5a200'),
     annot: v('--scan-annot', '#6a6c6e'),
@@ -83,7 +92,7 @@ export function frameOf(scene: Scene): { lo: Vec3; hi: Vec3 } {
   const ends: number[] = []
   for (let i = 0; i + 11 < scene.smooth.length; i += 12)
     for (let k = 0; k < 6; k++) ends.push(scene.smooth[i + k]!)
-  const all = [...scene.edges, ...ends, ...scene.cloud, ...scene.marks.flatMap(m => m.p)]
+  const all = [...scene.positions, ...scene.edges, ...ends, ...scene.marks.flatMap(m => m.p)]
   const b = bounds(all) ?? { lo: [-1, -1, -1], hi: [1, 1, 1] }
   for (let k = 0; k < 3; k++) {
     if (b.hi[k]! - b.lo[k]! < 1e-6) {
@@ -94,50 +103,60 @@ export function frameOf(scene: Scene): { lo: Vec3; hi: Vec3 } {
   return b
 }
 
-const DEPTH_ALPHA = [0.28, 0.5, 0.9]
+// How far behind a surface an edge may lie and still be drawn, as a share of the frame's radius.
+const EDGE_BIAS = 0.005
 
-function draw(ctx: CanvasRenderingContext2D, scene: Scene, c: Camera, col: Colors, focus: number) {
+function draw(
+  ctx: CanvasRenderingContext2D,
+  scene: Scene,
+  c: Camera,
+  col: Colors,
+  focus: number,
+  r: Raster,
+) {
   ctx.clearRect(0, 0, c.w, c.h)
-  if (!scene.edges.length && !scene.smooth.length && !scene.cloud.length && !scene.marks.length)
-    return
-  const depthBand = (z: number, span: number) =>
-    Math.max(0, Math.min(2, Math.floor(((z / span + 1) / 2) * 3)))
-  const span = 1 / (c.scale / (0.44 * Math.min(c.w, c.h)))
+  if (!scene.triangles.length && !scene.edges.length && !scene.marks.length) return
+  // The raster is in device pixels, the camera in CSS pixels.
+  const k = r.w / c.w
+  const t = c.toward
+  const light = [0, 1, 2].map(i => t[i]! + 0.35 * c.up[i]! - 0.25 * c.right[i]!)
+  const len = Math.hypot(...light)
+  rasterize(
+    r,
+    scene,
+    (x, y, z) => {
+      const p = project(c, x, y, z)
+      return [p[0] * k, p[1] * k, p[2]]
+    },
+    light.map(x => x / len) as Vec3,
+    col.face,
+  )
+  ctx.putImageData(new ImageData(r.rgba as Uint8ClampedArray<ArrayBuffer>, r.w, r.h), 0, 0)
 
+  const bias = (EDGE_BIAS * 0.44 * Math.min(c.w, c.h)) / c.scale
   ctx.lineWidth = 1
   ctx.strokeStyle = col.edge
-  const t = c.toward
-  for (let band = 0; band < 3; band++) {
-    ctx.globalAlpha = DEPTH_ALPHA[band]!
-    ctx.beginPath()
-    const segment = (E: Float32Array, i: number) => {
-      const a = project(c, E[i]!, E[i + 1]!, E[i + 2]!)
-      const b = project(c, E[i + 3]!, E[i + 4]!, E[i + 5]!)
-      if (depthBand((a[2] + b[2]) / 2, span) !== band) return
-      ctx.moveTo(a[0], a[1])
-      ctx.lineTo(b[0], b[1])
-    }
-    for (let i = 0; i + 5 < scene.edges.length; i += 6) segment(scene.edges, i)
-    // A smooth edge is on the outline where one of its faces turns toward the viewer and the
-    // other away.
-    const S = scene.smooth
-    for (let i = 0; i + 11 < S.length; i += 12) {
-      const f = S[i + 6]! * t[0] + S[i + 7]! * t[1] + S[i + 8]! * t[2]
-      const g = S[i + 9]! * t[0] + S[i + 10]! * t[1] + S[i + 11]! * t[2]
-      if (f * g <= 0 && f !== g) segment(S, i)
-    }
-    ctx.stroke()
-  }
-
-  const C = scene.cloud
-  ctx.fillStyle = col.cloud
-  for (let band = 0; band < 3; band++) {
-    ctx.globalAlpha = DEPTH_ALPHA[band]! * 0.7
-    for (let i = 0; i + 2 < C.length; i += 3) {
-      const p = project(c, C[i]!, C[i + 1]!, C[i + 2]!)
-      if (depthBand(p[2], span) === band) ctx.fillRect(p[0] - 0.75, p[1] - 0.75, 1.5, 1.5)
+  ctx.beginPath()
+  const segment = (E: Float32Array, i: number) => {
+    const a = project(c, E[i]!, E[i + 1]!, E[i + 2]!)
+    const b = project(c, E[i + 3]!, E[i + 4]!, E[i + 5]!)
+    const runs = visibleRuns(r, [a[0] * k, a[1] * k, a[2]], [b[0] * k, b[1] * k, b[2]], bias)
+    for (let n = 0; n + 1 < runs.length; n += 2) {
+      const [u, v] = [runs[n]!, runs[n + 1]!]
+      ctx.moveTo(a[0] + u * (b[0] - a[0]), a[1] + u * (b[1] - a[1]))
+      ctx.lineTo(a[0] + v * (b[0] - a[0]), a[1] + v * (b[1] - a[1]))
     }
   }
+  for (let i = 0; i + 5 < scene.edges.length; i += 6) segment(scene.edges, i)
+  // A smooth edge is on the outline where one of its faces turns toward the viewer and the
+  // other away.
+  const S = scene.smooth
+  for (let i = 0; i + 11 < S.length; i += 12) {
+    const f = S[i + 6]! * t[0] + S[i + 7]! * t[1] + S[i + 8]! * t[2]
+    const g = S[i + 9]! * t[0] + S[i + 10]! * t[1] + S[i + 11]! * t[2]
+    if (f * g <= 0 && f !== g) segment(S, i)
+  }
+  ctx.stroke()
 
   ctx.globalAlpha = 1
   ctx.lineWidth = 1.5
@@ -219,6 +238,7 @@ export function mountScan(
   let w = 0
   let h = 0
   let queued = 0
+  let buffer = raster(0, 0)
   const colors = colorsOf(canvas)
 
   const render = () => {
@@ -230,8 +250,11 @@ export function mountScan(
       canvas.width = Math.round(w * dpr)
       canvas.height = Math.round(h * dpr)
     }
+    if (!w || !h) return
+    if (buffer.w !== canvas.width || buffer.h !== canvas.height)
+      buffer = raster(canvas.width, canvas.height)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    draw(ctx, scene, camera(view, frame, w, h), colors, focused)
+    draw(ctx, scene, camera(view, frame, w, h), colors, focused, buffer)
   }
   const redraw = () => {
     if (!queued) queued = requestAnimationFrame(render)

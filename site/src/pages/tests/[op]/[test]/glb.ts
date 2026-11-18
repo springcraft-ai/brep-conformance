@@ -5,6 +5,8 @@
 export interface Shape {
   // xyz per vertex.
   positions: Float32Array
+  // A unit normal per vertex, or zeros where the file gives none.
+  normals: Float32Array
   // Three vertex indices per triangle.
   triangles: Uint32Array
   // Two xyz ends per segment: the file's own line primitives, or the mesh's creases if none.
@@ -29,7 +31,7 @@ interface BufferView {
 }
 
 interface Primitive {
-  attributes: { POSITION?: number }
+  attributes: { POSITION?: number; NORMAL?: number }
   indices?: number
   mode?: number
 }
@@ -165,12 +167,26 @@ export function parseGlb(buf: ArrayBuffer): Shape {
   if (unknown.length) throw new Error(`glb: needs ${unknown.join(', ')}`)
 
   const positions: number[] = []
+  const normals: number[] = []
   const triangles: number[] = []
   const lines: number[] = []
   const g = gltf
   const place = (m: Mat, p: number[], i: number) => {
     const [x, y, z] = [p[i]!, p[i + 1]!, p[i + 2]!]
     return [0, 1, 2].map(r => m[r]! * x + m[4 + r]! * y + m[8 + r]! * z + m[12 + r]!)
+  }
+  // By the cofactors of the transform, which keep a normal square to its face under any scale.
+  const turn = (m: Mat, n: number[], i: number) => {
+    const col = (c: number) => [m[c * 4]!, m[c * 4 + 1]!, m[c * 4 + 2]!]
+    const cross = (u: number[], v: number[]) => [
+      u[1]! * v[2]! - u[2]! * v[1]!,
+      u[2]! * v[0]! - u[0]! * v[2]!,
+      u[0]! * v[1]! - u[1]! * v[0]!,
+    ]
+    const rows = [cross(col(1), col(2)), cross(col(2), col(0)), cross(col(0), col(1))]
+    const o = [0, 1, 2].map(r => rows.reduce((s, row, k) => s + row[r]! * n[i + k]!, 0))
+    const len = Math.hypot(o[0]!, o[1]!, o[2]!)
+    return len > 1e-12 ? o.map(x => x / len) : [0, 0, 0]
   }
   const visit = (index: number, parent: Mat, depth: number) => {
     const node = g.nodes?.[index]
@@ -187,7 +203,12 @@ export function parseGlb(buf: ArrayBuffer): Shape {
           : Array.from({ length: count }, (_, i) => i)
       if (mode === MODE_TRIANGLES) {
         const first = positions.length / 3
-        for (let i = 0; i < count; i++) positions.push(...place(m, p, i * 3))
+        const n =
+          prim.attributes.NORMAL !== undefined ? read(g, bin, prim.attributes.NORMAL, 'VEC3') : []
+        for (let i = 0; i < count; i++) {
+          positions.push(...place(m, p, i * 3))
+          normals.push(...(n.length === p.length ? turn(m, n, i * 3) : [0, 0, 0]))
+        }
         for (const i of idx) triangles.push(first + i)
       } else if (mode === MODE_LINES || mode === MODE_LINE_STRIP) {
         const step = mode === MODE_LINES ? 2 : 1
@@ -204,7 +225,13 @@ export function parseGlb(buf: ArrayBuffer): Shape {
   const T = Uint32Array.from(triangles)
   const t = topology(P, T)
   const edges = lines.length ? Float32Array.from(lines) : t.creases
-  return { positions: P, triangles: T, edges, smooth: t.smooth }
+  return {
+    positions: P,
+    normals: Float32Array.from(normals),
+    triangles: T,
+    edges,
+    smooth: t.smooth,
+  }
 }
 
 export interface Topology {

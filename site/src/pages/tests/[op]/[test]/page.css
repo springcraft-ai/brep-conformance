@@ -76,7 +76,7 @@
 
 .bc-scan {
   --scan-edge: var(--series-5);
-  --scan-cloud: var(--void-ink-2);
+  --scan-face: color-mix(in srgb, var(--void-ink-3) 80%, var(--ground-void));
   --scan-fail: var(--error-void);
   --scan-focus: var(--accent);
   --scan-annot: var(--void-ink-3);
@@ -202,12 +202,6 @@
 }
 .bc-key--missed {
   border: 1.5px solid var(--error-void);
-}
-.bc-key--cloud {
-  width: 2px;
-  height: 2px;
-  margin: 0 2px;
-  background: var(--void-ink-2);
 }
 
 .bc-points {

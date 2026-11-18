@@ -6,9 +6,11 @@ const empty = new Float32Array(0)
 describe('frameOf', () => {
   it('fits the shape and the marks, and gives a flat frame some depth', () => {
     const f = frameOf({
+      positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+      normals: empty,
+      triangles: new Uint32Array([0, 1, 2]),
       edges: new Float32Array([0, 0, 0, 4, 2, 0]),
       smooth: new Float32Array([0, 0, 0, 0, 5, 0, 0, 0, 1, 0, 0, 1]),
-      cloud: empty,
       marks: [{ p: [-3, 1, 0], held: true }],
     })
     expect(f.lo).toEqual([-3, 0, -1])
