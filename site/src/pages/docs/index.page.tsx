@@ -21,7 +21,7 @@ export default function Docs({ parts, links }: Props) {
           contents
         </button>
         <nav className="dx-nav" aria-label="Contents">
-          <SearchBox label="search the docs" placeholder="e.g. tolerance" />
+          <SearchBox label="find a section" placeholder="e.g. tolerance" />
           <p className="bc-annot dx-nav__none" id="dx-none" hidden>
             no section matches
           </p>

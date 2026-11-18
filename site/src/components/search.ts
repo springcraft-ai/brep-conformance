@@ -4,6 +4,12 @@ import { useEffect, useRef } from 'react'
 // operations its operations, the docs their sections and a report its cases.
 export const SEARCH_ID = 'bc-search'
 
+// The pages with a box of their own. Any other page gets the header's, which finds a test on the
+// results page.
+export function hasOwnSearch(path: string): boolean {
+  return ['/', '/operations/', '/docs/'].includes(path) || path.startsWith('/reports/')
+}
+
 // Takes the box over on a page that searches in place without React: `apply` runs on each change,
 // and Enter runs `onEnter` instead of leaving the page. A ?q= the page was opened with is applied.
 export function takeSearch(apply: (q: string) => void, onEnter?: () => void) {
