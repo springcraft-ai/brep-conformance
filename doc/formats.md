@@ -91,7 +91,7 @@ finished may also give what it found: the result's `volume`, `area`, `centroid` 
 `mismatched`, the number of sample points the kernel placed differently from the exact operands, and
 the `first` few of them, each with its `point` and whether it is `inside`.
 
-A check has a `clause`, whether it held as `ok`, the `tier` it holds at, and what it measured and
+A check has a `clause`, whether it held as `ok`, the `tier` it holds at, and what it weighed and
 counted:
 
 - `measures`: each entry has a `measure` (`volume`, `area`, `distance`, `first moment` or
@@ -108,9 +108,9 @@ counted:
 ## Reports
 
 A run's `--html FILE` option, and the command `brep-conformance-report RESULTS.json... --out FILE`,
-each write a report page for reading on the machine that ran the suite. The page is one HTML file
-that holds its results, its styles and its scripts, and it asks the network for nothing. It is a
-view of the results file, not a format to read back.
+each write a report page for reading on the machine that wrote it. The page is one HTML file that
+holds its results, its styles and its scripts, and it asks the network for nothing. It is a view of
+the results file, not a format to read back.
 
 `brep-conformance-report RESULTS.json --flat report.json` writes one run in the form the results
 site reads. It holds `format` (the same number as the results file's), `kernel`, `adapter`, `suite`,
@@ -179,5 +179,5 @@ The expected shapes are published under a base URL that is compiled in from
 publishes nothing unless every case passed at 1e-7 and every file was drawn. Each published shape is
 then a kernel's result that the suite has verified against its own exact values, and no kernel
 produced those values. The script uploads only the files the bucket lacks. A file is never
-rewritten. A change to what a file shows, or to what draws it, gives the file a new name, so a file
-can be cached immutably.
+rewritten. A change to what a file shows, or to what draws it, gives the file a new name, so files
+are cached immutably.

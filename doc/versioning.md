@@ -13,9 +13,9 @@ results compare case for case.
 The contract and the protocol each keep a version number of their own. That number says which text a
 check or an adapter was written to. The protocol's rule is in [api.md](api.md#versions). The
 contract's major number rises when a clause changes what it requires, its minor number rises when
-clauses are added for new tests, and its patch number rises when its wording is corrected. All three
-numbers start together at 1.0.0 and move apart from there. The suite version is the one that orders
-releases, and the only one a result is grouped by.
+clauses are added for new tests, and its patch number rises when its wording is corrected. The
+suite's, the contract's and the protocol's versions all start together at 1.0.0 and move apart from
+there. The suite version is the one that orders releases, and the only one a result is grouped by.
 
 An adapter belongs to its kernel and has its kernel's version. A change that alters no case and no
 verdict, such as the report's layout, a document's wording or the runner's speed, needs no release
@@ -41,7 +41,7 @@ stops meaning what it meant.
   Existing cases keep their ids and are judged as before, so a kernel's result on each of them
   stands. The kernel's score still moves, because there are more cases, and a new function the
   kernel does not offer counts as unsupported.
-- **Patch.** A test was wrong and is fixed. The error may be an expected value, a case outside what
+- **Patch.** A test was wrong and is fixed. What was wrong is an expected value, a case outside what
   its test declares, or a check that did not implement its clause. A test that cannot be fixed is
   withdrawn the same way. The release names every affected test by its path, and only results on
   those tests change.

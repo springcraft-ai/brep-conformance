@@ -72,8 +72,8 @@ Two commands are not functions of a kernel:
 | `hello` |        | `{name, version, tolerance, configuration, protocol, supports}` |
 | `reset` |        | `null`                                                          |
 
-- `hello` gives the kernel's `name` and `version`. `tolerance` is the linear tolerance the kernel
-  declares, in mm. `configuration` is a sentence on anything the adapter set differently from the
+- `hello` gives the kernel's `name` and `version`. `tolerance` is the linear tolerance declared for
+  the kernel, in mm. `configuration` is a sentence on anything the adapter set differently from the
   kernel's defaults, and it is empty when the adapter set nothing differently. `protocol` is the
   protocol version the adapter speaks. `supports` lists the names of the functions the kernel
   offers, out of the functions of that protocol version. A case that needs a function that
@@ -623,9 +623,9 @@ of radius 5 and height 20 on the z axis. Solid 3 is a ball 30 mm away.
 ## Blends
 
 An edge is named by a point on it. Each point names the edge of `s` that passes within `10·ε` of the
-point, where ε is the suite's tolerance of 1e-7 mm. A point that names no edge is refused. Naming an
-edge by a point does not depend on how any kernel numbers or labels its topology, and a test can
-compute such a point from the solid's definition.
+point, where ε is the suite's tolerance of 1e-7 mm. A call with a point that names no edge refuses.
+Naming an edge by a point does not depend on how any kernel numbers or labels its topology, and a
+test can compute such a point from the solid's definition.
 
 A blend runs along the whole tangent chain of its edge. The chain is the named edge and every edge
 reached from it through vertices where the next edge leaves in the direction in which the last edge

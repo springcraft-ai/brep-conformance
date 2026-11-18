@@ -50,9 +50,9 @@ run only count their cases.
 
 **A check** that compares an error with a bound is judged at four tolerances: 1e-7, 1e-6, 1e-5 and
 1e-3 mm. Its bound grows with the tolerance in the same way as the volume bound above. Its tier is
-the tightest of the four tolerances at which it holds. Some checks do not depend on a tolerance: a
-result's validity, its Betti numbers, a point placed on the wrong side, or a refusal that was due.
-Such a check holds at every tier or at none.
+the tightest of the four tolerances at which it holds. Some checks do not depend on a tolerance,
+such as a result's validity, its Betti numbers, a point placed on the wrong side, or a refusal that
+was due. Such a check holds at every tier or at none.
 
 **A case** takes the loosest of its checks' tiers. One check that holds only at 1e-3 mm makes the
 case 1e-3, however many of its other checks hold at 1e-7. A case fails if any of its checks holds at
@@ -167,11 +167,11 @@ have their own clauses. They count in the same total as every other case:
 
 Q10 to Q13 examine the result's shape itself, whereas Q5 bounds only its volume:
 
-- **Q10, point for point.** The suite samples the case's open zone at 8192 points of the shifted
-  Halton sequence, or the base's box where the case has no open zone. It sets aside the points that
-  the limits leave open and asks the kernel to classify the rest. The result must hold each point
-  that every acceptable result holds, and must hold no point that no acceptable result holds. One
-  point placed differently is allowed, as in B9.
+- **Q10, point for point.** The suite samples 8192 points of the shifted Halton sequence in the
+  case's open zone, or in the base's box where the case has no open zone. It sets aside the points
+  that the limits leave open and asks the kernel to classify the rest. The result must hold each
+  point that every acceptable result holds, and must hold no point that no acceptable result holds.
+  One point placed differently is allowed, as in B9.
 - **Q11, no crease.** The suite casts a round grid of parallel rays, 24 across, at the blend. It
   asks for the normal at the point where each ray first meets the result. Where the normals of two
   neighbouring rays differ by more than 0.1 rad, it casts the ray between them, and repeats this on
