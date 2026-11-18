@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { box, glbOf } from './fixture'
+import { box, glbOf, Z_UP_TO_Y_UP } from './fixture'
 import { parseGlb, topology } from './glb'
 
 // A triangle and one edge as the suite writes them: positions as SHORT padded to 8 bytes, normals
@@ -23,7 +23,7 @@ function quantized(required: string[]): ArrayBuffer {
     scenes: [{ nodes: [1] }],
     nodes: [
       { mesh: 0, translation: [1, 2, 3], scale: [0.5, 0.5, 0.5] },
-      { children: [0], scale: [1e-3, 1e-3, 1e-3] },
+      { children: [0], rotation: Z_UP_TO_Y_UP, scale: [1e-3, 1e-3, 1e-3] },
     ],
     meshes: [
       {

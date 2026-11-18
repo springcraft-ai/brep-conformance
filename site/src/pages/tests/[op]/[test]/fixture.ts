@@ -1,5 +1,8 @@
 // Binary glTF files for the tests: a box, with or without its edges as a line primitive, in
-// millimetres under a root node that scales them to glTF's metres, as the suite writes them.
+// millimetres under a root node that scales them to glTF's metres and turns z to y, as the suite
+// writes them.
+
+export const Z_UP_TO_Y_UP = [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]
 
 export function glbOf(
   positions: number[],
@@ -23,7 +26,11 @@ export function glbOf(
     scenes: [{ nodes: [1] }],
     nodes: [
       { mesh: 0, ...node },
-      { children: [0, ...others.map((_, i) => i + 2)], scale: [1e-3, 1e-3, 1e-3] },
+      {
+        children: [0, ...others.map((_, i) => i + 2)],
+        rotation: Z_UP_TO_Y_UP,
+        scale: [1e-3, 1e-3, 1e-3],
+      },
       ...others,
     ],
     meshes: [{ primitives }],

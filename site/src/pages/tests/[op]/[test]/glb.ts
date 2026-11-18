@@ -1,6 +1,6 @@
 // A minimal binary glTF reader: triangles and line primitives, with node transforms, in
-// millimetres, as the report's points are; glTF's own unit is the metre. Enough for the suite's
-// shapes; anything it cannot read throws.
+// millimetres with z up, as the report's points are; glTF's own unit is the metre, and its y is up.
+// Enough for the suite's shapes; anything it cannot read throws.
 
 export interface Shape {
   // xyz per vertex.
@@ -79,7 +79,9 @@ const MODE_TRIANGLES = 4
 
 type Mat = number[]
 
-const METRES_TO_MM: Mat = [1000, 0, 0, 0, 0, 1000, 0, 0, 0, 0, 1000, 0, 0, 0, 0, 1]
+// glTF's (x, y, z) in metres is the suite's (x, -z, y) in millimetres. The suite's files turn z to y
+// at their root node, so this undoes it.
+const GLTF_TO_SUITE: Mat = [1000, 0, 0, 0, 0, 0, 1000, 0, 0, -1000, 0, 0, 0, 0, 0, 1]
 // The suite's ghosts: what an operand leaves outside the result, open surfaces drawn behind it.
 const GHOSTS = new Set(['ghost', 'ghost2'])
 
@@ -92,23 +94,28 @@ function mul(a: Mat, b: Mat): Mat {
   return o
 }
 
+// A quarter turn's quaternion holds √½, so its matrix comes out a hair off 0 and ±1: snap those.
+function exact(v: number): number {
+  return Math.abs(v - Math.round(v)) < 1e-12 ? Math.round(v) : v
+}
+
 function local(n: Node): Mat {
   if (n.matrix) return n.matrix
   const [tx, ty, tz] = n.translation ?? [0, 0, 0]
   const [x, y, z, w] = n.rotation ?? [0, 0, 0, 1]
   const [sx, sy, sz] = n.scale ?? [1, 1, 1]
   return [
-    (1 - 2 * (y! * y! + z! * z!)) * sx!,
-    2 * (x! * y! + z! * w!) * sx!,
-    2 * (x! * z! - y! * w!) * sx!,
+    exact(1 - 2 * (y! * y! + z! * z!)) * sx!,
+    exact(2 * (x! * y! + z! * w!)) * sx!,
+    exact(2 * (x! * z! - y! * w!)) * sx!,
     0,
-    2 * (x! * y! - z! * w!) * sy!,
-    (1 - 2 * (x! * x! + z! * z!)) * sy!,
-    2 * (y! * z! + x! * w!) * sy!,
+    exact(2 * (x! * y! - z! * w!)) * sy!,
+    exact(1 - 2 * (x! * x! + z! * z!)) * sy!,
+    exact(2 * (y! * z! + x! * w!)) * sy!,
     0,
-    2 * (x! * z! + y! * w!) * sz!,
-    2 * (y! * z! - x! * w!) * sz!,
-    (1 - 2 * (x! * x! + y! * y!)) * sz!,
+    exact(2 * (x! * z! + y! * w!)) * sz!,
+    exact(2 * (y! * z! - x! * w!)) * sz!,
+    exact(1 - 2 * (x! * x! + y! * y!)) * sz!,
     0,
     tx!,
     ty!,
@@ -191,7 +198,7 @@ export function parseGlb(buf: ArrayBuffer): Shape {
     for (const c of node.children ?? []) visit(c, m, depth + 1)
   }
   const roots = g.scenes?.[g.scene ?? 0]?.nodes ?? (g.nodes ?? []).map((_, i) => i)
-  for (const r of roots) visit(r, METRES_TO_MM, 0)
+  for (const r of roots) visit(r, GLTF_TO_SUITE, 0)
 
   const P = Float32Array.from(positions)
   const T = Uint32Array.from(triangles)

@@ -208,9 +208,13 @@ pub(super) fn export_case<K: Kernel<Solid: Clone + 'static>>(
     let spec = crate::views::views(c);
     let shapes = spec["shapes"].as_array().map_or(&[][..], |v| v.as_slice());
     let hash = assets::hash(c);
-    let primary = assets::has_step(c, &spec)
-        .then(|| assets::subject(&spec))
-        .flatten();
+    let subjects = if c.refuse {
+        Vec::new()
+    } else {
+        assets::subjects(&spec)
+    };
+    let roles: Vec<&str> = subjects.iter().map(|(_, r)| r.as_str()).collect();
+    let step_keys = assets::step_keys(c.test, &c.id, &hash, &roles);
     let whole = oracle::bounds(&Shape::bool(Op::Union, c.a.clone(), c.b.clone()));
     let tolerance = |r: &Value| {
         let bx = shape_at(shapes, r)
@@ -293,9 +297,12 @@ pub(super) fn export_case<K: Kernel<Solid: Clone + 'static>>(
             }
             if let Some(dir) = &ex.step
                 && vi == 0
-                && primary == Some(si)
+                && let Some(key) = subjects
+                    .iter()
+                    .position(|(i, _)| *i == si)
+                    .and_then(|n| step_keys.get(n))
             {
-                let key = assets::key(c.test, &c.id, &hash, "step");
+                let key = key.clone();
                 match attempt(|| k.write_step(&made)) {
                     Ok(text) => match write(&dir.join(&key), text.as_bytes()) {
                         Ok(()) => steps.push(key),

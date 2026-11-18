@@ -1,83 +1,90 @@
 #!/usr/bin/env bash
-# Runs the suite on springrep with its shape files exported, and uploads the files the bucket lacks,
-# immutable. It publishes nothing unless springrep passed every case at the suite's tolerance and
-# drew every file, so each published shape is one the suite verified. With no
-# BREP_CONFORMANCE_BUCKET it only writes them, into --out DIR or a temporary directory.
-# Usage: publish-assets.sh --adapter <springrep's adapter binary> [--out DIR]
+# Publishes one kernel's shape files: those a run's results list in its cases' `exports`, from the
+# directory the run wrote them to (`--glb DIR --step DIR`), under
+# <prefix>/<suite>/<kernel>/<version>/ in the bucket. A file the bucket already holds is never
+# rewritten, so a second run uploads nothing. With no BREP_CONFORMANCE_BUCKET it only checks the
+# files and says what it would upload.
+# Usage: publish-assets.sh RESULTS.json FILES_DIR
 set -euo pipefail
+# sort and comm compare keys byte by byte, as Python's sorted does.
+export LC_ALL=C
 
-root=$(cd "$(dirname "$0")" && pwd)
-adapter=""
-out=""
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --adapter)
-            adapter=$2
-            shift 2
-            ;;
-        --out)
-            out=$2
-            shift 2
-            ;;
-        *)
-            echo "usage: $0 --adapter PATH [--out DIR]" >&2
-            exit 2
-            ;;
-    esac
-done
-if [[ -z "$adapter" ]]; then
-    echo "usage: $0 --adapter PATH [--out DIR]" >&2
+if [[ $# -ne 2 ]]; then
+    echo "usage: $0 RESULTS.json FILES_DIR" >&2
     exit 2
 fi
-out=${out:-$(mktemp -d)}
-mkdir -p "$out"
-files="$out/files"
-
-cargo build --release --manifest-path "$root/Cargo.toml" -p brep-conformance
-"$root/target/release/brep-conformance" --adapter "$adapter" \
-    --out "$out/results.json" --glb "$files" --step "$files" >"$out/summary.txt"
-
-python3 -I - "$out/results.json" <<'EOF'
-import json, sys
-
-cases = json.load(open(sys.argv[1]))["cases"]
-short = [c["id"] for c in cases if c.get("result") != "1e-7"]
-broken = [(c["id"], e) for c in cases for e in c.get("exports", {}).get("errors", [])]
-# The site links a case's expected STEP file wherever `asset_step` says it has one.
-unwritten = [
-    c["id"]
-    for c in cases
-    if c.get("asset_step")
-    and f'{c["test"]}/{c["id"]}.{c["asset"]}.step' not in c.get("exports", {}).get("step", [])
-]
-for name, bad in [("not passed at 1e-7", short), ("export errors", broken),
-                  ("expected STEP file not written", unwritten)]:
-    if bad:
-        print(f"{len(bad)} cases {name}, publishing nothing; first: {bad[0]}", file=sys.stderr)
-        sys.exit(1)
-print(f"{len(cases)} cases verified", file=sys.stderr)
-EOF
-
-# The bucket and its key prefix come from the upload role's stack; these defaults are placeholders
-# until it exists.
+results=$1
+files=$2
 bucket=${BREP_CONFORMANCE_BUCKET:-}
 prefix=${BREP_CONFORMANCE_PREFIX:-brep-conformance}
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+# The kernel's folder, and every key its results list. A name or key that is not a path of plain
+# names is refused: the site refuses a report with one, and the folder must not climb out.
+python3 -I - "$results" "$files" "$work" <<'EOF'
+import json, os, re, sys
+
+results, files, work = sys.argv[1:]
+r = json.load(open(results))
+plain = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+folder = [str(r.get("suite", "")), str(r["kernel"].get("name", "")), str(r["kernel"].get("version", ""))]
+for part in folder:
+    if not plain.match(part) or ".." in part:
+        sys.exit(f"{results}: {part!r} cannot name a folder")
+keys = []
+for c in r["cases"]:
+    ex = c.get("exports") or {}
+    keys += [k for k in [ex.get("glb")] + list(ex.get("step") or []) if k]
+for k in keys:
+    parts = k.split("/")
+    if not all(plain.match(p) and ".." not in p for p in parts) or not k.endswith((".glb", ".step")):
+        sys.exit(f"{results}: key {k!r} is not a path of plain names ending .glb or .step")
+missing = [k for k in keys if not os.path.isfile(os.path.join(files, k))]
+if missing:
+    sys.exit(f"{len(missing)} listed files are not in {files}; first: {missing[0]}")
+open(os.path.join(work, "folder"), "w").write("/".join(folder))
+open(os.path.join(work, "keys"), "w").write("".join(k + "\n" for k in sorted(set(keys))))
+EOF
+
+folder=$(cat "$work/folder")
+dest="$prefix/$folder"
+listed=$(wc -l < "$work/keys" | tr -d ' ')
 if [[ -z "$bucket" ]]; then
-    echo "no BREP_CONFORMANCE_BUCKET: wrote $files, uploaded nothing" >&2
+    echo "$listed files listed for $dest; no BREP_CONFORMANCE_BUCKET, so nothing uploaded"
     exit 0
 fi
 
-# A published file is never rewritten: drop every local file the bucket already holds.
-aws s3api list-objects-v2 --bucket "$bucket" --prefix "$prefix/" \
-    --query 'Contents[].Key' --output text |
-    tr '\t' '\n' | sed -e '/^None$/d' -e "s|^$prefix/||" |
-    while IFS= read -r key; do
-        rm -f "$files/$key"
-    done
+held() {
+    aws s3api list-objects-v2 --bucket "$bucket" --prefix "$dest/" \
+        --query 'Contents[].Key' --output text |
+        tr '\t' '\n' | sed -e '/^None$/d' -e "s|^$dest/||" | sort
+}
 
-immutable="public, max-age=31536000, immutable"
-for kind in "glb model/gltf-binary" "step model/step"; do
-    read -r ext type <<<"$kind"
-    aws s3 cp "$files" "s3://$bucket/$prefix/" --recursive --exclude '*' --include "*.$ext" \
-        --content-type "$type" --cache-control "$immutable" --no-progress
-done
+# Stage only the files the bucket lacks, so one recursive copy per type uploads them in parallel.
+held > "$work/held"
+comm -23 "$work/keys" "$work/held" > "$work/new"
+stage="$work/stage"
+while IFS= read -r key; do
+    mkdir -p "$stage/$(dirname "$key")"
+    ln "$files/$key" "$stage/$key" 2>/dev/null || cp "$files/$key" "$stage/$key"
+done < "$work/new"
+new=$(wc -l < "$work/new" | tr -d ' ')
+echo "$dest: $listed files listed, $((listed - new)) already published, $new to upload"
+
+if [[ "$new" -gt 0 ]]; then
+    immutable="public, max-age=31536000, immutable"
+    for kind in "glb model/gltf-binary" "step model/step"; do
+        read -r ext type <<<"$kind"
+        aws s3 cp "$stage" "s3://$bucket/$dest/" --recursive --exclude '*' --include "*.$ext" \
+            --content-type "$type" --cache-control "$immutable" --no-progress --only-show-errors
+    done
+fi
+
+held > "$work/held"
+absent=$(comm -23 "$work/keys" "$work/held" | wc -l | tr -d ' ')
+if [[ "$absent" -gt 0 ]]; then
+    echo "$absent listed files are still not in the bucket" >&2
+    exit 1
+fi
+echo "every listed file is in s3://$bucket/$dest/"

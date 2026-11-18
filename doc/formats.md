@@ -69,7 +69,7 @@ A case's fields:
 | `time_ms`    | The sum of its steps' times                                                                                                                                                                                   |
 | `asset`      | The name of its shape files                                                                                                                                                                                   |
 | `sound`      | `true` on a case judged as sound                                                                                                                                                                              |
-| `asset_step` | `true` when the case has one expected shape, which a `.step` file holds ([Assets](#assets))                                                                                                                   |
+| `asset_step` | `true` when the case has STEP files ([Assets](#assets))                                                                                                                                                       |
 | `exports`    | With `--glb` or `--step`: the keys written as `glb` and `step`, what could not be drawn or written as `errors`, and as `skipped` a ghost the kernel could not cut or a refused case's input it would not make |
 
 In a feature, `b` is the shape the act must give, and a draft also has its `pull`. A case that must
@@ -117,8 +117,9 @@ site reads. It holds `format` (the same number as the results file's), `kernel`,
 `run` (`unix`, and `verified` when the suite's own benchmark machine ran it), `environment`,
 `unsupported`, `stand_ins`, a `summary` (the number of `cases`, the headline `pass_1e7` and the
 count of each result) and `cases`. `cases` has one row per case, with `id`, `test`, `operation`,
-`kind`, `result`, `why`, `failure`, `time_ms`, `asset`, its test's `group_median_ms`, and
-`group_low_confidence`.
+`kind`, `result`, `why`, `failure`, `time_ms`, `asset`, its test's `group_median_ms`,
+`group_low_confidence`, and, where files were drawn, `exports`: the `glb` key and the list of `step`
+keys, below the kernel's folder of [Assets](#assets).
 
 ## Operands
 
@@ -138,18 +139,20 @@ parameters.
 A run with `--glb DIR` or `--step DIR` writes each case's shape files there, as the kernel under
 test draws them. Failed cases' files are included ([`export.rs`](../suite/src/run/export.rs)):
 
-| Key                        | Holds                                                 |
-| -------------------------- | ----------------------------------------------------- |
-| `<test>/<id>.<asset>.glb`  | The case's views                                      |
-| `<test>/<id>.<asset>.step` | The case's expected shape, where `asset_step` is true |
+| Key                               | Holds                                                   |
+| --------------------------------- | ------------------------------------------------------- |
+| `<test>/<id>.<asset>.glb`         | The case's views                                        |
+| `<test>/<id>.<asset>.step`        | The one solid of its first view, as the kernel made it  |
+| `<test>/<id>.<asset>.<role>.step` | Each of the two solids of its first view, named by role |
 
-A case has one expected shape when it is neither refused nor sound and its first view has one
-subject, not counting ghosts. Such a subject is a boolean's intersection, a feature's result or a
-queried solid. A view of two subjects, such as a mirror join's part and its image, has no expected
-shape. `asset` is a 64-bit FNV-1a of the case id and `ASSET_GENERATOR` in
-[`run.rs`](../suite/src/run.rs). `ASSET_GENERATOR` changes when what draws the files changes. A test
-in springrep's adapter pins it to a fingerprint of what springrep's `display` draws, and fails when
-that drifts.
+STEP files are written for the subjects of a case's first view, not counting ghosts: a boolean's
+intersection, a feature's result, a queried solid, or a mirror join's part and its image. Each is
+the kernel's own result, for exact and sound cases alike, so on a failed case it may be wrong. A
+case that must be refused has none, and nor has a view of more than two solids, such as an assembly
+of a hundred parts, which its GLB shows. `asset` is a 64-bit FNV-1a of the case id and
+`ASSET_GENERATOR` in [`run.rs`](../suite/src/run.rs). `ASSET_GENERATOR` changes when what draws the
+files changes. A test in springrep's adapter pins it to a fingerprint of what springrep's `display`
+draws, and fails when that drifts.
 
 A view's subject is the kernel's own result where the case's runner kept one. The runner keeps a
 boolean's four results and operands, a feature's or chain's result, a moved solid, a split's pieces,
@@ -159,25 +162,30 @@ and moved by the kernel's [`transform`](api.md#transform), or by its [`affine`](
 the kernel's difference of the two, less each face and each edge whose middle the kernel
 [classifies](api.md#classify) as on the subject's boundary. Subjects are drawn first and ghosts
 last. An operand's ghost behind a union of that operand is empty, so it is not cut. Each solid is
-drawn with [`display`](api.md#display) within `DRAWN` (5e-4) of its diagonal, and the expected shape
-is written with [`write_step`](api.md#write_step).
+drawn with [`display`](api.md#display) within `DRAWN` (5e-4) of its diagonal, and each STEP file is
+written with [`write_step`](api.md#write_step).
 
 The GLB holds one scene per view, named as the view. Each scene has one node per solid. A node is
 named by its role (`main`, `alt`, `ghost`, `ghost2`) and also carries the role as `extras.role`. Its
-mesh has the display's faces as triangles and the display's edges as lines. Positions are in
-millimetres, under a root node that scales them to metres. The file's `extras` carry the case's
-`id`, `test` and `hash`, the `kernel` that drew it, the case's `outcome` and `result`, and the
-views' `points`, `box` and `plane`. The file requires `KHR_mesh_quantization`, which three.js,
-Blender and `<model-viewer>` read. Positions are `SHORT` over the solid's box, and the node's
-`translation` and uniform `scale` take them back to millimetres. Normals are normalized `BYTE`. Both
-primitives are indexed, with `UNSIGNED_SHORT` where the vertices fit.
+mesh has the display's faces as triangles and the display's edges as lines. Positions are in the
+suite's millimetres with z up, under a root node that scales them to glTF's metres and turns z to
+glTF's y, which every glTF viewer takes as up. The file's `extras` carry the case's `id`, `test` and
+`hash`, the `kernel` that drew it, the case's `outcome` and `result`, and the views' `points`, `box`
+and `plane`. The file requires `KHR_mesh_quantization`, which three.js, Blender and `<model-viewer>`
+read. Positions are `SHORT` over the solid's box, and the node's `translation` and uniform `scale`
+take them back to millimetres. Normals are normalized `BYTE`. Both primitives are indexed, with
+`UNSIGNED_SHORT` where the vertices fit.
 
-The expected shapes are published under a base URL that is compiled in from
-`BREP_CONFORMANCE_ASSET_BASE`. The default is `https://cdn.springcraft.ai/brep-conformance`.
-[`assets.rs`](../suite/src/assets.rs) gives the URLs of a case or of a result.
-[`publish-assets.sh`](../publish-assets.sh) runs the suite on springrep with both exports. It
-publishes nothing unless every case passed at 1e-7 and every file was drawn. Each published shape is
-then a kernel's result that the suite has verified against its own exact values, and no kernel
-produced those values. The script uploads only the files the bucket lacks. A file is never
-rewritten. A change to what a file shows, or to what draws it, gives the file a new name, so files
-are cached immutably.
+Each registered kernel's files are published under `<base>/<suite>/<kernel>/<version>/<key>`, the
+folder its report has on the results site. The base is compiled in from
+`BREP_CONFORMANCE_ASSET_BASE`, `https://cdn.springcraft.ai/brep-conformance` by default;
+[`assets.rs`](../suite/src/assets.rs) gives a file's URL. The
+[Assets workflow](../.github/workflows/assets.yml) draws them: for each kernel in
+[`kernels.json`](../kernels.json), an official run (`--kernel`) with both exports, on a machine of
+its own and not the timed session's. [`publish-assets.sh`](../publish-assets.sh) then uploads the
+files the run's `exports` list that the bucket lacks, with each file's type and an immutable cache
+lifetime. A file is never rewritten: a change to what it shows, or to what draws it, gives it a new
+name. The run's results are kept, and
+`brep-conformance-report RESULTS.json --flat report.json --exports DRAWN.json` puts each case's
+`exports` from them into the official report, after checking that both runs are of one kernel
+release on one suite.

@@ -1,6 +1,7 @@
 //! A case's views as one binary glTF: a scene per view, and in it a node per solid whose mesh holds
 //! the solid's triangles and, as a second primitive of lines, its edges. Positions stay in the
-//! suite's millimetres under a root node that scales them to glTF's metres, quantized to 16 bits
+//! suite's millimetres, z up, under a root node that scales them to glTF's metres and turns the
+//! suite's z axis to glTF's y, which is up in every glTF viewer. They are quantized to 16 bits
 //! over each solid's box (`KHR_mesh_quantization`). Each solid's node carries its role in
 //! `extras.role`, so a reader can leave out the ghosts, which are open surfaces, not solids.
 
@@ -16,6 +17,14 @@ const MATERIALS: [(&str, [f64; 4]); 5] = [
     ("ghost", [0.212, 0.468, 0.716, 0.14]),
     ("ghost2", [0.117, 0.456, 0.238, 0.14]),
     ("edge", [0.01, 0.01, 0.01, 1.0]),
+];
+
+/// A quarter turn about x, as glTF's `[x, y, z, w]` quaternion: the suite's +z becomes +y.
+const Z_UP_TO_Y_UP: [f64; 4] = [
+    -std::f64::consts::FRAC_1_SQRT_2,
+    0.0,
+    0.0,
+    std::f64::consts::FRAC_1_SQRT_2,
 ];
 
 fn material(role: &str) -> usize {
@@ -238,7 +247,8 @@ pub fn glb(views: &[View], extras: Value, generator: &str) -> Vec<u8> {
             );
             children.push(nodes.len() - 1);
         }
-        let mut root = json!({"name": v.name, "scale": [1e-3, 1e-3, 1e-3]});
+        let mut root =
+            json!({"name": v.name, "rotation": Z_UP_TO_Y_UP, "scale": [1e-3, 1e-3, 1e-3]});
         // glTF requires a node's `children` to be non-empty when present.
         if !children.is_empty() {
             root["children"] = json!(children);
@@ -399,9 +409,20 @@ mod tests {
         let node = &gltf["nodes"][0];
         assert_eq!(node["extras"]["role"], "main");
         let s = node["scale"][0].as_f64().unwrap();
+        let mm: Vec<f64> = (0..3)
+            .map(|k| node["translation"][k].as_f64().unwrap() + s * q[k])
+            .collect();
         for k in 0..3 {
-            let mm = node["translation"][k].as_f64().unwrap() + s * q[k];
-            assert!((mm - [10.0, 20.0, 30.0][k]).abs() <= s, "{mm}");
+            assert!((mm[k] - [10.0, 20.0, 30.0][k]).abs() <= s, "{mm:?}");
+        }
+        // The root turns the suite's z to glTF's y: (x, y, z) in millimetres is (x, z, -y) in
+        // glTF's frame, scaled to metres.
+        let root = gltf["nodes"].as_array().unwrap().last().unwrap();
+        let [x, _, _, w] = [0, 1, 2, 3].map(|i| root["rotation"][i].as_f64().unwrap());
+        let (c, sn) = (w * w - x * x, 2.0 * x * w);
+        let up = [mm[0], c * mm[1] - sn * mm[2], sn * mm[1] + c * mm[2]];
+        for k in 0..3 {
+            assert!((up[k] - [10.0, 30.0, -20.0][k]).abs() <= 2.0 * s, "{up:?}");
         }
     }
 

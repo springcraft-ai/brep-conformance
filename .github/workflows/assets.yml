@@ -1,0 +1,136 @@
+# SPDX-License-Identifier: MIT
+name: Assets
+
+# Draws each registered kernel's shape files with its pinned adapter (`--kernel`, kernels.json) and
+# publishes those the CDN lacks under <suite>/<kernel>/<version>/, cached immutably. A second run
+# uploads nothing. The drawing run's results are kept as an artifact: an official report takes its
+# cases' `exports` from them (`brep-conformance-report --flat --exports`), so the timed session
+# never draws. doc/formats.md describes the files.
+on:
+  workflow_dispatch:
+    inputs:
+      cdn:
+        description: Which CDN to publish to
+        type: choice
+        options: [dev, prod]
+        default: dev
+      kernels:
+        description: Kernels to draw, separated by spaces; every kernel in kernels.json when empty
+        type: string
+        default: ''
+
+# A job with no permissions block inherits these, so a job added later gets nothing by default.
+permissions: {}
+
+concurrency:
+  group: assets-${{ inputs.cdn }}
+  cancel-in-progress: false
+
+jobs:
+  kernels:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      list: ${{ steps.list.outputs.list }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: List the kernels to draw
+        id: list
+        env:
+          WANTED: ${{ inputs.kernels }}
+        run: |
+          list=$(jq -c --arg wanted "$WANTED" '
+              ($wanted | split(" ") | map(select(. != ""))) as $w
+              | [.kernels[].kernel | select(($w | length) == 0 or (. as $k | $w | index($k)))]
+          ' kernels.json)
+          if [ "$list" = "[]" ]; then
+              echo "no kernel in kernels.json matches \"$WANTED\""
+              exit 1
+          fi
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "drawing $list"
+
+  # Runs kernel code: no environment and no identity token, so nothing it starts can reach a role.
+  draw:
+    needs: kernels
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel: ${{ fromJSON(needs.kernels.outputs.list) }}
+    steps:
+      - name: Check that this job cannot request an identity token
+        run: |
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+              echo "this job can request an identity token, and must not"
+              exit 1
+          fi
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      # An adapter's build may need uv, as OpenCascade's does.
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: ${{ matrix.kernel }}
+          workspaces: |
+            . -> target
+            adapters/${{ matrix.kernel }} -> target
+      - name: Build the suite
+        run: cargo build --release --locked -p brep-conformance
+      - name: Draw every case with the pinned adapter
+        env:
+          KERNEL: ${{ matrix.kernel }}
+        run: |
+          mkdir -p out
+          target/release/brep-conformance --kernel "$KERNEL" --threads "$(nproc)" \
+              --glb out/files --step out/files --out out/results.json > out/summary.txt
+          {
+              echo '```'
+              grep -E '^(suite|all|offers)' out/summary.txt
+              echo "$(find out/files -name '*.glb' | wc -l) GLB and" \
+                  "$(find out/files -name '*.step' | wc -l) STEP files, $(du -sh out/files | cut -f1)"
+              echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # One file uploads far faster than thousands.
+          tar -C out -cf out/files.tar files
+          rm -rf out/files
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: assets-${{ matrix.kernel }}
+          path: out
+          retention-days: 90
+          if-no-files-found: error
+
+  # Runs no kernel code. The upload roles trust this repository's main branch and v* tags only.
+  publish:
+    needs: [kernels, draw]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # for AWS OIDC
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel: ${{ fromJSON(needs.kernels.outputs.list) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: assets-${{ matrix.kernel }}
+          path: out
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ inputs.cdn == 'prod' && vars.BREP_CONFORMANCE_ASSET_ROLE || vars.BREP_CONFORMANCE_ASSET_ROLE_DEV }}
+          aws-region: us-west-2
+      - name: Publish the files the CDN lacks
+        env:
+          BREP_CONFORMANCE_BUCKET: ${{ inputs.cdn == 'prod' && vars.BREP_CONFORMANCE_ASSET_BUCKET || vars.BREP_CONFORMANCE_ASSET_BUCKET_DEV }}
+        run: |
+          tar -C out -xf out/files.tar
+          ./publish-assets.sh out/results.json out/files | tee -a "$GITHUB_STEP_SUMMARY"

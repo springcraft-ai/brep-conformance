@@ -70,10 +70,9 @@ newest and lists the others apart, as [doc/versioning.md](doc/versioning.md) say
 WebAssembly, meshes a test's expected shape in the page when its view opens. A boolean case shows
 its four results with the operands behind them, and a feature its solid before and after.
 
-`--glb DIR` and `--step DIR` write every case's views as a GLB and its expected shape as a STEP
-file, as the kernel draws them, failed cases' included ([formats.md](doc/formats.md#assets)).
-[`publish-assets.sh`](publish-assets.sh) publishes springrep's to the CDN as the expected shapes,
-only when springrep passed every case.
+`--glb DIR` and `--step DIR` write every case's views as a GLB and the solids it shows as STEP
+files, as the kernel draws them, failed cases' included ([formats.md](doc/formats.md#assets)). The
+[Assets workflow](.github/workflows/assets.yml) publishes each registered kernel's to the CDN.
 
 A run prints outcomes per test and failed checks per clause and writes every case's result to
 `--out`. `--html FILE` also writes the run as a report page: one file that holds its own data and

@@ -253,7 +253,7 @@ pub fn flat(results: &Value, verified: bool) -> Value {
             let result = c["result"].as_str().unwrap_or("crash");
             *counts.entry(result.to_string()).or_default() += 1;
             let median = medians.get(&test);
-            json!({
+            let mut row = json!({
                 "id": c["id"],
                 "test": test,
                 "operation": area(&test),
@@ -266,7 +266,13 @@ pub fn flat(results: &Value, verified: bool) -> Value {
                 "group_low_confidence": median.is_none_or(|m| m.1 < TIMED_ENOUGH),
                 "asset": c["asset"],
                 "asset_step": c["asset_step"],
-            })
+            });
+            // The files written, below the kernel's folder; a case with none has no `exports`.
+            let ex = &c["exports"];
+            if ex.is_object() {
+                row["exports"] = json!({"glb": ex["glb"], "step": ex["step"]});
+            }
+            row
         })
         .collect();
     let passed = counts.get("1e-7").copied().unwrap_or(0);
@@ -286,6 +292,44 @@ pub fn flat(results: &Value, verified: bool) -> Value {
         "stand_ins": results["stand_ins"],
         "cases": rows,
     })
+}
+
+/// Puts the shape files another run of the same kernel release drew in `results`, case by case:
+/// an official session times the cases, and a separate run on the same suite and adapter draws
+/// them, so drawing never shares the timed machine. A case the other run drew nothing for has none.
+pub fn with_exports(results: &mut Value, drawn: &Value) -> Result<(), String> {
+    if results["suite"] != drawn["suite"] {
+        return Err(format!(
+            "the runs differ in suite: {} and {}",
+            results["suite"], drawn["suite"]
+        ));
+    }
+    for field in ["name", "version"] {
+        if results["kernel"][field] != drawn["kernel"][field] {
+            return Err(format!(
+                "the runs differ in the kernel's {field}: {} and {}",
+                results["kernel"][field], drawn["kernel"][field]
+            ));
+        }
+    }
+    let by_id: BTreeMap<&str, &Value> = drawn["cases"]
+        .as_array()
+        .map_or(&[][..], Vec::as_slice)
+        .iter()
+        .filter_map(|c| Some((c["id"].as_str()?, &c["exports"])))
+        .collect();
+    for c in results["cases"].as_array_mut().into_iter().flatten() {
+        let id = c["id"].as_str().unwrap_or_default();
+        match by_id.get(id) {
+            Some(ex) if ex.is_object() => c["exports"] = (*ex).clone(),
+            _ => {
+                if let Some(o) = c.as_object_mut() {
+                    o.remove("exports");
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -310,6 +354,32 @@ mod tests {
         assert_eq!(flat["cases"][1]["group_median_ms"], 4.0);
         assert_eq!(flat["cases"][1]["group_low_confidence"], true);
         assert_eq!(flat["run"]["verified"], true);
+        assert!(flat["cases"][0].get("exports").is_none());
+    }
+
+    #[test]
+    fn a_session_takes_its_shape_files_from_a_run_of_the_same_kernel_release() {
+        let kernel = json!({"name": "k", "version": "1"});
+        let ex = json!({"glb": "t/a.h.glb", "step": ["t/a.h.step"], "errors": [], "skipped": []});
+        let mut session = json!({"suite": "1.0.0", "kernel": kernel,
+            "cases": [{"id": "a", "test": "t", "result": "1e-7"}, {"id": "b", "test": "t"}]});
+        let drawn = json!({"suite": "1.0.0", "kernel": kernel,
+            "cases": [{"id": "a", "exports": ex}, {"id": "b"}]});
+        with_exports(&mut session, &drawn).unwrap();
+        let flat = flat(&session, false);
+        assert_eq!(
+            flat["cases"][0]["exports"],
+            json!({"glb": "t/a.h.glb", "step": ["t/a.h.step"]})
+        );
+        assert!(flat["cases"][1].get("exports").is_none());
+
+        let mut other = drawn.clone();
+        other["kernel"]["version"] = json!("2");
+        assert!(
+            with_exports(&mut session, &other)
+                .unwrap_err()
+                .contains("version")
+        );
     }
 
     #[test]
