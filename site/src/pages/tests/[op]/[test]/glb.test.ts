@@ -129,7 +129,6 @@ describe('topology', () => {
     const p = new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0])
     const t = topology(p, new Uint32Array([0, 1, 2, 0, 2, 3]))
     expect(t.creases.length / 6).toBe(4)
-    expect(Array.from(t.smooth)).toEqual([1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1])
   })
 
   it('ignores a triangle with no area', () => {

@@ -1,12 +1,20 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Checkbox, Segmented } from '@/ds'
 import { Annot } from '@/components'
 import type { Mark, ScanHandle } from './scan'
 import type { Loaded } from './viewer'
+import { firstView, ghostsOf, operandsLabel, subjectOf } from './views'
 
 type Status = 'loading' | 'ready' | 'missing' | 'unreadable' | 'undrawn'
 
 const EMPTY = new Float32Array(0)
 const NO_TRIANGLES = new Uint32Array(0)
+
+// What a ghost of each tone is: a boolean's operands, or the solid a step or move started from.
+function ghostLabel(view: string | undefined, tone: 0 | 1): string {
+  if (view && /[∩∖]/.test(view)) return tone === 0 ? 'operand a' : 'operand b'
+  return view === 'after' ? 'before the steps' : 'the starting solid'
+}
 
 // A kernel's drawing of a case in Scan mode, with a kernel's misplaced points over it. The drawing
 // code loads after hydration; where no kernel drew the case, or the file is not published yet, the
@@ -20,7 +28,10 @@ export function ScanView({
   files,
   unpublished = false,
   by,
+  missing = null,
 }: {
+  // Why the drawing kernel has no result to show, as its grade, where it made none.
+  missing?: string | null
   glb: string | null
   // No `glb` because every kernel's drawing is missing from the CDN, not because none drew it.
   unpublished?: boolean
@@ -33,11 +44,40 @@ export function ScanView({
   files?: ReactNode
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
+  const surface = useRef<HTMLCanvasElement>(null)
   const handle = useRef<ScanHandle | null>(null)
+  const [noGpu, setNoGpu] = useState(false)
+  // The zoom key as the reader's keyboard names it, known only once the page runs.
+  const [zoomKey, setZoomKey] = useState('ctrl')
+  useEffect(() => {
+    const nav = navigator as Navigator & { userAgentData?: { platform?: string } }
+    if (/mac|iphone|ipad/i.test(nav.userAgentData?.platform ?? nav.platform)) setZoomKey('⌘')
+  }, [])
   const pick = useRef(onPick)
   pick.current = onPick
   const [status, setStatus] = useState<Status>('loading')
   const [loaded, setLoaded] = useState<Loaded | null>(null)
+  // The view shown, by name, so moving to another case or kernel keeps it where it can.
+  const [viewName, setViewName] = useState<string | null>(null)
+  const [operands, setOperands] = useState(true)
+
+  const views = loaded?.views ?? []
+  const shown = useMemo(() => {
+    if (!views.length) return -1
+    const i = viewName === null ? -1 : views.findIndex(v => v.name === viewName)
+    // A kernel that made no result opens on the result's view, which says so.
+    return i < 0 ? (missing ? 0 : firstView(views)) : i
+  }, [views, viewName, missing])
+  const view = shown < 0 ? null : views[shown]!
+  const subject = useMemo(() => (view ? subjectOf(view) : null), [view])
+  // A view a kernel that made no result left empty, where a ghost alone would read as the result:
+  // show neither. A kernel that passed made every view, so its empty view is an empty result.
+  const noResult = !!missing && !!view && !subject?.triangles.length
+  const ghosts = useMemo(
+    () => (view && operands && !noResult ? ghostsOf(views, view) : []),
+    [views, view, operands, noResult],
+  )
+  const toggle = view && !noResult ? operandsLabel(views, view) : null
 
   useEffect(() => {
     let live = true
@@ -48,7 +88,7 @@ export function ScanView({
     }
     setStatus('loading')
     void import('./viewer').then(v =>
-      v.loadShape(glb).then(
+      v.loadViews(glb).then(
         l => {
           if (!live) return
           setLoaded(l)
@@ -69,24 +109,42 @@ export function ScanView({
   useEffect(() => {
     let live = true
     void import('./viewer').then(v => {
-      if (!live || !canvas.current) return
-      const scene = {
-        positions: loaded?.shape.positions ?? EMPTY,
-        normals: loaded?.shape.normals ?? EMPTY,
-        triangles: loaded?.shape.triangles ?? NO_TRIANGLES,
-        edges: loaded?.shape.edges ?? EMPTY,
-        smooth: loaded?.shape.smooth ?? EMPTY,
-        marks,
+      if (!live || !canvas.current || !surface.current || noGpu) return
+      let frame = loaded?.frame
+      if (frame && marks.length) {
+        const lo = [...frame.lo] as typeof frame.lo
+        const hi = [...frame.hi] as typeof frame.hi
+        for (const m of marks)
+          for (let k = 0; k < 3; k++) {
+            lo[k] = Math.min(lo[k]!, m.p[k]!)
+            hi[k] = Math.max(hi[k]!, m.p[k]!)
+          }
+        frame = { lo, hi }
       }
-      if (handle.current) handle.current.set(scene)
-      else handle.current = v.mountScan(canvas.current, scene, i => pick.current(i))
+      const scene = {
+        positions: subject?.positions ?? EMPTY,
+        normals: subject?.normals ?? EMPTY,
+        triangles: subject?.triangles ?? NO_TRIANGLES,
+        edges: subject?.edges ?? EMPTY,
+        ghosts,
+        marks,
+        frame,
+      }
+      if (handle.current) return handle.current.set(scene)
+      try {
+        handle.current = v.mountScan(canvas.current, surface.current, scene, i => pick.current(i))
+      } catch {
+        setNoGpu(true)
+      }
     })
     return () => {
       live = false
     }
-  }, [loaded, marks])
+  }, [loaded, subject, ghosts, marks, noGpu])
 
   useEffect(() => handle.current?.focus(focus), [focus, loaded, marks])
+
+  const triangles = subject ? subject.triangles.length / 3 : 0
 
   useEffect(
     () => () => {
@@ -97,11 +155,19 @@ export function ScanView({
   )
 
   // A result with no volume, such as the intersection of boxes that only touch, has no faces.
-  const hollow = status === 'ready' && loaded?.triangles === 0
-  const empty = ((status !== 'ready' && status !== 'loading') || hollow) && !marks.length
+  const hollow = status === 'ready' && triangles === 0
+  const ghosted = ghosts.some(g => g.triangles.length)
+  const empty =
+    noGpu || (((status !== 'ready' && status !== 'loading') || hollow) && !marks.length && !ghosted)
   const state = {
     loading: 'loading shape',
-    ready: loaded ? `glb · ${loaded.triangles.toLocaleString('en')} triangles` : '',
+    ready: loaded
+      ? hollow
+        ? noResult
+          ? `no result · ${missing}`
+          : 'result · empty'
+        : `glb · ${triangles.toLocaleString('en')} triangles`
+      : '',
     missing: 'shape not published yet',
     unreadable: 'shape file unreadable',
     undrawn: 'no kernel drew this case',
@@ -109,7 +175,23 @@ export function ScanView({
 
   return (
     <>
+      {views.length > 0 && (
+        <div className="bc-views">
+          {views.length > 1 && (
+            <Segmented
+              label="view"
+              options={views.map(v => ({ id: v.name, label: v.name }))}
+              value={view?.name ?? ''}
+              onChange={id => setViewName(id)}
+            />
+          )}
+          {toggle && (
+            <Checkbox tone="void" checked={operands} onChange={setOperands} label={toggle} />
+          )}
+        </div>
+      )}
       <div className="bc-scan" data-status={status} data-empty={empty || undefined}>
+        <canvas ref={surface} className="bc-scan__canvas bc-scan__surface" aria-hidden="true" />
         <canvas
           ref={canvas}
           className="bc-scan__canvas sc-focus"
@@ -120,11 +202,15 @@ export function ScanView({
         {empty && (
           <div className="bc-scan__empty sc-hatch">
             <Annot>
-              {status === 'unreadable' || status === 'undrawn'
-                ? state
-                : hollow
-                  ? 'shape · empty'
-                  : 'shape · not published yet'}
+              {noGpu
+                ? 'shape · this browser has no WebGL2'
+                : status === 'unreadable' || status === 'undrawn'
+                  ? state
+                  : noResult
+                    ? `no result · ${missing}`
+                    : hollow
+                      ? 'shape · empty'
+                      : 'shape · not published yet'}
             </Annot>
           </div>
         )}
@@ -138,7 +224,10 @@ export function ScanView({
         </div>
         {!empty && (
           <div className="bc-scan__bl">
-            <Annot>drag to turn · double-click resets</Annot>
+            <Annot>
+              drag to turn · right-drag to pan · pinch or {zoomKey}-scroll to zoom · double-click
+              resets
+            </Annot>
           </div>
         )}
         <i className="bc-scan__corner" />
@@ -148,6 +237,17 @@ export function ScanView({
       </div>
       <div className="bc-shape__foot">
         <div className="bc-shape__legend">
+          {view?.note && <span>{view.note}</span>}
+          {ghosts.some(g => g.tone === 0 && g.triangles.length) && (
+            <span>
+              <i className="bc-key bc-key--ghost" /> {ghostLabel(view?.name, 0)}
+            </span>
+          )}
+          {ghosts.some(g => g.tone === 1 && g.triangles.length) && (
+            <span>
+              <i className="bc-key bc-key--ghost2" /> {ghostLabel(view?.name, 1)}
+            </span>
+          )}
           {marks.some(m => m.held) && (
             <span>
               <i className="bc-key bc-key--held" /> placed inside, belongs outside

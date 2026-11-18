@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { drawnBy, point, stepLabel, shortCaseIds, testName, value } from './format'
+import type { Grade } from '@/data/results'
+import { drawnBy, kernelOrder, point, stepLabel, shortCaseIds, testName, value } from './format'
 
 describe('value', () => {
   it('writes counts whole, small values in exponent form, the rest to six figures', () => {
@@ -37,20 +38,48 @@ describe('shortCaseIds', () => {
   })
 })
 
-describe('drawnBy', () => {
-  const drew = { glb: 'x.glb' }
-
-  it('shows the preferred kernel’s drawing where it drew the case', () => {
-    expect(drawnBy([drew, drew], 1)).toBe(1)
+describe('kernelOrder', () => {
+  it('ranks the kernels by their cases at each tier in turn, then by fewer failures', () => {
+    const cases: (Grade | null)[][] = [
+      ['1e-7', '1e-7', '1e-6'],
+      ['1e-6', '1e-7', '1e-7'],
+      ['fail', '1e-7', '1e-7'],
+    ]
+    expect(kernelOrder(cases, [0, 1, 2])).toEqual([1, 2, 0])
   })
 
-  it('falls back to the first kernel that drew it', () => {
-    expect(drawnBy([null, { glb: null }, drew], 0)).toBe(2)
-    expect(drawnBy([drew, null], -1)).toBe(0)
+  it('breaks a tie on the test by the leaderboard', () => {
+    expect(kernelOrder([['1e-7', '1e-7', 'fail']], [2, 0, 1])).toEqual([1, 0, 2])
+  })
+})
+
+describe('drawnBy', () => {
+  const drew = { glb: 'x.glb' }
+  const inOrder = [0, 1, 2]
+
+  it('shows the drawing of the kernel that passed at the best tier', () => {
+    expect(drawnBy([drew, drew, drew], ['fail', '1e-5', '1e-7'], inOrder, -1)).toBe(2)
+    expect(drawnBy([drew, drew], ['refused', '1e-3'], [0, 1], -1)).toBe(1)
+  })
+
+  it('breaks a tie by the kernels’ order', () => {
+    expect(drawnBy([drew, drew, drew], ['1e-7', 'fail', '1e-7'], [2, 1, 0], -1)).toBe(2)
+    expect(drawnBy([drew, drew, drew], ['1e-7', 'fail', '1e-7'], inOrder, -1)).toBe(0)
+  })
+
+  it('keeps the reader’s kernel wherever it passed, at any tier', () => {
+    expect(drawnBy([drew, drew], ['1e-7', '1e-5'], [0, 1], 1)).toBe(1)
+    expect(drawnBy([drew, drew], ['1e-7', 'fail'], [0, 1], 1)).toBe(0)
+    expect(drawnBy([drew, null], ['1e-7', '1e-7'], [0, 1], 1)).toBe(0)
+  })
+
+  it('shows a failing kernel’s drawing only where no kernel that passed drew the case', () => {
+    expect(drawnBy([drew, null], ['fail', '1e-7'], [0, 1], -1)).toBe(0)
+    expect(drawnBy([drew, drew], ['crash', 'fail'], [1, 0], -1)).toBe(1)
   })
 
   it('shows none where no kernel drew it', () => {
-    expect(drawnBy([null, { glb: null }], 0)).toBeNull()
+    expect(drawnBy([null, { glb: null }], ['1e-7', '1e-7'], [0, 1], 0)).toBeNull()
   })
 })
 

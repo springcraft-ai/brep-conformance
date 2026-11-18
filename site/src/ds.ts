@@ -2,6 +2,7 @@
 import build from '../.ds/sc.mjs'
 
 export const {
+  Checkbox,
   DataTable,
   EmptyState,
   Logo,

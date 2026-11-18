@@ -1,17 +1,21 @@
 // Everything the Scan view needs in the browser, loaded as one chunk after the page hydrates.
-import { parseGlb, type Shape } from './glb'
+import { parseViews, type GlbView } from './glb'
+import { frameOf } from './scan'
+import type { Vec3 } from './vec'
+import { merge, subjectOf } from './views'
 
-export { mountScan, type Mark, type Scene, type ScanHandle } from './scan'
+export { mountScan, type Ghost, type Mark, type Scene, type ScanHandle } from './scan'
 
 export interface Loaded {
-  shape: Shape
-  triangles: number
+  views: GlbView[]
+  // The box round every view's subjects, so turning from one view to the next keeps the scale.
+  frame: { lo: Vec3; hi: Vec3 }
 }
 
 const cache = new Map<string, Promise<Loaded>>()
 
-// The expected shape from its GLB. Rejects when the file is not there.
-export function loadShape(url: string): Promise<Loaded> {
+// A kernel's drawing of a case, every view of it. Rejects when the file is not there.
+export function loadViews(url: string): Promise<Loaded> {
   let p = cache.get(url)
   if (!p) {
     p = fetch(url, { mode: 'cors' })
@@ -20,8 +24,9 @@ export function loadShape(url: string): Promise<Loaded> {
         return r.arrayBuffer()
       })
       .then(buf => {
-        const shape = parseGlb(buf)
-        return { shape, triangles: shape.triangles.length / 3 }
+        const views = parseViews(buf)
+        const all = merge(views.map(subjectOf))
+        return { views, frame: frameOf({ ...all, ghosts: [], marks: [] }) }
       })
     p.catch(() => cache.delete(url))
     cache.set(url, p)

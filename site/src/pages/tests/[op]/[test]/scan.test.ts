@@ -1,16 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { camera, frameOf, HOME, project } from './scan'
+import { camera, frameOf, HOME, panBy, project, tumble, zoomAt } from './scan'
 
 const empty = new Float32Array(0)
 
 describe('frameOf', () => {
-  it('fits the shape and the marks, and gives a flat frame some depth', () => {
+  it('fits the shape, its ghosts and the marks, and gives a flat frame some depth', () => {
     const f = frameOf({
       positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
       normals: empty,
       triangles: new Uint32Array([0, 1, 2]),
       edges: new Float32Array([0, 0, 0, 4, 2, 0]),
-      smooth: new Float32Array([0, 0, 0, 0, 5, 0, 0, 0, 1, 0, 0, 1]),
+      ghosts: [
+        {
+          positions: new Float32Array([0, 5, 0]),
+          normals: empty,
+          triangles: new Uint32Array(0),
+          edges: empty,
+          tone: 0,
+        },
+      ],
       marks: [{ p: [-3, 1, 0], held: true }],
     })
     expect(f.lo).toEqual([-3, 0, -1])
@@ -42,8 +50,35 @@ describe('camera and project', () => {
   })
 
   it('draws z up and nearer points with greater depth', () => {
-    const c = camera({ yaw: 0, pitch: 0 }, frame, 100, 100)
+    const c = camera({ ...HOME, yaw: 0, pitch: 0 }, frame, 100, 100)
     expect(project(c, 0, 0, 1)[1]).toBeLessThan(50)
     expect(project(c, 1, 0, 0)[2]).toBeGreaterThan(project(c, -1, 0, 0)[2])
+  })
+
+  it('zooms about a screen point, which stays on the same point of the model', () => {
+    const c = camera(HOME, frame, 400, 200)
+    const p: [number, number, number] = [0.5, -0.3, 0.2]
+    const [x, y] = project(c, ...p)
+    const z = camera(zoomAt(HOME, c, x, y, 3), frame, 400, 200)
+    expect(z.scale).toBeCloseTo(c.scale * 3)
+    expect(project(z, ...p)[0]).toBeCloseTo(x)
+    expect(project(z, ...p)[1]).toBeCloseTo(y)
+  })
+
+  it('pans so the model follows the pointer, at any zoom, keeping depth', () => {
+    const v = { ...HOME, zoom: 2.5 }
+    const c = camera(v, frame, 400, 200)
+    const before = project(c, 0, 0, 0)
+    const after = project(camera(panBy(v, c, 30, -12), frame, 400, 200), 0, 0, 0)
+    expect(after[0] - before[0]).toBeCloseTo(30)
+    expect(after[1] - before[1]).toBeCloseTo(-12)
+    expect(after[2]).toBeCloseTo(before[2])
+  })
+
+  it('tumbles over the top, and turns across the same way upside down', () => {
+    const over = tumble(HOME, 0, 200, Math.PI / 200)
+    expect(Math.cos(over.pitch)).toBeLessThan(0)
+    expect(tumble(over, 10, 0, 0.01).yaw).toBeGreaterThan(over.yaw)
+    expect(tumble(HOME, 10, 0, 0.01).yaw).toBeLessThan(HOME.yaw)
   })
 })

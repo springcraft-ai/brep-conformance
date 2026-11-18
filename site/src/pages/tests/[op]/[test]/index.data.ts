@@ -1,6 +1,7 @@
 import { site } from '@/data/source'
 import { readDoc } from '@/docs/source'
 import {
+  leaderboard,
   type CaseRow,
   type Check,
   type Failure,
@@ -48,6 +49,8 @@ export interface KernelView {
   failure: Failure | null
   passing: number
   total: number
+  // Its place on the leaderboard, from 0.
+  rank: number
   // The kernel's worst case, when it is not a pass.
   worst: CaseView | null
 }
@@ -82,6 +85,7 @@ function caseView(c: CaseRow): CaseView {
 export function propsOf(t: TestEntry, latest: Report[]): Props {
   const kernels: KernelView[] = []
   const rowsOf: Map<string, CaseRow>[] = []
+  const board = leaderboard(latest).map(r => r.kernel)
   for (const r of latest) {
     const k = t.kernels[r.identity.kernel]
     if (!k) continue
@@ -97,6 +101,7 @@ export function propsOf(t: TestEntry, latest: Report[]): Props {
       failure: k.failure,
       passing: k.summary.passing,
       total: k.summary.total,
+      rank: board.indexOf(r.identity.kernel),
       worst: worst && worst.grade !== '1e-7' ? caseView(worst) : null,
     })
   }

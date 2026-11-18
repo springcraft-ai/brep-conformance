@@ -11,9 +11,9 @@ import {
   Section,
   Table,
 } from '@/components'
-import { GRADES } from '@/data/results'
+import { GRADES, type Grade } from '@/data/results'
 import { url } from '@/site/href'
-import { drawnBy, point, shortCaseIds, testName, value } from './format'
+import { drawnBy, kernelOrder, point, shortCaseIds, testName, value } from './format'
 import type { CaseOption, CheckView, KernelView, Props } from './index.data'
 import type { Mark } from './scan'
 import { CaseKernels, filesOf, useFiles } from './CaseKernels'
@@ -32,6 +32,13 @@ interface PointRow {
 }
 
 const placed = (inside: boolean) => (inside ? 'inside' : 'outside')
+
+// Where the browser keeps the kernel the reader chose to see.
+const CHOSEN_KEY = 'brep-conformance:drawn-by'
+
+// The grades under which a kernel made no result: a wrong result ('fail') is still a solid to see.
+const NO_RESULT = new Set<Grade>(['refused', 'crash', 'timeout', 'unsupported'])
+const noResult = (g: Grade | null) => (g && NO_RESULT.has(g) ? g : null)
 
 // A kernel as the leaderboard names it: its name, linking to its report, over its version.
 function KernelName({ k }: { k: KernelView }) {
@@ -275,6 +282,32 @@ export default function TestPage(props: Props) {
   const [focus, setFocus] = useState<number | null>(null)
   const [picked, setPicked] = useState<CaseOption | null>(null)
   const [drawer, setDrawer] = useState<string | null>(null)
+  // The kernel the reader last chose to see, on any test page, kept in this browser.
+  const [chosen, setChosen] = useState<string | null>(null)
+  useEffect(() => {
+    try {
+      setChosen(localStorage.getItem(CHOSEN_KEY))
+    } catch {
+      // Storage refused: the choice lasts only for this page.
+    }
+  }, [])
+  const draw = (k: string) => {
+    setDrawer(k)
+    setChosen(k)
+    try {
+      localStorage.setItem(CHOSEN_KEY, k)
+    } catch {
+      // As above.
+    }
+  }
+  const order = useMemo(
+    () =>
+      kernelOrder(
+        caseList.map(c => c.grades),
+        kernels.map(k => k.rank),
+      ),
+    [caseList, kernels],
+  )
 
   // A link may name the kernel and the case to show: #kernel=<id>&case=<id>.
   useEffect(() => {
@@ -298,16 +331,22 @@ export default function TestPage(props: Props) {
   // A kernel that crashed on a case, or does not offer it, drew nothing: another's drawing shows.
   // Nor has a kernel whose drawing the CDN does not hold anything to show.
   const hydrated = useFiles()
-  const drawn = shownCase
-    ? drawnBy(
-        shownCase.files.map(f =>
-          f?.glb && displayOf(f.glb, hydrated) === 'missing' ? { ...f, glb: null } : f,
-        ),
-        kernels.findIndex(k => k.kernel === (drawer ?? selected)),
-      )
-    : null
+  const published = shownCase?.files.map(f =>
+    f?.glb && displayOf(f.glb, hydrated) === 'missing' ? { ...f, glb: null } : f,
+  )
+  const asked = kernels.findIndex(k => k.kernel === drawer)
+  const drawn = !shownCase
+    ? null
+    : asked >= 0 && published![asked]?.glb
+      ? asked
+      : drawnBy(
+          published!,
+          shownCase.grades,
+          order,
+          kernels.findIndex(k => k.kernel === chosen),
+        )
   const files = drawn === null ? null : shownCase!.files[drawn]!
-  const wanted = kernels.findIndex(k => k.kernel === (drawer ?? selected))
+  const wanted = asked
   // Drawn by some kernel, but by none the CDN holds yet.
   const unpublished = drawn === null && !!shownCase?.files.some(f => f?.glb)
   // A kernel's misplaced points belong to its worst case, so they show only over that shape.
@@ -415,13 +454,14 @@ export default function TestPage(props: Props) {
                   grades={shownCase.grades}
                   files={shownCase.files}
                   drawn={drawn}
-                  onDraw={setDrawer}
+                  onDraw={draw}
                 />
               </div>
             )}
             <ScanView
               glb={files?.glb ?? null}
               unpublished={unpublished}
+              missing={noResult(drawn === null ? null : shownCase!.grades[drawn]!)}
               caption={shownId}
               marks={marks}
               focus={focus}

@@ -75,11 +75,13 @@
 /* ---- shape: the Scan view, night-graded straight on the void ---- */
 
 .bc-scan {
-  --scan-edge: var(--series-5);
-  --scan-face: color-mix(in srgb, var(--void-ink-3) 80%, var(--ground-void));
+  --scan-edge: var(--void-ink-4);
+  --scan-face: color-mix(in srgb, var(--void-ink-2) 85%, var(--ground-void));
   --scan-fail: var(--error-void);
   --scan-focus: var(--accent);
   --scan-annot: var(--void-ink-3);
+  --scan-ghost: var(--series-1);
+  --scan-ghost2: var(--series-3);
   position: relative;
   aspect-ratio: 16 / 9;
   min-height: 280px;
@@ -92,6 +94,9 @@
   height: 100%;
   touch-action: none;
   cursor: grab;
+}
+.bc-scan__surface {
+  pointer-events: none;
 }
 .bc-scan__canvas:active {
   cursor: grabbing;
@@ -202,6 +207,21 @@
 }
 .bc-key--missed {
   border: 1.5px solid var(--error-void);
+}
+.bc-key--ghost {
+  background: color-mix(in srgb, var(--series-1) 45%, transparent);
+  border: 1px solid var(--series-1);
+}
+.bc-key--ghost2 {
+  background: color-mix(in srgb, var(--series-3) 45%, transparent);
+  border: 1px solid var(--series-3);
+}
+.bc-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-6);
+  align-items: center;
+  margin-bottom: var(--sp-4);
 }
 
 .bc-points {

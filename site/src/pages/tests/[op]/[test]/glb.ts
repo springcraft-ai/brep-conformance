@@ -11,8 +11,6 @@ export interface Shape {
   triangles: Uint32Array
   // Two xyz ends per segment: the file's own line primitives, or the mesh's creases if none.
   edges: Float32Array
-  // The smooth edges, from which a view finds the outline it sees: see topology.
-  smooth: Float32Array
 }
 
 interface Accessor {
@@ -51,7 +49,7 @@ interface Gltf {
   bufferViews?: BufferView[]
   meshes?: { primitives: Primitive[] }[]
   nodes?: Node[]
-  scenes?: { nodes: number[] }[]
+  scenes?: { nodes: number[]; name?: string; extras?: { note?: string } }[]
   scene?: number
   extensionsRequired?: string[]
 }
@@ -149,7 +147,57 @@ function read(gltf: Gltf, bin: DataView, index: number, want: string): number[] 
   return out
 }
 
+// One view of a case as its file draws it: a scene, and its solids merged by role.
+export interface GlbView {
+  name: string
+  note?: string
+  // Each role's solids as one shape: `main`, `alt`, and the suite's ghosts.
+  solids: { role: string; shape: Shape }[]
+}
+
+// The file's first scene, ghosts aside, as one shape.
 export function parseGlb(buf: ArrayBuffer): Shape {
+  const { gltf: g, bin } = chunks(buf)
+  const roots = g.scenes?.[g.scene ?? 0]?.nodes ?? (g.nodes ?? []).map((_, i) => i)
+  return gather(
+    g,
+    bin,
+    roots.map(r => [r, GLTF_TO_SUITE]),
+    r => GHOSTS.has(r),
+  )
+}
+
+// Every scene of the file, each solid under the first node that names a role, merged by role.
+export function parseViews(buf: ArrayBuffer): GlbView[] {
+  const { gltf: g, bin } = chunks(buf)
+  return (g.scenes ?? []).map((scene, n) => {
+    const byRole = new Map<string, [number, Mat][]>()
+    const add = (role: string, index: number, parent: Mat) => {
+      const list = byRole.get(role) ?? []
+      list.push([index, parent])
+      byRole.set(role, list)
+    }
+    const walk = (index: number, parent: Mat, depth: number) => {
+      const node = g.nodes?.[index]
+      if (!node || depth > 64) return
+      const role = node.extras?.role
+      if (role || node.mesh !== undefined) return add(role ?? 'main', index, parent)
+      const m = mul(parent, local(node))
+      for (const c of node.children ?? []) walk(c, m, depth + 1)
+    }
+    for (const r of scene.nodes) walk(r, GLTF_TO_SUITE, 0)
+    return {
+      name: scene.name ?? `view ${n + 1}`,
+      note: scene.extras?.note,
+      solids: [...byRole].map(([role, starts]) => ({
+        role,
+        shape: gather(g, bin, starts, () => false),
+      })),
+    }
+  })
+}
+
+function chunks(buf: ArrayBuffer): { gltf: Gltf; bin: DataView } {
   const dv = new DataView(buf)
   if (buf.byteLength < 20 || dv.getUint32(0, true) !== GLB_MAGIC) throw new Error('glb: not a GLB')
   let gltf: Gltf | null = null
@@ -165,12 +213,21 @@ export function parseGlb(buf: ArrayBuffer): Shape {
   if (!gltf) throw new Error('glb: no JSON chunk')
   const unknown = (gltf.extensionsRequired ?? []).filter(e => !UNDERSTOOD.has(e))
   if (unknown.length) throw new Error(`glb: needs ${unknown.join(', ')}`)
+  return { gltf, bin }
+}
 
+// The geometry below each of `starts`, a node and the transform above it, as one shape; a node
+// whose role `skip` names is left out with everything below it.
+function gather(
+  g: Gltf,
+  bin: DataView,
+  starts: [number, Mat][],
+  skip: (role: string) => boolean,
+): Shape {
   const positions: number[] = []
   const normals: number[] = []
   const triangles: number[] = []
   const lines: number[] = []
-  const g = gltf
   const place = (m: Mat, p: number[], i: number) => {
     const [x, y, z] = [p[i]!, p[i + 1]!, p[i + 2]!]
     return [0, 1, 2].map(r => m[r]! * x + m[4 + r]! * y + m[8 + r]! * z + m[12 + r]!)
@@ -190,7 +247,7 @@ export function parseGlb(buf: ArrayBuffer): Shape {
   }
   const visit = (index: number, parent: Mat, depth: number) => {
     const node = g.nodes?.[index]
-    if (!node || depth > 64 || GHOSTS.has(node.extras?.role ?? '')) return
+    if (!node || depth > 64 || skip(node.extras?.role ?? '')) return
     const m = mul(parent, local(node))
     for (const prim of node.mesh !== undefined ? (g.meshes?.[node.mesh]?.primitives ?? []) : []) {
       if (prim.attributes.POSITION === undefined) continue
@@ -218,31 +275,26 @@ export function parseGlb(buf: ArrayBuffer): Shape {
     }
     for (const c of node.children ?? []) visit(c, m, depth + 1)
   }
-  const roots = g.scenes?.[g.scene ?? 0]?.nodes ?? (g.nodes ?? []).map((_, i) => i)
-  for (const r of roots) visit(r, GLTF_TO_SUITE, 0)
+  for (const [r, m] of starts) visit(r, m, 0)
 
   const P = Float32Array.from(positions)
   const T = Uint32Array.from(triangles)
-  const t = topology(P, T)
-  const edges = lines.length ? Float32Array.from(lines) : t.creases
+  const edges = lines.length ? Float32Array.from(lines) : topology(P, T).creases
   return {
     positions: P,
     normals: Float32Array.from(normals),
     triangles: T,
     edges,
-    smooth: t.smooth,
   }
 }
 
 export interface Topology {
   // Two xyz ends per segment where the mesh folds by more than the crease angle, or ends.
   creases: Float32Array
-  // Per edge between two faces that meet smoothly: its two ends, then both faces' normals.
-  smooth: Float32Array
 }
 
-// Where the mesh folds by more than `degrees`, or ends: the edges a CAD view draws. The rest are
-// kept with their faces' normals, so a view can draw the outline of a curved surface.
+// Where the mesh folds by more than `degrees`, or ends: the edges a CAD view draws, for a file
+// that gives none of its own.
 export function topology(positions: Float32Array, triangles: Uint32Array, degrees = 20): Topology {
   // Weld by position, since a mesh splits vertices along every seam and crease.
   const weld = new Map<string, number>()
@@ -283,14 +335,11 @@ export function topology(positions: Float32Array, triangles: Uint32Array, degree
   }
   const cos = Math.cos((degrees * Math.PI) / 180)
   const creases: number[] = []
-  const smooth: number[] = []
   const at = (v: number) => [positions[v * 3]!, positions[v * 3 + 1]!, positions[v * 3 + 2]!]
   for (const e of byEdge.values()) {
     const nf = normals[e.faces[0]!]!
     const ng = e.faces.length === 2 ? normals[e.faces[1]!]! : null
-    if (ng && nf.reduce((s, x, k) => s + x * ng[k]!, 0) >= cos)
-      smooth.push(...at(e.a), ...at(e.b), ...nf, ...ng)
-    else creases.push(...at(e.a), ...at(e.b))
+    if (!ng || nf.reduce((s, x, k) => s + x * ng[k]!, 0) < cos) creases.push(...at(e.a), ...at(e.b))
   }
-  return { creases: Float32Array.from(creases), smooth: Float32Array.from(smooth) }
+  return { creases: Float32Array.from(creases) }
 }
