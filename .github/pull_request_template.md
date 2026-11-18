@@ -24,4 +24,3 @@ explains each line.
 - [ ] It adds no compiled binary, no vendor SDK file, and no CAD file outside a fixture folder.
 - [ ] Every new dependency is under a licence that
       [`deny.toml`](https://github.com/springcraft-ai/brep-conformance/blob/main/deny.toml) allows.
-- [ ] Every commit carries a `Signed-off-by` line.
