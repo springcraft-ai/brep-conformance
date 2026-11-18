@@ -80,7 +80,7 @@ function withPoints(kernels: KernelView[]): KernelView[] {
 
 function Definition({ definition, operation, kind, kindText }: TestProps) {
   return (
-    <details className="bc-section bc-defs">
+    <details className="bc-section bc-fold">
       <summary className="bc-section__label">
         <h2 className="bc-annot bc-section__title">definition</h2>
         <Annot>api.md · {definition?.heading ?? operation}</Annot>
@@ -158,6 +158,32 @@ function ChecksOf({ k }: { k: KernelView }) {
         />
       </div>
     </div>
+  )
+}
+
+const FAILURE_GLOSS = {
+  geometry: 'the shape is wrong',
+  measurement: 'a measured value is off',
+} as const
+
+const LONG_WHY = 220
+
+// A kernel's reason, a repeated message said once; a long one shows three lines until asked.
+function Why({ text }: { text: string }) {
+  const [all, setAll] = useState(false)
+  const short = fmt.condense(text)
+  const long = short.length > LONG_WHY
+  return (
+    <span className="bc-why">
+      <span className="bc-why__text" data-clamp={long && !all ? '' : undefined}>
+        {short}
+      </span>
+      {long && (
+        <button type="button" className="bc-why__more sc-focus" onClick={() => setAll(!all)}>
+          {all ? 'show less' : 'show all'}
+        </button>
+      )}
+    </span>
   )
 }
 
@@ -359,6 +385,13 @@ function TestPage(props: TestProps) {
     [current, onWorst],
   )
   const marks: Mark[] = useMemo(() => rows.map(r => ({ p: r.p, held: r.got })), [rows])
+  const choose = (k: KernelView) => {
+    setSelected(k.kernel)
+    setDrawer(null)
+    setPicked(null)
+    setFocus(null)
+    showInUrl(k.kernel, caseList.findIndex(c => c.id === k.worst?.id) + 1)
+  }
   const pickCase = (c: CaseOption) => {
     setPicked(c)
     showInUrl(null, caseList.indexOf(c) + 1)
@@ -372,6 +405,61 @@ function TestPage(props: TestProps) {
   return (
     <div className="fn-page tp">
       <PageHead trail={trailOf(suite, test)} title={testName(test)} />
+      <details className="bc-section bc-fold">
+        <summary className="bc-section__label">
+          <h2 className="bc-annot bc-section__title">summary</h2>
+          <Annot>
+            {props.kind} test · {cases} {cases === 1 ? 'case' : 'cases'}
+          </Annot>
+        </summary>
+        <div className="bc-kernels" role="table" aria-label="Each kernel on this test">
+          <div className="bc-kernels__row bc-kernels__head" role="row">
+            <span role="columnheader">kernel</span>
+            <span role="columnheader">result</span>
+            <span role="columnheader">cases at 1e-7</span>
+            <span role="columnheader">why, on its worst case</span>
+          </div>
+          {kernels.map(k => {
+            const on = onWorst && current?.kernel === k.kernel
+            return (
+              <div
+                key={k.kernel}
+                className="bc-kernels__row"
+                role="row"
+                aria-current={on || undefined}
+              >
+                <span role="rowheader">
+                  <KernelName k={k} />
+                </span>
+                <span className="bc-kernels__result" role="cell">
+                  <GradeLabel grade={k.grade} />
+                  {k.failure && (
+                    <span className="bc-kernels__gloss">{FAILURE_GLOSS[k.failure]}</span>
+                  )}
+                </span>
+                <span className="bc-machine bc-kernels__n" role="cell">
+                  {k.passing}/{k.total}
+                </span>
+                <span className="bc-kernels__why" role="cell">
+                  {k.why ? <Why text={k.why} /> : '–'}
+                  {k.worst &&
+                    (on ? (
+                      <span className="bc-annot">showing its worst case</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="bc-kernels__show sc-focus"
+                        onClick={() => choose(k)}
+                      >
+                        show its worst case
+                      </button>
+                    ))}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </details>
       <Section
         label="cases"
         aside={`${cases} ${cases === 1 ? 'case' : 'cases'} × ${kernels.length} kernels`}
