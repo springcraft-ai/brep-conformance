@@ -349,7 +349,11 @@ pub(super) fn export_case<K: Kernel<Solid: Clone + 'static>>(
         .map(|row| row.into_iter().flatten().collect())
         .collect();
     let mut glb_key = Value::Null;
-    if let Some(dir) = &ex.glb {
+    // A kernel without `display` draws nothing: it gets no GLB, not an empty one.
+    let anything = drawn.iter().flatten().any(|(_, _, d)| !d.faces.is_empty());
+    if let Some(dir) = &ex.glb
+        && anything
+    {
         let mut extras = json!({"id": c.id, "test": c.test, "hash": hash, "unit": "mm",
             "kernel": {"name": k.name(), "version": k.version()},
             "outcome": v["outcome"], "result": v["result"]});

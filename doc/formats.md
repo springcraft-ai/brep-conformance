@@ -150,7 +150,9 @@ STEP files are written for the subjects of a case's first view, not counting gho
 intersection, a feature's result, a queried solid, or a mirror join's part and its image. Each is
 the kernel's own result, for exact and sound cases alike, so on a failed case it may be wrong. A
 case that must be refused has none, and nor has a view of more than two solids, such as an assembly
-of a hundred parts, which its GLB shows. `asset` is a 64-bit FNV-1a of the case id and
+of a hundred parts, which its GLB shows. A kernel whose adapter does not offer
+[`display`](api.md#display) draws nothing, so its cases have no GLB, and one without
+[`write_step`](api.md#write_step) has no STEP files. `asset` is a 64-bit FNV-1a of the case id and
 `ASSET_GENERATOR` in [`run.rs`](../suite/src/run.rs). `ASSET_GENERATOR` changes when what draws the
 files changes. A test in springrep's adapter pins it to a fingerprint of what springrep's `display`
 draws, and fails when that drifts.
