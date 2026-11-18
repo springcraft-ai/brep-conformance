@@ -1,0 +1,210 @@
+# SPDX-License-Identifier: MIT
+# Starts the benchmark machine, runs one job on it, and terminates it: bench/README.md.
+name: Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      fail_bench:
+        description: Fail the bench job on purpose, to test that the machine still ends
+        type: boolean
+        default: false
+
+# A job with no permissions block inherits these, so a job added later gets nothing by default.
+permissions: {}
+
+concurrency:
+  group: benchmark
+  cancel-in-progress: false
+
+env:
+  RUNNER_LABEL: benchmark-${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  start:
+    runs-on: ubuntu-24.04
+    environment: benchmark
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write # for AWS OIDC
+    outputs:
+      label: ${{ env.RUNNER_LABEL }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Register a one-time runner
+        id: runner
+        env:
+          APP_CLIENT_ID: ${{ vars.BENCHMARK_APP_CLIENT_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.BENCHMARK_APP_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          token=$(bench/app-token.sh)
+          echo "::add-mask::$token"
+          version=$(gh api repos/actions/runner/releases/latest --jq '.tag_name | ltrimstr("v")')
+          reply=$(curl -sSf -X POST \
+              -H "Authorization: Bearer $token" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runners/generate-jitconfig" \
+              -d "{\"name\":\"$RUNNER_LABEL\",\"runner_group_id\":1,\"work_folder\":\"_work\",
+                   \"labels\":[\"self-hosted\",\"linux\",\"x64\",\"$RUNNER_LABEL\"]}")
+          jitconfig=$(jq -r .encoded_jit_config <<<"$reply")
+          echo "::add-mask::$jitconfig"
+          {
+              echo '#!/bin/bash'
+              printf 'RUNNER_VERSION=%q\nRUNNER_JITCONFIG=%q\n' "$version" "$jitconfig"
+              tail -n +2 bench/first-boot.sh
+          } > "$RUNNER_TEMP/user-data.sh"
+          echo "runner $(jq -r .runner.id <<<"$reply"), version $version," \
+              "user data $(wc -c < "$RUNNER_TEMP/user-data.sh") bytes of 16384"
+          echo "id=$(jq -r .runner.id <<<"$reply")" >> "$GITHUB_OUTPUT"
+          echo "$token" > "$RUNNER_TEMP/app-token"
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.BENCHMARK_ROLE_ARN }}
+          aws-region: ${{ vars.BENCHMARK_AWS_REGION }}
+
+      - name: Launch the machine
+        id: launch
+        env:
+          TEMPLATE: ${{ vars.BENCHMARK_LAUNCH_TEMPLATE }}
+          SUBNETS: ${{ vars.BENCHMARK_SUBNET_IDS }}
+        run: |
+          tags="{Key=Application,Value=benchmark-runner},{Key=Name,Value=benchmark-runner}"
+          tags="$tags,{Key=CostCenter,Value=springcraft-engineering}"
+          tags="$tags,{Key=Environment,Value=production},{Key=GitHubRun,Value=$RUNNER_LABEL}"
+          instance=""
+          for subnet in ${SUBNETS//,/ }; do
+              if instance=$(aws ec2 run-instances \
+                  --launch-template "LaunchTemplateName=$TEMPLATE,Version=\$Latest" \
+                  --subnet-id "$subnet" --count 1 \
+                  --user-data "file://$RUNNER_TEMP/user-data.sh" \
+                  --tag-specifications "ResourceType=instance,Tags=[$tags]" \
+                      "ResourceType=volume,Tags=[$tags]" \
+                  --query 'Instances[0].InstanceId' --output text 2> "$RUNNER_TEMP/error"); then
+                  break
+              fi
+              instance=""
+              if ! grep -q -e InsufficientInstanceCapacity -e Unsupported "$RUNNER_TEMP/error"; then
+                  cat "$RUNNER_TEMP/error"
+                  exit 1
+              fi
+              echo "no capacity in $subnet; trying the next zone"
+          done
+          if [ -z "$instance" ]; then
+              echo "no zone has capacity for this instance type"
+              exit 1
+          fi
+          echo "launched $instance"
+          echo "instance=$instance" >> "$GITHUB_OUTPUT"
+
+      # The machine configures itself, reboots, and only then starts the runner: about 10 minutes.
+      - name: Wait for the runner to come online
+        env:
+          INSTANCE: ${{ steps.launch.outputs.instance }}
+          RUNNER_ID: ${{ steps.runner.outputs.id }}
+        run: |
+          token=$(cat "$RUNNER_TEMP/app-token")
+          for _ in $(seq 120); do
+              status=$(curl -sS -H "Authorization: Bearer $token" \
+                  "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runners/$RUNNER_ID" \
+                  | jq -r '.status // "unknown"')
+              if [ "$status" = online ]; then
+                  echo "the runner is online"
+                  exit 0
+              fi
+              state=$(aws ec2 describe-instances --instance-ids "$INSTANCE" \
+                  --query 'Reservations[0].Instances[0].State.Name' --output text)
+              if [ "$state" != pending ] && [ "$state" != running ]; then
+                  echo "the machine is $state before its runner came online"
+                  exit 1
+              fi
+              sleep 15
+          done
+          echo "the runner is not online after 30 minutes"
+          exit 1
+
+  # Runs on the machine, and runs kernel code. It declares no environment and has no identity
+  # token, so nothing it starts can reach the App's key or an AWS role.
+  bench:
+    needs: start
+    runs-on: ${{ needs.start.outputs.label }}
+    timeout-minutes: 420
+    permissions:
+      contents: read
+    steps:
+      - name: Check that this job cannot request an identity token
+        run: |
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+              echo "this job can request an identity token, and must not"
+              exit 1
+          fi
+
+      - name: Record the machine
+        run: |
+          test -e /run/benchmark-runner/ready
+          cat /etc/benchmark-runner/environment
+          cp /etc/benchmark-runner/environment "$RUNNER_TEMP/environment.txt"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: machine
+          path: ${{ runner.temp }}/environment.txt
+
+      - name: Fail on purpose
+        if: inputs.fail_bench
+        run: exit 1
+
+  stop:
+    needs: [start, bench]
+    if: always()
+    runs-on: ubuntu-24.04
+    environment: benchmark
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # for AWS OIDC
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.BENCHMARK_ROLE_ARN }}
+          aws-region: ${{ vars.BENCHMARK_AWS_REGION }}
+
+      # By tag and not by the start job's output: a start job cancelled after the launch has none.
+      - name: Terminate the machine
+        run: |
+          instances=$(aws ec2 describe-instances \
+              --filters "Name=tag:GitHubRun,Values=$RUNNER_LABEL" \
+                  "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+              --query 'Reservations[].Instances[].InstanceId' --output text)
+          if [ -z "$instances" ]; then
+              echo "no machine is running for this run"
+              exit 0
+          fi
+          # shellcheck disable=SC2086
+          aws ec2 terminate-instances --instance-ids $instances --output text
+          # shellcheck disable=SC2086
+          aws ec2 wait instance-terminated --instance-ids $instances
+          echo "terminated $instances"
+
+      # A runner that ran its job removes itself. One that never came online stays registered.
+      - name: Remove the runner's registration
+        if: always()
+        env:
+          APP_CLIENT_ID: ${{ vars.BENCHMARK_APP_CLIENT_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.BENCHMARK_APP_PRIVATE_KEY }}
+        run: |
+          token=$(bench/app-token.sh)
+          echo "::add-mask::$token"
+          api="https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runners"
+          id=$(curl -sSf -H "Authorization: Bearer $token" "$api?per_page=100" \
+              | jq -r --arg name "$RUNNER_LABEL" '.runners[] | select(.name == $name) | .id')
+          if [ -z "$id" ]; then
+              echo "the runner is no longer registered"
+              exit 0
+          fi
+          curl -sSf -X DELETE -H "Authorization: Bearer $token" "$api/$id"
+          echo "removed runner $id"
