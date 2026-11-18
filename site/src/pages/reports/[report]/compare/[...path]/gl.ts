@@ -25,6 +25,8 @@ export interface View {
   h: number
   // Half the depth the frame spans, so every depth maps inside the clip volume.
   reach: number
+  // Device pixels per CSS pixel, for the point markers' size.
+  dpr: number
 }
 
 export interface Look {
@@ -33,6 +35,9 @@ export interface Look {
   faceAlt: Rgb
   edge: Rgb
   ghost: [Rgb, Rgb]
+  // The overlay's plane and box, and its points.
+  guide: Rgb
+  dot: Rgb
 }
 
 // The share of a face's light that does not depend on its turn to the light: low for the subject,
@@ -86,13 +91,51 @@ void main() {
 
 // Edges are WebGL lines one device pixel wide, drawn after the faces with the ordinary depth
 // test. A line is drawn only along its own centre, where it and the faces it bounds share their
-// vertices and so their depth: it passes the test wherever those faces are seen, with no offset.
-// A wider line would reach over the faces beside it, which a slant puts nearer than the edge.
+// vertices and so their depth. A wider line would reach over the faces beside it, which a slant
+// puts nearer than the edge. The overlay's plane and box are drawn with this flat colour too.
 const LINES = `#version 300 es
 precision highp float;
 uniform vec4 u_color;
 out vec4 o;
 void main() { o = vec4(u_color.rgb * u_color.a, u_color.a); }`
+
+// The overlay's points as round markers of a fixed size on screen, depth-tested like the rest,
+// so a point on the far side of the solid is hidden by it.
+const POINT_VERTEX = `#version 300 es
+in vec3 a_pos;
+uniform vec3 u_center, u_right, u_up, u_toward, u_scale;
+uniform float u_size;
+void main() {
+  vec3 d = a_pos - u_center;
+  gl_Position = vec4(dot(d, u_right) * u_scale.x, dot(d, u_up) * u_scale.y,
+                     -dot(d, u_toward) * u_scale.z, 1.0);
+  gl_PointSize = u_size;
+}`
+// A ring: the colour round a dark centre, so it reads on a face in light or shade.
+const POINTS = `#version 300 es
+precision highp float;
+uniform vec4 u_color;
+out vec4 o;
+void main() {
+  float r = length(gl_PointCoord * 2.0 - 1.0);
+  if (r > 1.0) discard;
+  vec3 c = r > 0.55 ? u_color.rgb : vec3(0.0);
+  o = vec4(c * u_color.a, u_color.a);
+}`
+
+// The overlay as the GPU draws it, in model units: a plane as two triangles and its outline, a box
+// as its twelve edges, the points as points.
+export interface OverlayGeometry {
+  plane: Float32Array
+  planeEdges: Float32Array
+  box: Float32Array
+  points: Float32Array
+}
+
+const PLANE_ALPHA = 0.16
+const GUIDE_ALPHA = 0.85
+// A point marker's diameter in CSS pixels.
+const POINT_SIZE = 9
 
 interface Uploaded {
   faces: WebGLVertexArrayObject | null
@@ -162,9 +205,12 @@ export class Renderer {
   private faces: WebGLProgram
   private lines: WebGLProgram
   private far: WebGLProgram
+  private points: WebGLProgram
   private subject: Uploaded | null = null
   private alt: Uploaded | null = null
   private ghosts: { mesh: Uploaded; tone: 0 | 1 }[] = []
+  // The overlay, each part as positions only: its array and how many vertices it holds.
+  private overlay: { vao: WebGLVertexArrayObject | null; buffer: WebGLBuffer; count: number }[] = []
 
   // Throws where the browser has no WebGL2.
   constructor(canvas: HTMLCanvasElement) {
@@ -174,6 +220,28 @@ export class Renderer {
     this.faces = compile(gl, VERTEX, FACES)
     this.lines = compile(gl, VERTEX, LINES)
     this.far = compile(gl, FAR_VERTEX, FAR)
+    this.points = compile(gl, POINT_VERTEX, POINTS)
+  }
+
+  // The overlay's plane, plane outline, box and points, in that order.
+  setOverlay(o: OverlayGeometry) {
+    const gl = this.gl
+    for (const part of this.overlay) {
+      gl.deleteVertexArray(part.vao)
+      gl.deleteBuffer(part.buffer)
+    }
+    this.overlay = [o.plane, o.planeEdges, o.box, o.points].map(data => {
+      const vao = gl.createVertexArray()
+      gl.bindVertexArray(vao)
+      const buffer = gl.createBuffer()!
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW)
+      gl.enableVertexAttribArray(0)
+      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0)
+      gl.vertexAttrib3f(1, 0, 0, 1)
+      gl.bindVertexArray(null)
+      return { vao, buffer, count: data.length / 3 }
+    })
   }
 
   private upload(m: Mesh): Uploaded {
@@ -329,6 +397,26 @@ export class Renderer {
     gl.uniform4f(color, ...rgba(look.edge, EDGE_ALPHA))
     if (this.subject) stroke(this.subject)
     if (this.alt) stroke(this.alt)
+
+    // The overlay, depth-tested and writing no depth: the plane faint where nothing of the solid
+    // is in front of it, then its outline and the box, then the points.
+    const [plane, planeEdges, box, points] = this.overlay
+    const draw = (part: (typeof this.overlay)[number] | undefined, mode: number) => {
+      if (!part?.count) return
+      gl.bindVertexArray(part.vao)
+      gl.drawArrays(mode, 0, part.count)
+    }
+    gl.uniform4f(color, ...rgba(look.guide, PLANE_ALPHA))
+    draw(plane, gl.TRIANGLES)
+    gl.uniform4f(color, ...rgba(look.guide, GUIDE_ALPHA))
+    draw(planeEdges, gl.LINES)
+    draw(box, gl.LINES)
+    if (points?.count) {
+      const p = uniforms(this.points)
+      gl.uniform1f(gl.getUniformLocation(this.points, 'u_size'), POINT_SIZE * v.dpr)
+      gl.uniform4f(p, ...rgba(look.dot, 1))
+      draw(points, gl.POINTS)
+    }
     gl.depthMask(true)
     gl.bindVertexArray(null)
   }
@@ -340,6 +428,11 @@ export class Renderer {
     this.gl.deleteProgram(this.faces)
     this.gl.deleteProgram(this.lines)
     this.gl.deleteProgram(this.far)
+    this.gl.deleteProgram(this.points)
+    for (const part of this.overlay) {
+      this.gl.deleteVertexArray(part.vao)
+      this.gl.deleteBuffer(part.buffer)
+    }
     this.gl.getExtension('WEBGL_lose_context')?.loseContext()
   }
 }

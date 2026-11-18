@@ -1,5 +1,43 @@
 import { describe, expect, it } from 'vitest'
-import { camera, frameOf, HOME, panBy, project, tumble, zoomAt } from './scan'
+import { camera, frameOf, HOME, overlayGeometry, panBy, project, tumble, zoomAt } from './scan'
+
+describe('overlayGeometry', () => {
+  it('draws a box as its twelve edges, each from a corner to the next', () => {
+    const g = overlayGeometry(
+      {
+        points: [],
+        box: [
+          [0, 0, 0],
+          [1, 2, 3],
+        ],
+        plane: null,
+      },
+      1,
+    )
+    expect(g.box.length / 6).toBe(12)
+    for (let i = 0; i < g.box.length; i += 6) {
+      const changed = [0, 1, 2].filter(k => g.box[i + k] !== g.box[i + 3 + k])
+      expect(changed.length).toBe(1)
+    }
+  })
+
+  it('draws a plane as a square through its origin, square to its normal, and its outline', () => {
+    const g = overlayGeometry(
+      { points: [[1, 2, 3]], box: null, plane: { origin: [0, 0, 5], normal: [0, 0, 2] } },
+      2,
+    )
+    expect(g.plane.length / 3).toBe(6)
+    expect(g.planeEdges.length / 6).toBe(4)
+    for (let i = 2; i < g.plane.length; i += 3) expect(g.plane[i]).toBeCloseTo(5)
+    expect(Math.max(...g.plane.filter((_, i) => i % 3 === 0))).toBeCloseTo(2)
+    expect(Array.from(g.points)).toEqual([1, 2, 3])
+  })
+
+  it('draws nothing where the case lays nothing over its views', () => {
+    const g = overlayGeometry(undefined, 1)
+    expect(g.plane.length + g.planeEdges.length + g.box.length + g.points.length).toBe(0)
+  })
+})
 
 const empty = new Float32Array(0)
 

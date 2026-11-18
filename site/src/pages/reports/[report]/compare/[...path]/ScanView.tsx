@@ -60,6 +60,13 @@ export function ScanView({
   // The view shown, by name, so moving to another case or kernel keeps it where it can.
   const [viewName, setViewName] = useState<string | null>(null)
   const [operands, setOperands] = useState(true)
+  const [points, setPoints] = useState(true)
+  const hasPoints = !!loaded?.overlay.points.length
+  // The case's overlay, its points left out when they are turned off.
+  const overlay = useMemo(
+    () => loaded && (points ? loaded.overlay : { ...loaded.overlay, points: [] }),
+    [loaded, points],
+  )
 
   const views = loaded?.views ?? []
   const shown = useMemo(() => {
@@ -128,7 +135,7 @@ export function ScanView({
         alt: tones?.alt ?? none,
         ghosts,
         marks,
-        overlay: loaded?.overlay,
+        overlay: overlay ?? undefined,
         frame,
       }
       if (handle.current) return handle.current.set(scene)
@@ -141,7 +148,7 @@ export function ScanView({
     return () => {
       live = false
     }
-  }, [loaded, tones, ghosts, marks, noGpu])
+  }, [loaded, tones, ghosts, marks, overlay, noGpu])
 
   useEffect(() => handle.current?.focus(focus), [focus, loaded, marks])
 
@@ -188,6 +195,9 @@ export function ScanView({
           )}
           {toggle && (
             <Checkbox tone="void" checked={operands} onChange={setOperands} label={toggle} />
+          )}
+          {hasPoints && (
+            <Checkbox tone="void" checked={points} onChange={setPoints} label="show points" />
           )}
         </div>
       )}

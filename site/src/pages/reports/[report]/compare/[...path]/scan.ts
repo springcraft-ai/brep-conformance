@@ -1,7 +1,7 @@
 // The Scan view: the shape as a shaded solid with its edges, drawn by WebGL2 (gl.ts), and a
 // kernel's misplaced points over it on a 2D canvas, which also takes the pointer. Orthographic,
 // z up, turned by dragging.
-import { Renderer, type Mesh, type Rgb } from './gl'
+import { Renderer, type Mesh, type OverlayGeometry, type Rgb } from './gl'
 import type { Overlay } from './glb'
 import type { Vec3 } from './vec'
 
@@ -116,8 +116,8 @@ interface Colors {
   ghost: [Rgb, Rgb]
   fail: string
   // The overlay's dots, and its box and plane.
-  dot: string
-  guide: string
+  dot: Rgb
+  guide: Rgb
   focus: string
   annot: string
 }
@@ -140,8 +140,8 @@ function colorsOf(el: Element): Colors {
     faceAlt: rgbOf(v('--scan-face-alt', '#7f97a8')),
     ghost: [rgbOf(v('--scan-ghost', '#4fb3ff')), rgbOf(v('--scan-ghost2', '#f5a200'))],
     fail: v('--scan-fail', '#ff5a33'),
-    dot: v('--scan-dot', '#ffffff'),
-    guide: v('--scan-guide', '#b98cff'),
+    dot: rgbOf(v('--scan-dot', '#f5a200')),
+    guide: rgbOf(v('--scan-guide', '#a2a4a6')),
     focus: v('--scan-focus', '#f5a200'),
     annot: v('--scan-annot', '#6a6c6e'),
   }
@@ -154,6 +154,13 @@ function grow(b: { lo: Vec3; hi: Vec3 }, xs: ArrayLike<number>) {
       b.hi[k] = Math.max(b.hi[k]!, xs[i + k]!)
     }
 }
+
+// How far an overlay's plane reaches each way from its origin, as a share of the frame's radius:
+// across the solid it cuts, without filling the view.
+const PLANE_SIZE = 0.6
+
+const radiusOf = (f: { lo: Vec3; hi: Vec3 }) =>
+  Math.hypot(...[0, 1, 2].map(k => f.hi[k]! - f.lo[k]!)) / 2
 
 // The frame every view of a scene is fitted to: the shape, its ghosts, and the marks with it.
 export function frameOf(scene: Scene): { lo: Vec3; hi: Vec3 } {
@@ -186,7 +193,7 @@ function overlay(
   focus: number,
 ) {
   ctx.clearRect(0, 0, c.w, c.h)
-  if (scene.overlay) guides(ctx, scene.overlay, c, col)
+
   ctx.lineWidth = 1.5
   scene.marks.forEach((m, i) => {
     const [x, y] = project(c, ...m.p)
@@ -199,12 +206,13 @@ function overlay(
   triad(ctx, c, col.annot)
 }
 
-// The case's overlay over the drawing: a plane as a square through the frame, faint and outlined;
-// a box as its twelve edges, dashed; each point as a dot. Drawn over the solid, not into it, so a
-// point on the far side still shows where it is.
-function guides(ctx: CanvasRenderingContext2D, o: Overlay, c: Camera, col: Colors) {
-  const at = (p: Vec3) => project(c, ...p)
-  ctx.save()
+// The case's overlay as the GPU draws it: a plane as a square `size` across each way from its
+// origin, a box as its twelve edges, the points as they are.
+export function overlayGeometry(o: Overlay | undefined, size: number): OverlayGeometry {
+  const none = new Float32Array(0)
+  if (!o) return { plane: none, planeEdges: none, box: none, points: none }
+  let plane = none
+  let planeEdges = none
   if (o.plane) {
     const n = o.plane.normal
     const len = Math.hypot(...n) || 1
@@ -219,61 +227,22 @@ function guides(ctx: CanvasRenderingContext2D, o: Overlay, c: Camera, col: Color
       z[2] * u[0] - z[0] * u[2],
       z[0] * u[1] - z[1] * u[0],
     ]
-    const r = 0.6 * c.radius
-    const corners = [
-      [-1, -1],
-      [1, -1],
-      [1, 1],
-      [-1, 1],
-    ].map(([a, b]) =>
-      at([0, 1, 2].map(k => o.plane!.origin[k]! + r * (a! * u[k]! + b! * v[k]!)) as Vec3),
-    )
-    ctx.beginPath()
-    corners.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)))
-    ctx.closePath()
-    ctx.globalAlpha = 0.12
-    ctx.fillStyle = col.guide
-    ctx.fill()
-    ctx.globalAlpha = 0.8
-    ctx.strokeStyle = col.guide
-    ctx.lineWidth = 1
-    ctx.stroke()
+    const corner = (a: number, b: number) =>
+      [0, 1, 2].map(k => o.plane!.origin[k]! + size * (a * u[k]! + b * v[k]!))
+    const [p, q, r, s] = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)]
+    plane = Float32Array.from([p, q, r, p, r, s].flat())
+    planeEdges = Float32Array.from([p, q, q, r, r, s, s, p].flat())
   }
+  let box = none
   if (o.box) {
     const [lo, hi] = o.box
-    const p = (i: number): Vec3 => [
-      i & 1 ? hi[0] : lo[0],
-      i & 2 ? hi[1] : lo[1],
-      i & 4 ? hi[2] : lo[2],
-    ]
-    ctx.globalAlpha = 0.9
-    ctx.strokeStyle = col.guide
-    ctx.lineWidth = 1
-    ctx.setLineDash([4, 3])
-    ctx.beginPath()
+    const at = (i: number) => [i & 1 ? hi[0] : lo[0], i & 2 ? hi[1] : lo[1], i & 4 ? hi[2] : lo[2]]
+    const ends: number[] = []
     for (let i = 0; i < 8; i++)
-      for (const bit of [1, 2, 4])
-        if (!(i & bit)) {
-          const [ax, ay] = at(p(i))
-          const [bx, by] = at(p(i | bit))
-          ctx.moveTo(ax, ay)
-          ctx.lineTo(bx, by)
-        }
-    ctx.stroke()
-    ctx.setLineDash([])
+      for (const bit of [1, 2, 4]) if (!(i & bit)) ends.push(...at(i), ...at(i | bit))
+    box = Float32Array.from(ends)
   }
-  ctx.globalAlpha = 1
-  for (const q of o.points) {
-    const [x, y] = at(q)
-    ctx.beginPath()
-    ctx.arc(x, y, 3, 0, Math.PI * 2)
-    ctx.fillStyle = col.dot
-    ctx.fill()
-    ctx.lineWidth = 1
-    ctx.strokeStyle = col.annot
-    ctx.stroke()
-  }
-  ctx.restore()
+  return { plane, planeEdges, box, points: Float32Array.from(o.points.flat()) }
 }
 
 // The lock-on reticle: four corner brackets round the focused point.
@@ -347,6 +316,7 @@ export function mountScan(
   let queued = 0
   const colors = colorsOf(canvas)
   renderer.set(scene, scene.alt, scene.ghosts)
+  renderer.setOverlay(overlayGeometry(scene.overlay, PLANE_SIZE * radiusOf(frame)))
 
   const render = () => {
     queued = 0
@@ -371,8 +341,16 @@ export function mountScan(
         w: surface.width,
         h: surface.height,
         reach: c.radius * 1.01,
+        dpr,
       },
-      { face: colors.face, faceAlt: colors.faceAlt, edge: colors.edge, ghost: colors.ghost },
+      {
+        face: colors.face,
+        faceAlt: colors.faceAlt,
+        edge: colors.edge,
+        ghost: colors.ghost,
+        guide: colors.guide,
+        dot: colors.dot,
+      },
     )
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     overlay(ctx, scene, c, colors, focused)
@@ -510,6 +488,7 @@ export function mountScan(
       frame = frameOf(scene)
       focused = -1
       renderer.set(scene, scene.alt, scene.ghosts)
+      renderer.setOverlay(overlayGeometry(scene.overlay, PLANE_SIZE * radiusOf(frame)))
       redraw()
     },
     focus(i) {
