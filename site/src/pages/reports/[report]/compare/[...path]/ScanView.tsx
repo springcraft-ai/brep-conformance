@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Checkbox, Segmented } from '@/ds'
 import { Annot } from '@/components'
+import { zoomKeyOf } from './format'
 import type { Mark, ScanHandle } from './scan'
 import type { Loaded } from './viewer'
 import { firstView, ghostsOf, operandsLabel, subjectOf, tonesOf } from './views'
@@ -51,7 +52,7 @@ export function ScanView({
   const [zoomKey, setZoomKey] = useState('ctrl')
   useEffect(() => {
     const nav = navigator as Navigator & { userAgentData?: { platform?: string } }
-    if (/mac|iphone|ipad/i.test(nav.userAgentData?.platform ?? nav.platform)) setZoomKey('⌘')
+    setZoomKey(zoomKeyOf(nav.userAgentData?.platform, nav.platform))
   }, [])
   const pick = useRef(onPick)
   pick.current = onPick

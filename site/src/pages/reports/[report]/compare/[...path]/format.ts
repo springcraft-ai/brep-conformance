@@ -117,3 +117,9 @@ export function stepLabel(url: string): string {
   const parts = fileName(url).split('.')
   return parts.length > 3 ? `step · ${parts.at(-2)}` : 'step'
 }
+
+// The zoom key as the reader's keyboard names it. Some browsers report the newer platform as an
+// empty string, so an empty one falls back to the older.
+export function zoomKeyOf(uaPlatform: string | undefined, platform: string): string {
+  return /mac|iphone|ipad/i.test(uaPlatform || platform) ? '⌘' : 'ctrl'
+}

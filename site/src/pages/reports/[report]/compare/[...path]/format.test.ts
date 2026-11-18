@@ -10,7 +10,21 @@ import {
   titleOf,
   trailOf,
   value,
+  zoomKeyOf,
 } from './format'
+
+describe('zoomKeyOf', () => {
+  it('names ⌘ on Apple systems and ctrl elsewhere', () => {
+    expect(zoomKeyOf('macOS', 'MacIntel')).toBe('⌘')
+    expect(zoomKeyOf(undefined, 'iPad')).toBe('⌘')
+    expect(zoomKeyOf('Windows', 'Win32')).toBe('ctrl')
+    expect(zoomKeyOf(undefined, 'Linux x86_64')).toBe('ctrl')
+  })
+
+  it('falls back to the older platform string when the newer one is empty', () => {
+    expect(zoomKeyOf('', 'MacIntel')).toBe('⌘')
+  })
+})
 
 describe('trailOf', () => {
   it('climbs from a test to its report through the page of each level', () => {
