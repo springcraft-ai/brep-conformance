@@ -3,11 +3,12 @@
 
 use std::cell::Cell;
 use std::io::{BufRead, BufReader, Write};
+use std::panic::AssertUnwindSafe;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
@@ -76,6 +77,21 @@ impl Worker {
             Ok(line) => serde_json::from_str(&line).map_err(|_| Lost::Died),
             Err(RecvTimeoutError::Timeout) => Err(Lost::TimedOut),
             Err(RecvTimeoutError::Disconnected) => Err(Lost::Died),
+        }
+    }
+
+    /// How the worker ended, waiting briefly for a worker that closed its output to exit.
+    fn exit_status(&mut self) -> String {
+        let deadline = Instant::now() + Duration::from_millis(200);
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(status)) => return status.to_string(),
+                Ok(None) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Ok(None) => return "still running, killed".into(),
+                Err(e) => return format!("exit status unknown: {e}"),
+            }
         }
     }
 }
@@ -183,9 +199,13 @@ impl Remote {
                 )));
             }
             _ => {
+                let status = slot.as_mut().map(Worker::exit_status).unwrap_or_default();
                 *slot = None;
                 drop(slot);
-                lose(Loss::Died(format!("the worker died on {}", req["cmd"])));
+                lose(Loss::Died(format!(
+                    "the worker died on {} ({status})",
+                    req["cmd"]
+                )));
             }
         };
         if let Some(c) = reply.get("crash") {
@@ -660,8 +680,15 @@ impl Kernel for Remote {
     fn reset(&self) {
         // Only this thread's worker: the others hold other threads' cases.
         let w = self.mine();
-        *self.lost[w].lock().unwrap_or_else(|p| p.into_inner()) = None;
-        let _ = self.call(w, json!({"cmd": "reset"}));
+        let lost = || self.lost[w].lock().unwrap_or_else(|p| p.into_inner());
+        *lost() = None;
+        let _ =
+            std::panic::catch_unwind(AssertUnwindSafe(|| self.call(w, json!({"cmd": "reset"}))));
+        // A worker lost on the reset holds no case's solids, so its loss is not the next case's:
+        // that case starts on a new worker, and the loss is reported here.
+        if let Some(Loss::Died(what) | Loss::TimedOut(what)) = lost().take() {
+            eprintln!("worker {w} lost between cases: {what}");
+        }
     }
 
     fn unsupported(&self) -> Vec<String> {
@@ -777,5 +804,49 @@ mod tests {
             std::thread::sleep(Duration::from_millis(20));
         }
         assert!(!alive(), "process {pid} outlived its worker");
+    }
+
+    /// A worker, run as `sh -c`, that answers hello and gives handle 1 to every other request.
+    /// `arms` are `case` arms tried ahead of those two.
+    fn scripted(arms: &str) -> Vec<String> {
+        let hello = format!(r#"{{"ok": {{"protocol": "{PROTOCOL_VERSION}"}}}}"#);
+        let script = format!(
+            "while read line; do case \"$line\" in {arms} *hello*) echo '{hello}';; \
+             *) echo '{{\"ok\": 1}}';; esac; done"
+        );
+        ["sh", "-c", &script].map(String::from).to_vec()
+    }
+
+    #[test]
+    fn a_worker_that_dies_on_reset_is_not_charged_to_the_next_case() {
+        let cmd = scripted(r#"*'"reset"'*) exit 3;;"#);
+        let k = Remote::new(cmd, 1, Duration::from_secs(10)).unwrap();
+        k.read_step("first case").unwrap();
+        k.reset();
+        assert_eq!(k.read_step("next case").unwrap().handle, 1);
+    }
+
+    #[test]
+    fn a_worker_that_cannot_start_after_a_loss_is_not_charged_to_the_next_case() {
+        // Each start adds a line to a file; the second start exits before it reads a request.
+        let starts = std::env::temp_dir().join(format!("remote-starts-{}", std::process::id()));
+        let _ = std::fs::remove_file(&starts);
+        let mut cmd = scripted(r#"*'"volume"'*) exit 5;;"#);
+        cmd[2] = format!(
+            "echo >> '{0}'; [ \"$(wc -l < '{0}')\" -eq 2 ] && exit 4; {1}",
+            starts.display(),
+            cmd[2]
+        );
+        let k = Remote::new(cmd, 1, Duration::from_secs(10)).unwrap();
+        let s = k.read_step("first case").unwrap();
+        let died = std::panic::catch_unwind(AssertUnwindSafe(|| k.volume(&s))).unwrap_err();
+        let died = died.downcast_ref::<String>().cloned().unwrap_or_default();
+        assert!(died.starts_with(r#"the worker died on "volume""#), "{died}");
+        k.reset();
+        let next = k.read_step("next case");
+        let started = std::fs::read_to_string(&starts).unwrap().lines().count();
+        let _ = std::fs::remove_file(&starts);
+        assert_eq!(next.unwrap().handle, 1);
+        assert_eq!(started, 3);
     }
 }
