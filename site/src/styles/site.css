@@ -92,7 +92,7 @@ body {
   min-width: 0;
   max-width: 420px;
 }
-.bc-search label {
+.bc-search span {
   color: var(--void-ink-2);
   font: var(--fw-annot) var(--fs-micro-3) / 1 var(--font-annot);
   letter-spacing: var(--ls-micro);

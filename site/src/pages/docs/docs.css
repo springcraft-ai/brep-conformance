@@ -12,6 +12,12 @@
 
 /* ---- contents ---- */
 
+/* The contents' wrappers take no part in the layout: the button and the list are the grid's. */
+.dx-island,
+.dx-contents {
+  display: contents;
+}
+
 .dx-nav {
   /* Pinned below the site's header, and no taller than what is left of the window. */
   position: sticky;
@@ -47,9 +53,6 @@
 /* Named with the script's own class, to outrank the rule that folds every group but one. */
 .dx-nav--js.dx-nav--finding .dx-nav__g > ul {
   display: block;
-}
-.dx-nav li[hidden] {
-  display: none;
 }
 .dx-nav a {
   display: block;

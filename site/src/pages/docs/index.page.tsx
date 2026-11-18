@@ -1,14 +1,17 @@
 import type { DocEntry, DocGroup } from '@/docs/source'
-import { PageHead, SearchBox } from '@/components'
-import { takeSearch } from '@/components/search'
+import { hydrateRoot } from 'react-dom/client'
+import { PageHead } from '@/components'
 import { prettyJson } from '@/docs/example'
 import { Markdown, type DocLinks } from '@/pages/operations/Markdown'
 import { href } from '@/site/href'
+import { Contents, tocOf, type TocPart } from './Contents'
 import type { Props } from './index.data'
 import '../operations/operations.css'
 import './docs.css'
 
 export const nav = { label: 'docs', order: 3 }
+
+const CONTENTS_ID = 'dx-contents'
 
 // The docs on one page: contents on the left, definitions in the middle, and beside each function
 // a real call and its reply.
@@ -17,40 +20,9 @@ export default function Docs({ parts, links }: Props) {
     <div className="fn-page dx-page">
       <PageHead title="Docs" />
       <div className="dx">
-        <button type="button" id="dx-menu" className="dx-menu sc-focus" aria-expanded="false">
-          contents
-        </button>
-        <nav className="dx-nav" aria-label="Contents">
-          <SearchBox label="find a section" placeholder="e.g. tolerance" />
-          <p className="bc-annot dx-nav__none" id="dx-none" hidden>
-            no section matches
-          </p>
-          <ul>
-            {parts.map(p => (
-              <li key={p.id} className="dx-nav__part">
-                <a href={`#${p.id}`}>{p.title}</a>
-                <ul>
-                  {p.groups.map(g => (
-                    <li key={g.id} className="dx-nav__g" data-g={g.id}>
-                      <a href={`#${g.id}`}>{g.heading}</a>
-                      {g.entries.length > 0 && (
-                        <ul>
-                          {g.entries.map(e => (
-                            <li key={e.id}>
-                              <a href={`#${e.id}`} className={e.fn ? 'dx-nav__fn' : undefined}>
-                                {e.heading}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <div id={CONTENTS_ID} className="dx-island">
+          <Contents toc={tocOf(parts)} />
+        </div>
         <div className="dx-main">
           {parts.map(p => (
             <div key={p.id}>
@@ -150,67 +122,13 @@ function Entry({
   )
 }
 
-// Marks the section in view in the contents, opens its group there, and works the phone menu.
-export function enhance() {
-  const nav = document.querySelector<HTMLElement>('.dx-nav')
-  const menu = document.getElementById('dx-menu')
-  if (!nav || !menu) return
-  // Without this script every group's list stays open; with it, only the one in view.
-  nav.classList.add('dx-nav--js')
-  const links = new Map(
-    [...nav.querySelectorAll<HTMLAnchorElement>("a[href^='#']")].map(a => [
-      a.getAttribute('href')!.slice(1),
-      a,
-    ]),
-  )
-  const groups = [...nav.querySelectorAll<HTMLElement>('.dx-nav__g')]
-  const sections = [...document.querySelectorAll<HTMLElement>('.dx-part, .dx-entry')]
-  let on: HTMLAnchorElement | undefined
-  const chrome = document.querySelector<HTMLElement>('.bc-chrome')
-  const spy = () => {
-    // The section in view is the last one whose top has passed under the site's header.
-    const line = (chrome?.getBoundingClientRect().bottom ?? 0) + 64
-    let current = sections[0]
-    for (const s of sections) {
-      if (s.getBoundingClientRect().top <= line) current = s
-      else break
-    }
-    if (!current) return
-    const a = links.get(current.id)
-    if (a === on) return
-    on?.classList.remove('dx-on')
-    on = a
-    a?.classList.add('dx-on')
-    groups.forEach(g => g.classList.toggle('dx-open', g.dataset.g === current.dataset.g))
-    if (!finding) a?.scrollIntoView({ block: 'nearest' })
-  }
+export const clientProps = ({ parts }: Props) => ({ toc: tocOf(parts) })
 
-  // Finding a section with the search box: only the headings that match stay in the list,
-  // with what they sit under, and Enter goes to the first.
-  let finding = false
-  const none = document.getElementById('dx-none')
-  const items = [...nav.querySelectorAll<HTMLLIElement>('li')]
-  const narrow = (q: string) => {
-    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
-    finding = words.length > 0
-    nav.classList.toggle('dx-nav--finding', finding)
-    const hit = (li: HTMLLIElement) => {
-      const text = li.querySelector('a')?.textContent?.toLowerCase() ?? ''
-      return words.every(w => text.includes(w))
-    }
-    for (const li of items) li.hidden = finding && !hit(li)
-    if (none) none.hidden = !finding || items.some(hit)
-    if (finding)
-      for (const li of items.filter(hit))
-        for (let up = li.parentElement?.closest('li'); up; up = up.parentElement?.closest('li'))
-          up.hidden = false
-  }
-  takeSearch(narrow, () => {
-    const first = items.find(li => !li.hidden && li.querySelector('ul') === null)
-    first?.querySelector('a')?.click()
-  })
+// Hydrates the contents, and lets a long example open in place rather than scroll inside itself.
+export function enhance({ toc }: { toc: TocPart[] }) {
+  const contents = document.getElementById(CONTENTS_ID)
+  if (contents) hydrateRoot(contents, <Contents toc={toc} />)
 
-  // A long example opens in place rather than scrolling inside itself.
   document.querySelector('.dx')?.classList.add('dx--js')
   for (const pre of document.querySelectorAll<HTMLElement>('.dx-box pre')) {
     if (pre.scrollHeight <= pre.clientHeight + 4) continue
@@ -229,41 +147,4 @@ export function enhance() {
     label()
     pre.after(more)
   }
-  // At the foot of the page the end of the docs would push the pinned contents up and its search
-  // box out of view: the contents get shorter instead.
-  const page = document.querySelector<HTMLElement>('.dx')
-  const fit = () => {
-    if (!page || getComputedStyle(nav).position !== 'sticky') {
-      nav.style.maxHeight = ''
-      return
-    }
-    const top = chrome?.getBoundingClientRect().bottom ?? 0
-    const room = page.getBoundingClientRect().bottom - top
-    nav.style.maxHeight = room < window.innerHeight - top ? `${Math.max(room, 0)}px` : ''
-  }
-  window.addEventListener('resize', fit)
-  let queued = false
-  window.addEventListener(
-    'scroll',
-    () => {
-      if (queued) return
-      queued = true
-      requestAnimationFrame(() => {
-        queued = false
-        fit()
-        spy()
-      })
-    },
-    { passive: true },
-  )
-  const setMenu = (open: boolean) => {
-    document.body.classList.toggle('dx-menu-open', open)
-    menu.setAttribute('aria-expanded', String(open))
-  }
-  menu.addEventListener('click', () => setMenu(!document.body.classList.contains('dx-menu-open')))
-  nav.addEventListener('click', e => {
-    if ((e.target as HTMLElement).closest('a')) setMenu(false)
-  })
-  fit()
-  spy()
 }

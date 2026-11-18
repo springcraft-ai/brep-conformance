@@ -1,29 +1,31 @@
-import { SEARCH_ID } from './search'
-
-// A page's search box, placed by what it narrows. A React page passes `value` and `onChange`; a
-// page that searches without React leaves them out and reads the box with `takeSearch`.
+// A page's search box, placed by what it narrows. The page holds the query; Enter runs `onEnter`.
 export function SearchBox({
   label,
   placeholder,
   value,
   onChange,
+  onEnter,
 }: {
   label: string
   placeholder: string
-  value?: string
-  onChange?: (q: string) => void
+  value: string
+  onChange: (q: string) => void
+  onEnter?: () => void
 }) {
   return (
-    <div className="bc-search" role="search">
-      <label htmlFor={SEARCH_ID}>{label}</label>
+    <label className="bc-search" role="search">
+      <span>{label}</span>
       <input
-        id={SEARCH_ID}
         type="search"
         className="sc-focus"
         placeholder={placeholder}
         autoComplete="off"
-        {...(onChange && { value: value ?? '', onChange: e => onChange(e.target.value) })}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') onEnter?.()
+        }}
       />
-    </div>
+    </label>
   )
 }
