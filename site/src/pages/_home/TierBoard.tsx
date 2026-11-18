@@ -3,7 +3,7 @@ import { fmt, GradeMark, groupLabel, markGroups } from '@/components'
 import { GRADES, type Grade } from '@/data/results'
 import { url } from '@/site/href'
 import { BarCard, tipAt } from './BarCard'
-import { drawn, type BoardRow } from './model'
+import { bandGrades, drawn, type BoardRow } from './model'
 import { TierBar } from './TierBar'
 
 const n = (x: number) => x.toLocaleString('en-US')
@@ -26,12 +26,12 @@ function License({ spdx }: { spdx: string }) {
 }
 
 // The share of a kernel's cases that pass at `tier` or tighter.
-const within = (r: BoardRow, tier: Grade) =>
+export const within = (r: BoardRow, tier: Grade) =>
   r.counts.slice(0, GRADES.indexOf(tier) + 1).reduce((a, b) => a + b, 0) / r.total
 
 // Each column's one winner, the only figure in it marked in the accent: the highest share passing,
 // a tie going to the faster kernel, and the lowest time. Still level, the first listed.
-function bests(board: BoardRow[]) {
+export function bests(board: BoardRow[]) {
   const time = (r: BoardRow) => r.time?.median ?? Number.POSITIVE_INFINITY
   const top = (score: (r: BoardRow) => number) =>
     board.reduce((w, r) =>
@@ -216,7 +216,9 @@ export function TierBoard({
                       counts={r.counts}
                       label={`${r.kernel}: ${n(r.passing)} of ${n(r.total)} cases at 1e-7`}
                       top={r.kernel === b.rate}
-                      href={g => `${url.report(r.suite, r.kernel, r.version)}?grade=${g}#cases`}
+                      href={g =>
+                        `${url.report(r.suite, r.kernel, r.version)}?grade=${bandGrades(g).join(',')}#cases`
+                      }
                     />
                   </BarCard>
                   <Ruler />

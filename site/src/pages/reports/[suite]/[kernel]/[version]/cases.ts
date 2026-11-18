@@ -75,8 +75,20 @@ export function unpackCases(packed: PackedCases): Row[] {
   })
 }
 
-// 'below' is every case that did not pass at 1e-7: the cases the headline counts against.
-export type GradeFilter = 'all' | 'below' | Grade
+// 'below' is every case that did not pass at 1e-7: the cases the headline counts against. A set,
+// grades joined by commas in GRADES order, is the cases of any of them: a bar's band can draw
+// several, such as fail with crash and 1e-3, and lists them all.
+export type GradeFilter = 'all' | 'below' | Grade | `${Grade},${string}`
+
+// The grades a filter keeps, or null for 'all' and 'below'.
+export function gradesOf(f: GradeFilter): Grade[] | null {
+  return f === 'all' || f === 'below' ? null : (f.split(',') as Grade[])
+}
+
+// A set of grades as a filter: one grade alone, several in GRADES order.
+export function gradeSet(grades: readonly Grade[]): GradeFilter {
+  return GRADES.filter(g => grades.includes(g)).join(',') as GradeFilter
+}
 
 export interface Filter {
   grade: GradeFilter
@@ -106,7 +118,8 @@ export function isUnfiltered(f: Filter): boolean {
 }
 
 export function matches(row: Row, f: Filter): boolean {
-  if (f.grade === 'below' ? row.grade === '1e-7' : f.grade !== 'all' && row.grade !== f.grade)
+  const grades = gradesOf(f.grade)
+  if (f.grade === 'below' ? row.grade === '1e-7' : grades && !grades.includes(row.grade))
     return false
   if (f.operation !== 'all' && row.operation !== f.operation) return false
   if (f.test !== 'all' && row.test !== f.test) return false
@@ -146,7 +159,13 @@ export function sortRows(rows: Row[], key: SortKey, dir: SortDir): Row[] {
   })
 }
 
-const GRADE_FILTERS: readonly string[] = ['all', 'below', ...GRADES]
+// A grade filter from a query string: 'all', 'below', or grades this suite knows, as a set.
+function gradeFilterOf(value: string): GradeFilter {
+  if (value === 'all' || value === 'below') return value
+  const parts = value.split(',')
+  if (!parts.length || !parts.every(g => (GRADES as readonly string[]).includes(g))) return 'all'
+  return gradeSet(parts as Grade[])
+}
 const FILTER_KEYS = ['grade', 'op', 'test', 'kind', 'q'] as const
 
 // The filter lives in the query string, so a filtered view of a report is a link.
@@ -155,7 +174,7 @@ export function filterFromSearch(search: string): Filter {
   const grade = p.get('grade') ?? 'all'
   const kind = p.get('kind') ?? 'all'
   return {
-    grade: GRADE_FILTERS.includes(grade) ? (grade as GradeFilter) : 'all',
+    grade: gradeFilterOf(grade),
     operation: p.get('op') || 'all',
     test: p.get('test') || 'all',
     kind: (KINDS as readonly string[]).includes(kind) ? (kind as Kind) : 'all',

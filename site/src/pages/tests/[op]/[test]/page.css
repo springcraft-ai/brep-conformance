@@ -472,7 +472,7 @@
 .bc-kernels__row[aria-current='true'] {
   box-shadow: inset 2px 0 0 var(--accent);
 }
-.bc-kernels__row > :first-child {
+.bc-kernels__row {
   padding-left: var(--sp-4);
 }
 .bc-kernels__head {
@@ -603,10 +603,23 @@
     display: none;
   }
   .bc-kernels__row {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: var(--sp-2) var(--sp-4);
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name n'
+      'result result'
+      'why why';
+    gap: var(--sp-3) var(--sp-4);
   }
-  .bc-kernels__why {
-    grid-column: 1 / -1;
+  .bc-kernels__row > :nth-child(1) {
+    grid-area: name;
+  }
+  .bc-kernels__row > :nth-child(2) {
+    grid-area: result;
+  }
+  .bc-kernels__row > :nth-child(3) {
+    grid-area: n;
+  }
+  .bc-kernels__row > :nth-child(4) {
+    grid-area: why;
   }
 }

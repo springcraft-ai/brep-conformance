@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { fmt } from '@/components'
 import { GRADES, summarize, type CaseRow, type Grade, type TestEntry } from '@/data/results'
 import {
+  bandGrades,
   boardRows,
   caseTitle,
   distinctFilters,
@@ -234,5 +235,15 @@ describe('drawn', () => {
     expect(out[at('1e-5')]).toBe(counts[at('1e-5')]! + counts[at('1e-6')]!)
     expect(out[at('fail')]).toBe(counts[at('fail')]! + counts[at('1e-3')]!)
     expect(out.reduce((a, b) => a + b, 0)).toBe(counts.reduce((a, b) => a + b, 0))
+  })
+})
+
+describe('bandGrades', () => {
+  it('lists the grades a band draws, in GRADES order', () => {
+    expect(bandGrades('1e-7')).toEqual(['1e-7'])
+    expect(bandGrades('1e-5')).toEqual(['1e-6', '1e-5'])
+    expect(bandGrades('fail')).toEqual(['1e-3', 'fail', 'crash'])
+    expect(bandGrades('crash')).toEqual(['1e-3', 'fail', 'crash'])
+    expect(bandGrades('refused')).toEqual(['refused', 'timeout'])
   })
 })

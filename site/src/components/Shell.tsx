@@ -63,7 +63,7 @@ export function Shell({ path, nav, suite, children }: ShellProps) {
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path d={GH_MARK} />
           </svg>
-          github
+          <span className="bc-chrome__gh-label">github</span>
         </a>
       </header>
       <main className="bc-main" id="content" tabIndex={-1}>

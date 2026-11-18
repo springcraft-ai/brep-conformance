@@ -8,6 +8,7 @@ import {
   type TestEntry,
 } from '@/data/results'
 import { kernelInfo, repoName } from '@/data/kernels'
+import { markGroups } from '@/components/Grade'
 
 // Pure shaping of the shared derivations into what the home page draws. Hydrated, so it ships to
 // the browser: no file access here.
@@ -29,6 +30,16 @@ export function drawn(counts: Counts): Counts {
   fold('1e-6', '1e-5')
   fold('1e-3', 'fail')
   return out
+}
+
+// The grades a band of a bar holds: those that share its mark, and those drawn into it. A band
+// lists its cases by this set, so it lists every case it draws.
+export function bandGrades(g: Grade): Grade[] {
+  const group = markGroups().find(m => m.includes(g)) ?? [g]
+  const into: Grade[] = [...group]
+  if (into.includes('1e-5')) into.push('1e-6')
+  if (into.includes('fail')) into.push('1e-3')
+  return GRADES.filter(x => into.includes(x))
 }
 
 export interface Cell {

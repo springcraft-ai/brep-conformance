@@ -7,6 +7,7 @@ import {
   filterFromSearch,
   filterToLocation,
   filterToSearch,
+  gradeSet,
   groupByTest,
   matches,
   NO_FILTER,
@@ -103,6 +104,12 @@ describe('matches', () => {
     expect(ids({ grade: 'below' })).toEqual(['a2', 'b1', 'c1', 'c2', 'd2', 'e1'])
   })
 
+  it('filters by a set of grades, keeping the cases of any of them', () => {
+    const one = (g: Grade) => ids({ grade: g })
+    const both = ids({ grade: gradeSet(['fail', 'unsupported']) })
+    expect([...both].sort()).toEqual([...one('unsupported'), ...one('fail')].sort())
+  })
+
   it('combines operation, kind and grade', () => {
     expect(ids({ operation: 'fillet' })).toEqual(['d1', 'd2'])
     expect(ids({ operation: 'fillet', grade: '1e-7' })).toEqual(['d1'])
@@ -182,6 +189,14 @@ describe('the query string', () => {
 
   it('ignores values it does not know', () => {
     expect(filterFromSearch('?grade=great&kind=fuzzy')).toEqual(NO_FILTER)
+    expect(filterFromSearch('?grade=fail,great')).toEqual(NO_FILTER)
+  })
+
+  it('reads a set of grades in GRADES order, and round-trips it', () => {
+    expect(filterFromSearch('?grade=crash,fail').grade).toBe('fail,crash')
+    const f = { ...NO_FILTER, grade: gradeSet(['1e-3', 'fail', 'crash']) }
+    expect(f.grade).toBe('1e-3,fail,crash')
+    expect(filterFromSearch(filterToSearch(f))).toEqual(f)
   })
 })
 

@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useState, type MouseEvent } from 'react'
-import { SpecTable } from '@/ds'
-import { Annot, fmt, GradeLabel, KernelChip, PageHead, Section } from '@/components'
+import { Fragment, useEffect, useMemo, useState, type MouseEvent } from 'react'
+import type { ReactNode } from 'react'
+import { Annot, fmt, GradeLabel, PageHead, Section } from '@/components'
 import { useChromeSearch } from '@/components/search'
 import { repoName } from '@/data/kernels'
 import { FAILURES, GRADES, KINDS, TIERS, type Grade } from '@/data/results'
 import { href, url } from '@/site/href'
 import { BarCard } from '@/pages/_home/BarCard'
+import { bandGrades } from '@/pages/_home/model'
 import { TierBar } from '@/pages/_home/TierBar'
 import {
   byOperation,
   duration,
   filterFromLocation,
   filterToLocation,
+  gradeSet,
   NO_FILTER,
   openingFilter,
   ordinal,
@@ -83,11 +85,12 @@ export default function ReportPage(props: Props) {
           <Annot>not the release ranked</Annot>
           <span>
             The results page ranks{' '}
-            <KernelChip
-              kernel={id.kernel}
-              version={props.current.version}
+            <a
+              className="rp-release"
               href={url.report(props.current.suite, id.kernel, props.current.version)}
-            />
+            >
+              {id.name} {fmt.version(props.current.version)}
+            </a>
             , its latest release on suite {props.current.suite}.
           </span>
         </p>
@@ -163,7 +166,11 @@ export default function ReportPage(props: Props) {
               operation: o.operation,
               grade: o.passing < o.total ? 'below' : 'all',
             }
-            const band = (g: Grade): Filter => ({ ...NO_FILTER, operation: o.operation, grade: g })
+            const band = (g: Grade): Filter => ({
+              ...NO_FILTER,
+              operation: o.operation,
+              grade: gradeSet(bandGrades(g)),
+            })
             return (
               <div key={o.operation} className="rp-ops__row">
                 <a className="rp-ops__name" href={casesHref(f)} onClick={e => show(e, f)}>
@@ -194,7 +201,13 @@ export default function ReportPage(props: Props) {
                 <span className="rp-ops__short">
                   {GRADES.flatMap((g, i) =>
                     i > 0 && o.counts[i] ? [`${o.counts[i]} ${g}`] : [],
-                  ).join(' · ') || '–'}
+                  ).map((s, i) => (
+                    <Fragment key={s}>
+                      {i > 0 && ' · '}
+                      <span>{s}</span>
+                    </Fragment>
+                  ))}
+                  {o.passing === o.total && '–'}
                 </span>
               </div>
             )
@@ -236,8 +249,7 @@ export default function ReportPage(props: Props) {
 
       <Section label="about this run" aside={<a href={METHODOLOGY}>how a report is scored</a>}>
         <div className="rp-specs">
-          <SpecTable
-            density="compact"
+          <Specs
             rows={[
               ...(props.license ? [{ label: 'license', value: props.license }] : []),
               {
@@ -277,8 +289,7 @@ export default function ReportPage(props: Props) {
               },
             ]}
           />
-          <SpecTable
-            density="compact"
+          <Specs
             rows={[
               { label: 'os', value: env.os || '–' },
               { label: 'architecture', value: env.arch || '–' },
@@ -293,13 +304,19 @@ export default function ReportPage(props: Props) {
             <div className="rp-releases__list">
               {props.releases.map(r => {
                 const here = r.suite === m.suite && r.version === id.version
-                return (
-                  <KernelChip
+                const label = `${fmt.version(r.version)} · suite ${r.suite}`
+                return here ? (
+                  <span key={`${r.suite}/${r.version}`} className="rp-release" aria-current="page">
+                    {label}
+                  </span>
+                ) : (
+                  <a
                     key={`${r.suite}/${r.version}`}
-                    kernel={id.kernel}
-                    version={`${r.version} · suite ${r.suite}`}
-                    href={here ? undefined : url.report(r.suite, id.kernel, r.version)}
-                  />
+                    className="rp-release"
+                    href={url.report(r.suite, id.kernel, r.version)}
+                  >
+                    {label}
+                  </a>
                 )
               })}
             </div>
@@ -307,6 +324,23 @@ export default function ReportPage(props: Props) {
         )}
       </Section>
     </div>
+  )
+}
+
+// The run's particulars as the page's other rows are set: a small-caps label, the value right.
+function Specs({ rows }: { rows: { label: string; value: ReactNode; unit?: string }[] }) {
+  return (
+    <dl className="rp-spec">
+      {rows.map(r => (
+        <div key={r.label} className="rp-spec__row">
+          <dt className="bc-annot">{r.label}</dt>
+          <dd>
+            {r.value}
+            {r.unit && <span className="rp-spec__unit"> {r.unit}</span>}
+          </dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 

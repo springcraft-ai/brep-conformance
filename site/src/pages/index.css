@@ -77,9 +77,12 @@
   color: var(--void-ink-1);
 }
 .hm-overall {
-  font: var(--fw-machine) var(--fs-read-3) / 1 var(--font-machine);
+  font: var(--fw-machine) 18px / 1 var(--font-machine);
   font-variant-numeric: tabular-nums;
   color: var(--void-ink-1);
+}
+.hm-overall.is-best {
+  color: var(--accent);
 }
 
 /* ---- the tolerance table: tier bars with a hover card ---- */
@@ -277,6 +280,15 @@ a.hm-cell:focus-visible .hm-bar {
 }
 
 @media (max-width: 720px) {
+  /* The filters are wider than a phone: they slide sideways inside their own row, never the page. */
+  .hm-grid__filters {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .hm-grid__filters::-webkit-scrollbar {
+    display: none;
+  }
   /* Every kernel compared fits a phone: a test's name takes a line of its own, the kernels share
      the next. */
   .hm-grid__head,
@@ -331,8 +343,27 @@ a.hm-cell:focus-visible .hm-bar {
   color: var(--void-ink-2);
 }
 .hm-card__bar,
+.hm-card__figs,
 .hm-card > .bc-annot {
   grid-column: 2 / -1;
+}
+/* The board's three columns under the bar, each with its label, as springrep's phone board. */
+.hm-card__figs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-4);
+  margin: var(--sp-2) 0 0;
+}
+.hm-card__figs dt {
+  margin-bottom: 8px;
+  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--void-ink-2);
+}
+.hm-card__figs dd {
+  margin: 0;
+  font-size: 16px;
 }
 
 @media (max-width: 720px) {
@@ -343,8 +374,25 @@ a.hm-cell:focus-visible .hm-bar {
   .hm-home .bc-display {
     font-size: min(var(--fs-display-4), 11vw);
   }
-  .hm-card > .bc-chip {
-    justify-self: start;
+  .hm-card {
+    align-items: start;
+    padding: var(--sp-5) 0;
+  }
+  .hm-card__rank {
+    padding-top: 3px;
+  }
+  .hm-card__bar {
+    margin-top: var(--sp-2);
+  }
+  .hm-card > .bc-annot {
+    font-size: var(--fs-micro-1);
+    line-height: 1.5;
+  }
+  /* The foot's two halves stack: the slot, then how scoring works over the run it describes. */
+  .hm-foot__meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-3);
   }
   .hm-home .bc-head__corner {
     justify-items: start;

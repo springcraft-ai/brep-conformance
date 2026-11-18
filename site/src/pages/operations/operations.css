@@ -319,6 +319,19 @@
 }
 
 @media (max-width: 720px) {
+  /* A column one mark wide has no room for a total under a leaning name: the group rows keep
+     theirs, set small enough to fit. */
+  .fn-table thead .fn-pair {
+    display: none;
+  }
+  .fn-table .fn-group .fn-pair__n {
+    font-size: 11px;
+    letter-spacing: -0.02em;
+  }
+  .fn-table .fn-group .bc-annot {
+    display: block;
+    margin-top: 4px;
+  }
   .fn-key {
     margin-left: 0;
   }
@@ -355,7 +368,7 @@
     font-size: var(--fs-read-4);
   }
   .fn-table .fn-group > th {
-    padding-left: var(--sp-3);
+    padding-left: 0;
   }
   .fn-group__name {
     font-size: 17px;

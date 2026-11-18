@@ -186,7 +186,7 @@ body {
     padding-right: var(--grid-margin);
   }
   :root {
-    --chrome-h: 89px;
+    --chrome-h: 52px;
   }
   /* A page's corner labels go under its title: beside it they run into a long one. */
   .bc-main .bc-head {
@@ -200,20 +200,63 @@ body {
   .bc-main .bc-display {
     font-size: min(var(--fs-display-4), 11vw);
   }
+  /* One row: the mark, the pages, then search and GitHub as icons. The search icon opens into a
+     box across the row while it has focus or holds a query. */
   .bc-chrome {
-    flex-wrap: wrap;
-    height: auto;
-    padding-top: var(--sp-3);
-    padding-bottom: var(--sp-3);
-    row-gap: var(--sp-3);
+    gap: var(--sp-5);
   }
   .bc-chrome__id span {
     display: none;
   }
   .bc-chrome__nav {
+    order: 2;
+  }
+  .bc-search {
     order: 3;
+    flex: none;
+    width: 30px;
+  }
+  .bc-search input {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-color: transparent;
+    color: transparent;
+    cursor: pointer;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23a3a3a3' stroke-width='1.5'%3E%3Ccircle cx='7' cy='7' r='4.5'/%3E%3Cpath d='M10.4 10.4 14 14'/%3E%3C/svg%3E")
+      center / 16px no-repeat;
+  }
+  .bc-search input::placeholder {
+    color: transparent;
+  }
+  .bc-search:focus-within,
+  .bc-search:has(input:not(:placeholder-shown)) {
+    position: absolute;
+    inset: 11px var(--grid-margin) auto;
+    z-index: 2;
+    width: auto;
+    max-width: none;
+  }
+  .bc-search:focus-within input,
+  .bc-search:has(input:not(:placeholder-shown)) input {
     width: 100%;
-    overflow-x: auto;
+    padding: 0 12px 0 34px;
+    border-color: var(--void-ink-3);
+    color: var(--void-ink-1);
+    cursor: text;
+    background-color: var(--ground-void);
+    background-position: 10px center;
+  }
+  .bc-search:focus-within input::placeholder,
+  .bc-search:has(input:not(:placeholder-shown)) input::placeholder {
+    color: var(--void-ink-2);
+  }
+  .bc-chrome__gh {
+    order: 4;
+    padding: 0 7px;
+  }
+  .bc-chrome__gh-label {
+    display: none;
   }
   .bc-chrome__nav a {
     white-space: nowrap;
@@ -301,27 +344,6 @@ body {
   padding-bottom: var(--sp-3);
   margin-bottom: var(--sp-4);
   border-bottom: var(--hairline-void-soft);
-}
-
-/* ---- kernel chip: identical for every kernel, no colour ---- */
-
-.bc-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 3px 7px;
-  border: var(--hairline-void-soft);
-  color: var(--void-ink-1);
-  font: var(--fw-voice) var(--fs-voice-2) / 1.2 var(--font-voice);
-  white-space: nowrap;
-}
-a.bc-chip:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.bc-chip__version {
-  font: var(--fw-machine) var(--fs-read-4) / 1.2 var(--font-machine);
-  color: var(--void-ink-2);
 }
 
 /* ---- grades ---- */
@@ -542,4 +564,25 @@ a.bc-chip:hover {
 }
 .bc-section__title {
   margin: 0;
+}
+
+/* ---- phone: the title close under the header, the nav's first word on the page's left edge, its
+   current page underlined under the word alone ---- */
+@media (max-width: 720px) {
+  .bc-main {
+    padding-top: var(--sp-4);
+  }
+  .bc-main .fn-page .bc-head,
+  .bc-main .hm-home .bc-head {
+    margin-top: var(--sp-5);
+  }
+  .bc-chrome {
+    height: var(--chrome-h);
+  }
+  .bc-chrome__nav {
+    gap: 18px;
+  }
+  .bc-chrome__nav a {
+    padding: 0;
+  }
 }

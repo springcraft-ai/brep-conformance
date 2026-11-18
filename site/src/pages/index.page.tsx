@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Annot, fmt, KernelChip, PageHead, Section } from '@/components'
+import { Annot, fmt, PageHead, Section } from '@/components'
 import { queryFromUrl, useChromeSearch } from '@/components/search'
 import { EmptyState } from '@/ds'
-import { GRADES, TIERS } from '@/data/results'
 import { href, url } from '@/site/href'
 import { Grid } from './_home/Grid'
 import { TierBar } from './_home/TierBar'
-import { BoardKey, TierBoard } from './_home/TierBoard'
-import { COMPARE_MAX, defaultCompare, toggleCompare, type BoardRow } from './_home/model'
+import { BoardKey, bests, TierBoard, within } from './_home/TierBoard'
+import { COMPARE_MAX, defaultCompare, toggleCompare } from './_home/model'
 import type { Props } from './index.data'
 import './index.css'
 
@@ -15,10 +14,6 @@ export const nav = { label: 'results', order: 0 }
 export const hydrate = true
 
 const n = (x: number) => x.toLocaleString('en-US')
-
-// The cases a kernel passes only at a tolerance looser than 1e-7.
-const looserOf = (r: BoardRow) =>
-  TIERS.reduce((sum, t) => sum + (t === '1e-7' ? 0 : r.counts[GRADES.indexOf(t)]!), 0)
 
 export default function Home({ suite, cases, kernels, runs, board, groups }: Props) {
   const versions = Object.fromEntries(board.map(r => [r.kernel, r.version]))
@@ -56,6 +51,7 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
       </div>
     )
 
+  const b = bests(board)
   return (
     <div className="hm-home">
       <PageHead title="B-rep kernel leaderboard" />
@@ -70,32 +66,47 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
         </div>
         <TierBoard board={board} picked={canCompare ? picked : null} onCompare={compare} />
         <ol className="hm-cards" aria-label="Leaderboard">
+          {/* The board's own winners, so a phone marks the same figures. */}
           {board.map(r => (
             <li key={r.kernel} className="hm-card">
               <span className="hm-card__rank">{r.rank}</span>
-              <KernelChip
-                kernel={r.kernel}
-                version={r.version}
-                href={url.report(r.suite, r.kernel, r.version)}
-              />
-              <span className="hm-overall">{fmt.pct(r.rate)}</span>
+              <span className="hm-card__kernel">
+                <a className="hm-kname" href={url.report(r.suite, r.kernel, r.version)}>
+                  {r.kernel}
+                </a>
+                <span className="hm-license">{fmt.version(r.version)}</span>
+              </span>
               <span className="hm-card__bar">
                 <TierBar
                   counts={r.counts}
                   label={`${r.kernel}: ${r.passing} of ${r.total} cases at 1e-7`}
+                  top={r.rank === 1}
                 />
               </span>
+              <dl className="hm-card__figs">
+                <div>
+                  <dt>pass at 1e-7</dt>
+                  <dd className={`hm-overall${r.kernel === b.rate ? ' is-best' : ''}`}>
+                    {fmt.pct(r.rate)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>pass at 1e-5</dt>
+                  <dd className={`hm-overall${r.kernel === b.loose ? ' is-best' : ''}`}>
+                    {fmt.pct(within(r, '1e-5'))}
+                  </dd>
+                </div>
+                <div>
+                  <dt>speed</dt>
+                  <dd className={`hm-overall${r.kernel === b.time ? ' is-best' : ''}`}>
+                    {r.time ? fmt.ms(r.time.median) : '–'}
+                  </dd>
+                </div>
+              </dl>
               <Annot>
-                {fmt.factor(r.speedFactor)} the fastest · median case{' '}
-                {r.time ? fmt.ms(r.time.median) : '–'}
+                {fmt.factor(r.speedFactor)} the fastest
                 {r.maintainers && ' · made by the suite’s maintainer'}
               </Annot>
-              {looserOf(r) > 0 && (
-                <Annot>
-                  +{n(looserOf(r))} more {looserOf(r) === 1 ? 'case' : 'cases'} at a looser
-                  tolerance
-                </Annot>
-              )}
             </li>
           ))}
         </ol>

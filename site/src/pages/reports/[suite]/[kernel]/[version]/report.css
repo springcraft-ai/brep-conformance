@@ -167,15 +167,49 @@ a.rp-dist__row:hover .rp-bar {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 var(--sp-8);
 }
+.rp-spec {
+  display: grid;
+  align-content: start;
+  margin: 0;
+}
+.rp-spec__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-4);
+  align-items: baseline;
+  padding: 9px 0;
+  border-bottom: var(--hairline-void-soft);
+}
+.rp-spec dd {
+  margin: 0;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+  font: var(--fw-machine) 13px / 1.4 var(--font-machine);
+  color: var(--void-ink-1);
+}
+.rp-spec__unit {
+  color: var(--void-ink-2);
+}
 .rp-releases {
   display: grid;
   gap: var(--sp-3);
-  margin-top: var(--sp-5);
+  margin-top: var(--sp-6);
 }
 .rp-releases__list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-3);
+  gap: var(--sp-2) var(--sp-5);
+}
+/* A release named as a version, linking to its report; the one shown is marked, not linked. */
+.rp-release {
+  font: var(--fw-machine) 13px / 1.4 var(--font-machine);
+  color: var(--void-ink-1);
+}
+.rp-release[aria-current] {
+  color: var(--void-ink-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+  padding-left: 8px;
 }
 
 /* ---- by operation: each operation's cases by grade; a row lists its cases ---- */
@@ -230,6 +264,10 @@ a.rp-dist__row:hover .rp-bar {
 }
 .rp-ops__short {
   color: var(--void-ink-2);
+}
+/* A shortfall is never split: a long list breaks between them. */
+.rp-ops__short > span {
+  white-space: nowrap;
 }
 .rp-fold {
   border-bottom: var(--hairline-void-soft);
@@ -466,7 +504,7 @@ a.rp-dist__row:hover .rp-bar {
     font-size: var(--fs-display-5);
   }
   .rp-dist__row {
-    grid-template-columns: 96px minmax(0, 1fr) 3.5em 5.5em;
+    grid-template-columns: 124px minmax(0, 1fr) 3.5em 5.5em;
     gap: var(--sp-3);
   }
   .rp-filters {

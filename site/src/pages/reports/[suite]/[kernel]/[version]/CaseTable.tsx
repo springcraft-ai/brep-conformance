@@ -6,6 +6,7 @@ import { GRADES } from '@/data/results'
 import { url } from '@/site/href'
 import {
   filterToSearch,
+  gradesOf,
   groupByTest,
   isUnfiltered,
   matches,
@@ -71,6 +72,7 @@ export function CaseTable({
   const set = (patch: Partial<Filter>) => onFilter({ ...filter, ...patch })
 
   const short = rows.length - (counts.grade.get('1e-7') ?? 0)
+  const chosen = gradesOf(filter.grade)
   const gradeOptions = [
     { id: 'all', label: 'all grades', meta: String(rows.length) },
     { id: 'below', label: 'not 1e-7', meta: String(short) },
@@ -79,6 +81,16 @@ export function CaseTable({
       label: g,
       meta: String(counts.grade.get(g)),
     })),
+    // A band's set of grades, chosen from a bar, is an option while it is the filter.
+    ...(chosen && chosen.length > 1
+      ? [
+          {
+            id: filter.grade,
+            label: chosen.join(' + '),
+            meta: String(chosen.reduce((n, g) => n + (counts.grade.get(g) ?? 0), 0)),
+          },
+        ]
+      : []),
   ]
   const opOptions = [
     { id: 'all', label: 'all areas', meta: String(rows.length) },
