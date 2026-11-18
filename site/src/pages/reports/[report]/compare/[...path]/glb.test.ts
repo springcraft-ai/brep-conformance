@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { box, glbOf, Z_UP_TO_Y_UP } from './fixture'
-import { parseGlb, topology } from './glb'
+import { parseGlb } from './glb'
 
 // A triangle and one edge as the suite writes them: positions as SHORT padded to 8 bytes, normals
 // as normalized BYTE, and the node's translation and scale taking them back.
@@ -67,12 +67,12 @@ function quantized(required: string[]): ArrayBuffer {
 describe('parseGlb', () => {
   const { positions, triangles } = box([2, 3, 4])
 
-  it('reads triangles, and draws a box by its twelve edges when the file has none', () => {
+  it('reads triangles, and draws no edge the file does not give', () => {
+    // A sphere's file has no edges; folds found in its mesh would draw lines that are not there.
     const s = parseGlb(glbOf(positions, triangles))
     expect(s.positions.length).toBe(24)
     expect(s.triangles.length).toBe(36)
-    // Twelve creases at 90°; the face diagonals are flat and dropped.
-    expect(s.edges.length / 6).toBe(12)
+    expect(s.edges.length).toBe(0)
   })
 
   it('reads no normals from a file without them, and turns the ones a file has', () => {
@@ -121,19 +121,5 @@ describe('parseGlb', () => {
 
   it('refuses what is not a GLB', () => {
     expect(() => parseGlb(new ArrayBuffer(32))).toThrow(/not a GLB/)
-  })
-})
-
-describe('topology', () => {
-  it('keeps the shared edge of two coplanar triangles apart from the border', () => {
-    const p = new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0])
-    const t = topology(p, new Uint32Array([0, 1, 2, 0, 2, 3]))
-    expect(t.creases.length / 6).toBe(4)
-  })
-
-  it('ignores a triangle with no area', () => {
-    const p = new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 2, 0, 0])
-    const t = topology(p, new Uint32Array([0, 1, 2, 0, 2, 3, 0, 1, 4]))
-    expect(t.creases.length / 6).toBe(4)
   })
 })

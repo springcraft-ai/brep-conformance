@@ -25,12 +25,12 @@ export interface View {
   h: number
   // Half the depth the frame spans, so every depth maps inside the clip volume.
   reach: number
-  // Device pixels per CSS pixel.
-  dpr: number
 }
 
 export interface Look {
   face: Rgb
+  // The second subject's faces: a part's neighbour in an assembly, a mirror image, a piece.
+  faceAlt: Rgb
   edge: Rgb
   ghost: [Rgb, Rgb]
 }
@@ -41,10 +41,9 @@ const AMBIENT = 0.3
 const GHOST_AMBIENT = 0.8
 const GHOST_ALPHA = 0.22
 const GHOST_EDGE_ALPHA = 0.55
-// An edge's width in CSS pixels, and how far toward the viewer it is pulled, in clip depth: the
-// frame spans one unit of it.
-const EDGE_WIDTH = 1.25
-const EDGE_BIAS = 1e-3
+// The subject's edges darken the face they cross rather than paint over it, so a one-pixel line
+// split across two pixels still shows against a face in light or in shade.
+const EDGE_ALPHA = 0.6
 
 // Invariant, so a ghost's colour pass lands on exactly the depth its depth pass wrote.
 const VERTEX = `#version 300 es
@@ -85,32 +84,10 @@ void main() {
   o = vec4(u_color.rgb * l * u_color.a, u_color.a);
 }`
 
-// An edge as a quad a few pixels wide: a_pos and a_nrm carry the segment's two ends, a_tw which
-// end this corner is at and which side of the line it lies. WebGL draws lines one device pixel
-// wide whatever is asked, too thin to keep under multisampling. Every edge is pulled a little
-// toward the viewer, so one lying on its face never loses the depth test to it.
-const LINE_VERTEX = `#version 300 es
-in vec3 a_pos;
-in vec3 a_nrm;
-in vec2 a_tw;
-uniform vec3 u_center, u_right, u_up, u_toward, u_scale;
-uniform vec2 u_viewport;
-uniform float u_width, u_bias;
-vec3 clip(vec3 p) {
-  vec3 d = p - u_center;
-  return vec3(dot(d, u_right) * u_scale.x, dot(d, u_up) * u_scale.y, -dot(d, u_toward) * u_scale.z);
-}
-void main() {
-  vec3 a = clip(a_pos);
-  vec3 b = clip(a_nrm);
-  vec2 along = (b.xy - a.xy) * u_viewport;
-  float len = length(along);
-  vec2 dir = len > 1e-6 ? along / len : vec2(1.0, 0.0);
-  vec2 side = vec2(-dir.y, dir.x) * a_tw.y * u_width / u_viewport;
-  vec3 p = mix(a, b, a_tw.x);
-  gl_Position = vec4(p.xy + side, p.z - u_bias, 1.0);
-}`
-
+// Edges are WebGL lines one device pixel wide, drawn after the faces with the ordinary depth
+// test. A line is drawn only along its own centre, where it and the faces it bounds share their
+// vertices and so their depth: it passes the test wherever those faces are seen, with no offset.
+// A wider line would reach over the faces beside it, which a slant puts nearer than the edge.
 const LINES = `#version 300 es
 precision highp float;
 uniform vec4 u_color;
@@ -140,38 +117,9 @@ function compile(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgr
   }
   gl.bindAttribLocation(p, 0, 'a_pos')
   gl.bindAttribLocation(p, 1, 'a_nrm')
-  gl.bindAttribLocation(p, 2, 'a_tw')
   gl.linkProgram(p)
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p) ?? '')
   return p
-}
-
-// Each corner of an edge's quad: both ends of the segment, then which end and which side.
-const QUAD_FLOATS = 8
-const CORNERS = [
-  [0, 1],
-  [0, -1],
-  [1, 1],
-  [1, 1],
-  [0, -1],
-  [1, -1],
-] as const
-
-// The segments' quads as two triangles each, for LINE_VERTEX.
-export function quads(edges: Float32Array): Float32Array {
-  const n = Math.floor(edges.length / 6)
-  const out = new Float32Array(n * CORNERS.length * QUAD_FLOATS)
-  let at = 0
-  for (let s = 0; s < n; s++) {
-    const ends = edges.subarray(s * 6, s * 6 + 6)
-    for (const [t, side] of CORNERS) {
-      out.set(ends, at)
-      out[at + 6] = t
-      out[at + 7] = side
-      at += QUAD_FLOATS
-    }
-  }
-  return out
 }
 
 // The mesh as the GPU draws it: indexed where every vertex has a normal, else one vertex per
@@ -215,6 +163,7 @@ export class Renderer {
   private lines: WebGLProgram
   private far: WebGLProgram
   private subject: Uploaded | null = null
+  private alt: Uploaded | null = null
   private ghosts: { mesh: Uploaded; tone: 0 | 1 }[] = []
 
   // Throws where the browser has no WebGL2.
@@ -223,7 +172,7 @@ export class Renderer {
     if (!gl) throw new Error('no WebGL2')
     this.gl = gl
     this.faces = compile(gl, VERTEX, FACES)
-    this.lines = compile(gl, LINE_VERTEX, LINES)
+    this.lines = compile(gl, VERTEX, LINES)
     this.far = compile(gl, FAR_VERTEX, FAR)
   }
 
@@ -249,14 +198,10 @@ export class Renderer {
     if (idx) buffer(gl.ELEMENT_ARRAY_BUFFER, idx)
     const lines = gl.createVertexArray()
     gl.bindVertexArray(lines)
-    buffer(gl.ARRAY_BUFFER, quads(m.edges))
-    const stride = QUAD_FLOATS * 4
+    buffer(gl.ARRAY_BUFFER, m.edges)
     gl.enableVertexAttribArray(0)
-    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, 0)
-    gl.enableVertexAttribArray(1)
-    gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12)
-    gl.enableVertexAttribArray(2)
-    gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride, 24)
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0)
+    gl.vertexAttrib3f(1, 0, 0, 1)
     gl.bindVertexArray(null)
     return {
       faces,
@@ -276,10 +221,12 @@ export class Renderer {
     for (const b of u.buffers) gl.deleteBuffer(b)
   }
 
-  set(subject: Mesh, ghosts: (Mesh & { tone: 0 | 1 })[]) {
+  set(subject: Mesh, alt: Mesh, ghosts: (Mesh & { tone: 0 | 1 })[]) {
     this.free(this.subject)
+    this.free(this.alt)
     for (const g of this.ghosts) this.free(g.mesh)
     this.subject = this.upload(subject)
+    this.alt = this.upload(alt)
     this.ghosts = ghosts.map(g => ({ mesh: this.upload(g), tone: g.tone }))
   }
 
@@ -308,10 +255,6 @@ export class Renderer {
       if (p === this.faces) {
         gl.uniform3f(u('u_light'), light[0]! / len, light[1]! / len, light[2]! / len)
         gl.uniform1f(u('u_ambient'), AMBIENT)
-      } else {
-        gl.uniform2f(u('u_viewport'), v.w / 2, v.h / 2)
-        gl.uniform1f(u('u_width'), (EDGE_WIDTH / 2) * v.dpr)
-        gl.uniform1f(u('u_bias'), EDGE_BIAS)
       }
       return u('u_color')
     }
@@ -323,12 +266,18 @@ export class Renderer {
     }
     const stroke = (m: Uploaded) => {
       gl.bindVertexArray(m.lines)
-      gl.drawArrays(gl.TRIANGLES, 0, m.segments * CORNERS.length)
+      gl.drawArrays(gl.LINES, 0, m.segments * 2)
     }
 
-    // The subject's faces, a hair behind its edges, marking the stencil where they cover.
+    // The subject's faces turned toward the viewer, marking the stencil where they cover. A
+    // solid's triangles are counter-clockwise seen from outside (display's contract), so the back
+    // faces are culled and never meet the front ones near an edge.
     let color = uniforms(this.faces)
     gl.enable(gl.STENCIL_TEST)
+    gl.enable(gl.CULL_FACE)
+    gl.cullFace(gl.BACK)
+    // Along an edge the line and its faces have one depth, a tie that rounding would settle a
+    // sample at a time; the least offset settles it for the line.
     gl.enable(gl.POLYGON_OFFSET_FILL)
     gl.polygonOffset(1, 1)
     gl.depthMask(true)
@@ -336,11 +285,14 @@ export class Renderer {
     gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE)
     gl.uniform4f(color, ...rgba(look.face, 1))
     if (this.subject) fill(this.subject)
+    gl.uniform4f(color, ...rgba(look.faceAlt, 1))
+    if (this.alt) fill(this.alt)
 
     // Each ghost's fill where the subject is not, its nearest surface only: blending every layer
     // of it, front and back, in triangle order would band it by the order they came in. So its
     // depth first, then its colour where that depth is, then that depth cleared away again, so the
     // next ghost and the edges meet only the subject's.
+    gl.disable(gl.CULL_FACE)
     gl.disable(gl.POLYGON_OFFSET_FILL)
     gl.stencilFunc(gl.EQUAL, 0, 0xff)
     gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP)
@@ -374,14 +326,16 @@ export class Renderer {
       gl.uniform4f(color, ...rgba(look.ghost[g.tone], GHOST_EDGE_ALPHA))
       stroke(g.mesh)
     }
-    gl.uniform4f(color, ...rgba(look.edge, 1))
+    gl.uniform4f(color, ...rgba(look.edge, EDGE_ALPHA))
     if (this.subject) stroke(this.subject)
+    if (this.alt) stroke(this.alt)
     gl.depthMask(true)
     gl.bindVertexArray(null)
   }
 
   destroy() {
     this.free(this.subject)
+    this.free(this.alt)
     for (const g of this.ghosts) this.free(g.mesh)
     this.gl.deleteProgram(this.faces)
     this.gl.deleteProgram(this.lines)

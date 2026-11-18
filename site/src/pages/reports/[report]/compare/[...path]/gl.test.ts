@@ -1,23 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { prepare, quads } from './gl'
-
-describe('quads', () => {
-  it('makes each segment two triangles, every corner holding both ends, its end and its side', () => {
-    const q = quads(new Float32Array([0, 0, 0, 1, 2, 3]))
-    expect(q.length).toBe(6 * 8)
-    for (let c = 0; c < 6; c++)
-      expect(Array.from(q.subarray(c * 8, c * 8 + 6))).toEqual([0, 0, 0, 1, 2, 3])
-    const tw = [0, 1, 2, 3, 4, 5].map(c => [q[c * 8 + 6], q[c * 8 + 7]])
-    expect(tw).toEqual([
-      [0, 1],
-      [0, -1],
-      [1, 1],
-      [1, 1],
-      [0, -1],
-      [1, -1],
-    ])
-  })
-})
+import { prepare } from './gl'
 
 describe('prepare', () => {
   const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])

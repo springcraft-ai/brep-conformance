@@ -4,12 +4,18 @@ import { camera, frameOf, HOME, panBy, project, tumble, zoomAt } from './scan'
 const empty = new Float32Array(0)
 
 describe('frameOf', () => {
-  it('fits the shape, its ghosts and the marks, and gives a flat frame some depth', () => {
+  it('fits both subjects, the ghosts and the marks, and gives a flat frame some depth', () => {
     const f = frameOf({
       positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
       normals: empty,
       triangles: new Uint32Array([0, 1, 2]),
       edges: new Float32Array([0, 0, 0, 4, 2, 0]),
+      alt: {
+        positions: new Float32Array([0, 0, 6]),
+        normals: empty,
+        triangles: new Uint32Array(0),
+        edges: empty,
+      },
       ghosts: [
         {
           positions: new Float32Array([0, 5, 0]),
@@ -21,8 +27,8 @@ describe('frameOf', () => {
       ],
       marks: [{ p: [-3, 1, 0], held: true }],
     })
-    expect(f.lo).toEqual([-3, 0, -1])
-    expect(f.hi).toEqual([4, 5, 1])
+    expect(f.lo).toEqual([-3, 0, 0])
+    expect(f.hi).toEqual([4, 5, 6])
   })
 })
 

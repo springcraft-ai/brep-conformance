@@ -1591,17 +1591,18 @@ for each face. The volume that the mesh bounds differs from the solid's volume b
 
 `display(s: Solid, tolerance: Length) -> {faces: list<{positions: list<Point3>, normals: list<Vector3>, triangles: list<Index[3]>}>, edges: list<list<Point3>>}`
 
-Draws the solid as a viewer shows it: each face meshed on its own, and its creases as polylines.
+Draws the solid as a viewer shows it: each face meshed on its own, and its edges as polylines.
 
 Each face has its own vertices, so shading is smooth within a face and sharp where two faces meet.
 Every vertex lies on the face's surface, and `normals` gives the surface's outward unit normal at
 each vertex. The triangles are counter-clockwise seen from outside, and no triangle lies farther
 than `tolerance` from the face. Together the faces close the solid, as [`mesh`](#mesh) does.
 
-`edges` holds each edge where two faces meet at an angle. Each such edge is given as a polyline
-whose every vertex lies on the edge and whose every chord lies within `tolerance` of the edge. A
-seam, where a face meets itself, is not drawn, and neither is an edge between two faces on one
-surface.
+`edges` holds each edge between two faces, whether they meet at an angle or smoothly, as where a
+fillet meets the face it rounds into. Each edge is given as a polyline whose every vertex lies on
+the edge and whose every chord lies within `tolerance` of the edge. A seam, where a face meets
+itself, is not drawn, and neither is an edge between two faces on one surface: neither marks a
+change in the shape.
 
 The suite's runner draws the files it exports with `display` ([formats.md](formats.md#assets)).
 

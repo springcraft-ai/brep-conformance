@@ -9,7 +9,7 @@ export interface Shape {
   normals: Float32Array
   // Three vertex indices per triangle.
   triangles: Uint32Array
-  // Two xyz ends per segment: the file's own line primitives, or the mesh's creases if none.
+  // Two xyz ends per segment: the file's own line primitives, none where it has none.
   edges: Float32Array
 }
 
@@ -147,6 +147,37 @@ function read(gltf: Gltf, bin: DataView, index: number, want: string): number[] 
   return out
 }
 
+type Xyz = [number, number, number]
+
+// What the suite lays over every view of a case, in its own millimetres, z up: the points the case
+// asks about or the edges and faces its steps name, a box, or a plane.
+export interface Overlay {
+  points: Xyz[]
+  box: [Xyz, Xyz] | null
+  plane: { origin: Xyz; normal: Xyz } | null
+}
+
+const xyz = (v: unknown): v is Xyz =>
+  Array.isArray(v) && v.length === 3 && v.every(x => typeof x === 'number' && Number.isFinite(x))
+
+// The overlay the file's extras carry; whatever is missing or malformed is left out.
+export function parseOverlay(buf: ArrayBuffer): Overlay {
+  const extras = ((chunks(buf).gltf as { extras?: Record<string, unknown> }).extras ?? {}) as {
+    points?: unknown
+    box?: unknown
+    plane?: { origin?: unknown; normal?: unknown }
+  }
+  const points = Array.isArray(extras.points) ? extras.points.filter(xyz) : []
+  const b = extras.box
+  const box =
+    Array.isArray(b) && b.length === 2 && xyz(b[0]) && xyz(b[1])
+      ? ([b[0], b[1]] as [Xyz, Xyz])
+      : null
+  const p = extras.plane
+  const plane = p && xyz(p.origin) && xyz(p.normal) ? { origin: p.origin, normal: p.normal } : null
+  return { points, box, plane }
+}
+
 // One view of a case as its file draws it: a scene, and its solids merged by role.
 export interface GlbView {
   name: string
@@ -279,67 +310,11 @@ function gather(
 
   const P = Float32Array.from(positions)
   const T = Uint32Array.from(triangles)
-  const edges = lines.length ? Float32Array.from(lines) : topology(P, T).creases
+  // The kernel's own edges only: a solid it gave none, such as a sphere, is drawn with none.
   return {
     positions: P,
     normals: Float32Array.from(normals),
     triangles: T,
-    edges,
+    edges: Float32Array.from(lines),
   }
-}
-
-export interface Topology {
-  // Two xyz ends per segment where the mesh folds by more than the crease angle, or ends.
-  creases: Float32Array
-}
-
-// Where the mesh folds by more than `degrees`, or ends: the edges a CAD view draws, for a file
-// that gives none of its own.
-export function topology(positions: Float32Array, triangles: Uint32Array, degrees = 20): Topology {
-  // Weld by position, since a mesh splits vertices along every seam and crease.
-  const weld = new Map<string, number>()
-  const id = new Uint32Array(positions.length / 3)
-  for (let i = 0; i < id.length; i++) {
-    const key = [0, 1, 2].map(k => Math.round(positions[i * 3 + k]! * 1e5)).join(',')
-    let w = weld.get(key)
-    if (w === undefined) weld.set(key, (w = weld.size))
-    id[i] = w
-  }
-  const normals: (number[] | null)[] = []
-  for (let t = 0; t < triangles.length; t += 3) {
-    const [a, b, c] = [0, 1, 2].map(k => triangles[t + k]! * 3)
-    const u = [0, 1, 2].map(k => positions[b! + k]! - positions[a! + k]!)
-    const v = [0, 1, 2].map(k => positions[c! + k]! - positions[a! + k]!)
-    const n = [
-      u[1]! * v[2]! - u[2]! * v[1]!,
-      u[2]! * v[0]! - u[0]! * v[2]!,
-      u[0]! * v[1]! - u[1]! * v[0]!,
-    ]
-    const len = Math.hypot(n[0]!, n[1]!, n[2]!)
-    // A sliver with no area, such as a row at a sphere's pole, has no side and bounds nothing.
-    normals.push(len > 1e-12 ? n.map(x => x / len) : null)
-  }
-  const byEdge = new Map<string, { a: number; b: number; faces: number[] }>()
-  for (let t = 0; t < triangles.length; t += 3) {
-    if (!normals[t / 3]) continue
-    for (let k = 0; k < 3; k++) {
-      const a = triangles[t + k]!
-      const b = triangles[t + ((k + 1) % 3)]!
-      const [wa, wb] = [id[a]!, id[b]!]
-      if (wa === wb) continue
-      const key = wa < wb ? `${wa},${wb}` : `${wb},${wa}`
-      const e = byEdge.get(key) ?? { a, b, faces: [] }
-      e.faces.push(t / 3)
-      byEdge.set(key, e)
-    }
-  }
-  const cos = Math.cos((degrees * Math.PI) / 180)
-  const creases: number[] = []
-  const at = (v: number) => [positions[v * 3]!, positions[v * 3 + 1]!, positions[v * 3 + 2]!]
-  for (const e of byEdge.values()) {
-    const nf = normals[e.faces[0]!]!
-    const ng = e.faces.length === 2 ? normals[e.faces[1]!]! : null
-    if (!ng || nf.reduce((s, x, k) => s + x * ng[k]!, 0) < cos) creases.push(...at(e.a), ...at(e.b))
-  }
-  return { creases: Float32Array.from(creases) }
 }

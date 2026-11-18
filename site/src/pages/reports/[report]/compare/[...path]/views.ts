@@ -49,8 +49,18 @@ export function merge(shapes: Shape[]): Shape {
 
 const isGhost = (role: string) => role === 'ghost' || role === 'ghost2'
 
+// Everything a view shows as its subject, of either tone.
 export function subjectOf(v: GlbView): Shape {
   return merge(v.solids.filter(s => !isGhost(s.role)).map(s => s.shape))
+}
+
+// The subject split by tone: the second subject is what the file marks `alt`.
+export function tonesOf(v: GlbView): { main: Shape; alt: Shape } {
+  const subjects = v.solids.filter(s => !isGhost(s.role))
+  return {
+    main: merge(subjects.filter(s => s.role !== 'alt').map(s => s.shape)),
+    alt: merge(subjects.filter(s => s.role === 'alt').map(s => s.shape)),
+  }
 }
 
 // The ghosts behind view `v`: its operands whole, from the views they are the subjects of. The

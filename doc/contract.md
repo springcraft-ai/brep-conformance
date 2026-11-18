@@ -366,7 +366,8 @@ as its row in the table above says:
   edges are judged in space by the rules B38 applies to a drawing: every vertex lies on a crease,
   every chord lies within the tolerance of a crease, every crease is covered, and the edges have no
   more length than the creases have. A ball has no crease, and a cylinder's seam does not count as
-  one.
+  one. None of these solids has two faces meeting smoothly, so their creases are every edge
+  `display` draws.
 
 The face edits `delete_faces`, `move_faces` and `thicken` are treated as features, so B14 to B16
 judge each result as the primitive it must be. `sweep_path` is treated as a constructor, so B0 to

@@ -1,7 +1,7 @@
 // Everything the Scan view needs in the browser, loaded as one chunk after the page hydrates. It
 // imports nothing the page itself imports: a module both share is bundled into the page's chunk,
 // which then has no manifest entry of its own and cannot be prerendered.
-import { parseViews, type GlbView } from './glb'
+import { parseOverlay, parseViews, type GlbView, type Overlay } from './glb'
 import { frameOf } from './scan'
 import type { Vec3 } from './vec'
 
@@ -9,7 +9,9 @@ export { mountScan, type Ghost, type Mark, type Scene, type ScanHandle } from '.
 
 export interface Loaded {
   views: GlbView[]
-  // The box round every view's subjects, so turning from one view to the next keeps the scale.
+  overlay: Overlay
+  // The box round every view's subjects and the overlay, so turning from one view to the next
+  // keeps the scale.
   frame: { lo: Vec3; hi: Vec3 }
 }
 
@@ -26,6 +28,9 @@ export function loadViews(url: string): Promise<Loaded> {
       })
       .then(buf => {
         const views = parseViews(buf)
+        const overlay = parseOverlay(buf)
+        const at = [...overlay.points, ...(overlay.box ?? [])]
+        if (overlay.plane) at.push(overlay.plane.origin)
         const none = new Float32Array(0)
         const solids = views.flatMap(v =>
           v.solids
@@ -37,10 +42,11 @@ export function loadViews(url: string): Promise<Loaded> {
           normals: none,
           triangles: new Uint32Array(0),
           edges: none,
+          alt: { positions: none, normals: none, triangles: new Uint32Array(0), edges: none },
           ghosts: solids,
-          marks: [],
+          marks: at.map(p => ({ p, held: false })),
         })
-        return { views, frame }
+        return { views, overlay, frame }
       })
     p.catch(() => cache.delete(url))
     cache.set(url, p)

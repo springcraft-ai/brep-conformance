@@ -3,7 +3,7 @@ import { Checkbox, Segmented } from '@/ds'
 import { Annot } from '@/components'
 import type { Mark, ScanHandle } from './scan'
 import type { Loaded } from './viewer'
-import { firstView, ghostsOf, operandsLabel, subjectOf } from './views'
+import { firstView, ghostsOf, operandsLabel, subjectOf, tonesOf } from './views'
 
 type Status = 'loading' | 'ready' | 'missing' | 'unreadable' | 'undrawn'
 
@@ -70,6 +70,7 @@ export function ScanView({
   }, [views, viewName, missing])
   const view = shown < 0 ? null : views[shown]!
   const subject = useMemo(() => (view ? subjectOf(view) : null), [view])
+  const tones = useMemo(() => (view ? tonesOf(view) : null), [view])
   // A view a kernel that made no result left empty, where a ghost alone would read as the result:
   // show neither. A kernel that passed made every view, so its empty view is an empty result.
   const noResult = !!missing && !!view && !subject?.triangles.length
@@ -121,13 +122,13 @@ export function ScanView({
           }
         frame = { lo, hi }
       }
+      const none = { positions: EMPTY, normals: EMPTY, triangles: NO_TRIANGLES, edges: EMPTY }
       const scene = {
-        positions: subject?.positions ?? EMPTY,
-        normals: subject?.normals ?? EMPTY,
-        triangles: subject?.triangles ?? NO_TRIANGLES,
-        edges: subject?.edges ?? EMPTY,
+        ...(tones?.main ?? none),
+        alt: tones?.alt ?? none,
         ghosts,
         marks,
+        overlay: loaded?.overlay,
         frame,
       }
       if (handle.current) return handle.current.set(scene)
@@ -140,7 +141,7 @@ export function ScanView({
     return () => {
       live = false
     }
-  }, [loaded, subject, ghosts, marks, noGpu])
+  }, [loaded, tones, ghosts, marks, noGpu])
 
   useEffect(() => handle.current?.focus(focus), [focus, loaded, marks])
 
@@ -235,9 +236,11 @@ export function ScanView({
         <i className="bc-scan__corner" />
         <i className="bc-scan__corner" />
       </div>
+      <p className="bc-shape__note" title={view?.note}>
+        {view?.note ?? ' '}
+      </p>
       <div className="bc-shape__foot">
         <div className="bc-shape__legend">
-          {view?.note && <span>{view.note}</span>}
           {ghosts.some(g => g.tone === 0 && g.triangles.length) && (
             <span>
               <i className="bc-key bc-key--ghost" /> {ghostLabel(view?.name, 0)}
