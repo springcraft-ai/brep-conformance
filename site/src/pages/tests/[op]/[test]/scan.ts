@@ -1,8 +1,8 @@
-// The Scan view: the shape as a shaded solid, and a kernel's misplaced points over it.
-// Orthographic, z up, turned by dragging. Canvas 2D over solid.ts's rasterizer: the suite's meshes
-// redraw well inside a frame, and the page ships no 3D library.
+// The Scan view: the shape shaded by mesh.ts on a WebGL2 canvas, and over it, as HTML, a kernel's
+// misplaced points, the focused point's reticle, and the axes. Orthographic, z up, turned by
+// dragging. The page ships no 3D library.
+import { createMeshLayer, type Mesh } from './mesh'
 import { bounds, type Vec3 } from './vec'
-import { raster, rasterize, studio, type Mesh, type Raster, type Shade } from './solid'
 
 export interface Mark {
   p: Vec3
@@ -58,33 +58,6 @@ export function project(c: Camera, x: number, y: number, z: number): [number, nu
   return [c.w / 2 + dot(c.right) * c.scale, c.h / 2 - dot(c.up) * c.scale, dot(c.toward)]
 }
 
-export interface Colors {
-  face: Shade
-  fail: string
-  focus: string
-  annot: string
-}
-
-// Any CSS colour as the bytes the rasterizer writes, by painting it.
-function rgbOf(color: string): [number, number, number] {
-  const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!
-  ctx.fillStyle = color
-  ctx.fillRect(0, 0, 1, 1)
-  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data
-  return [r!, g!, b!]
-}
-
-function colorsOf(el: Element): Colors {
-  const s = getComputedStyle(el)
-  const v = (name: string, fallback: string) => s.getPropertyValue(name).trim() || fallback
-  return {
-    face: studio(rgbOf(v('--scan-face', '#b8c2cc'))),
-    fail: v('--scan-fail', '#ff5a33'),
-    focus: v('--scan-focus', '#f5a200'),
-    annot: v('--scan-annot', '#6a6c6e'),
-  }
-}
-
 // The frame every view of a scene is fitted to: the shape, and the marks with it.
 export function frameOf(scene: Scene): { lo: Vec3; hi: Vec3 } {
   const ends: number[] = []
@@ -101,131 +74,117 @@ export function frameOf(scene: Scene): { lo: Vec3; hi: Vec3 } {
   return b
 }
 
-function draw(
-  ctx: CanvasRenderingContext2D,
-  scene: Scene,
-  c: Camera,
-  col: Colors,
-  focus: number,
-  r: Raster,
-) {
-  ctx.clearRect(0, 0, c.w, c.h)
-  if (!scene.triangles.length && !scene.edges.length && !scene.marks.length) return
-  // The raster is in device pixels, the camera in CSS pixels.
-  const k = r.w / c.w
-  rasterize(
-    r,
-    scene,
-    (x, y, z) => {
-      const p = project(c, x, y, z)
-      return [p[0] * k, p[1] * k, p[2]]
-    },
-    [c.right, c.up, c.toward],
-    col.face,
-  )
-  ctx.putImageData(new ImageData(r.rgba as Uint8ClampedArray<ArrayBuffer>, r.w, r.h), 0, 0)
+// The canvas's CSS colour is the metal's own, --scan-face, read as bytes.
+function faceColor(el: Element): [number, number, number] {
+  const m = getComputedStyle(el).color.match(/[\d.]+/g)
+  return m && m.length >= 3 ? [Number(m[0]), Number(m[1]), Number(m[2])] : [184, 194, 204]
+}
 
-  ctx.globalAlpha = 1
-  ctx.lineWidth = 1.5
-  scene.marks.forEach((m, i) => {
-    const [x, y] = project(c, ...m.p)
-    ctx.strokeStyle = col.fail
-    ctx.fillStyle = col.fail
-    if (m.held) ctx.fillRect(x - 3.5, y - 3.5, 7, 7)
-    else ctx.strokeRect(x - 3.25, y - 3.25, 6.5, 6.5)
-    if (i === focus) reticle(ctx, x, y, col.focus)
+const SVG = 'http://www.w3.org/2000/svg'
+const AXES: [string, Vec3][] = [
+  ['x', [1, 0, 0]],
+  ['y', [0, 1, 0]],
+  ['z', [0, 0, 1]],
+]
+
+function triad(): { el: SVGSVGElement; place(c: Camera): void } {
+  const el = document.createElementNS(SVG, 'svg')
+  el.setAttribute('class', 'bc-scan__triad')
+  el.setAttribute('viewBox', '-30 -30 60 60')
+  el.setAttribute('aria-hidden', 'true')
+  const parts = AXES.map(([name]) => {
+    const line = document.createElementNS(SVG, 'line')
+    const text = document.createElementNS(SVG, 'text')
+    text.textContent = name
+    el.append(line, text)
+    return { line, text }
   })
-
-  triad(ctx, c, col.annot)
+  return {
+    el,
+    place(c) {
+      AXES.forEach(([, v], i) => {
+        const dx = v[0] * c.right[0] + v[1] * c.right[1] + v[2] * c.right[2]
+        const dy = v[0] * c.up[0] + v[1] * c.up[1] + v[2] * c.up[2]
+        const { line, text } = parts[i]!
+        line.setAttribute('x2', String(dx * 16))
+        line.setAttribute('y2', String(-dy * 16))
+        text.setAttribute('x', String(dx * 24))
+        text.setAttribute('y', String(-dy * 24))
+      })
+    },
+  }
 }
 
-// The lock-on reticle: four corner brackets round the focused point.
-function reticle(ctx: CanvasRenderingContext2D, x: number, y: number, color: string) {
-  const r = 11
-  const l = 5
-  ctx.strokeStyle = color
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  for (const [sx, sy] of [
-    [-1, -1],
-    [1, -1],
-    [1, 1],
-    [-1, 1],
-  ] as const) {
-    ctx.moveTo(x + sx * r, y + sy * (r - l))
-    ctx.lineTo(x + sx * r, y + sy * r)
-    ctx.lineTo(x + sx * (r - l), y + sy * r)
-  }
-  ctx.stroke()
-}
-
-function triad(ctx: CanvasRenderingContext2D, c: Camera, color: string) {
-  const ox = c.w - 34
-  const oy = c.h - 30
-  ctx.strokeStyle = color
-  ctx.fillStyle = color
-  ctx.lineWidth = 1
-  ctx.font = '9px ui-monospace, monospace'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  const axes: [string, Vec3][] = [
-    ['x', [1, 0, 0]],
-    ['y', [0, 1, 0]],
-    ['z', [0, 0, 1]],
-  ]
-  for (const [name, v] of axes) {
-    const dx = v[0] * c.right[0] + v[1] * c.right[1] + v[2] * c.right[2]
-    const dy = v[0] * c.up[0] + v[1] * c.up[1] + v[2] * c.up[2]
-    ctx.beginPath()
-    ctx.moveTo(ox, oy)
-    ctx.lineTo(ox + dx * 16, oy - dy * 16)
-    ctx.stroke()
-    ctx.fillText(name, ox + dx * 24, oy - dy * 24)
-  }
+function markButtons(marks: Mark[], onPick: (i: number) => void): HTMLButtonElement[] {
+  return marks.map((m, i) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.className = 'bc-scan__mark sc-focus'
+    if (m.held) b.dataset.held = ''
+    b.setAttribute('aria-pressed', 'false')
+    b.setAttribute(
+      'aria-label',
+      `point ${i + 1}: ${m.held ? 'placed inside, belongs outside' : 'placed outside, belongs inside'}`,
+    )
+    b.addEventListener('click', () => onPick(i))
+    return b
+  })
 }
 
 export interface ScanHandle {
+  // False where the browser has no WebGL2: the points and axes are drawn, the shape is not.
+  readonly gl: boolean
   set(scene: Scene): void
   focus(i: number | null): void
   reset(): void
   destroy(): void
 }
 
-// Draws `scene` into `canvas` and keeps it drawn: on resize, on drag, and on each change.
+// Draws `scene`'s shape into `canvas` and its points and axes into `overlay`, and keeps them drawn:
+// on resize, on drag, and on each change.
 export function mountScan(
   canvas: HTMLCanvasElement,
+  overlay: HTMLElement,
   initial: Scene,
   onPick: (i: number | null) => void,
 ): ScanHandle {
-  const ctx = canvas.getContext('2d')!
   let scene = initial
   let frame = frameOf(scene)
   let view = { ...HOME }
   let focused = -1
-  let w = 0
-  let h = 0
   let queued = 0
-  let buffer = raster(0, 0)
-  const colors = colorsOf(canvas)
 
   const render = () => {
     queued = 0
-    const dpr = window.devicePixelRatio || 1
-    w = canvas.clientWidth
-    h = canvas.clientHeight
-    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
-      canvas.width = Math.round(w * dpr)
-      canvas.height = Math.round(h * dpr)
-    }
+    const w = canvas.clientWidth
+    const h = canvas.clientHeight
     if (!w || !h) return
-    if (buffer.w !== canvas.width || buffer.h !== canvas.height)
-      buffer = raster(canvas.width, canvas.height)
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    draw(ctx, scene, camera(view, frame, w, h), colors, focused, buffer)
+    const c = camera(view, frame, w, h)
+    layer?.draw(c, window.devicePixelRatio || 1)
+    scene.marks.forEach((m, i) => {
+      const [x, y] = project(c, ...m.p)
+      buttons[i]!.style.translate = `${x}px ${y}px`
+    })
+    axes.place(c)
   }
   const redraw = () => {
     if (!queued) queued = requestAnimationFrame(render)
   }
+
+  const layer = createMeshLayer(canvas, faceColor(canvas), redraw)
+  layer?.set(scene)
+  const marks = document.createElement('div')
+  marks.className = 'bc-scan__marks'
+  const axes = triad()
+  overlay.replaceChildren(marks, axes.el)
+  let buttons = markButtons(scene.marks, i => onPick(i))
+  marks.replaceChildren(...buttons)
+
+  const showFocus = () =>
+    buttons.forEach((b, i) => {
+      b.classList.toggle('is-focus', i === focused)
+      b.setAttribute('aria-pressed', String(i === focused))
+    })
 
   let drag: { x: number; y: number; view: View; moved: boolean } | null = null
   const down = (e: PointerEvent) => {
@@ -243,19 +202,9 @@ export function mountScan(
     }
     redraw()
   }
-  const up = (e: PointerEvent) => {
-    if (drag && !drag.moved) {
-      const r = canvas.getBoundingClientRect()
-      const c = camera(view, frame, w, h)
-      let best = -1
-      let bestD = 12
-      scene.marks.forEach((m, i) => {
-        const [x, y] = project(c, ...m.p)
-        const d = Math.hypot(x - (e.clientX - r.left), y - (e.clientY - r.top))
-        if (d < bestD) [best, bestD] = [i, d]
-      })
-      onPick(best < 0 ? null : best)
-    }
+  // A tap on the shape, not a drag, lets go of the focused point; a point is picked by its button.
+  const up = () => {
+    if (drag && !drag.moved) onPick(null)
     drag = null
   }
   const key = (e: KeyboardEvent) => {
@@ -281,23 +230,32 @@ export function mountScan(
   render()
 
   return {
+    gl: !!layer,
     set(next) {
+      if (next.positions !== scene.positions || next.triangles !== scene.triangles) layer?.set(next)
+      if (next.marks !== scene.marks) {
+        buttons = markButtons(next.marks, i => onPick(i))
+        marks.replaceChildren(...buttons)
+      }
       scene = next
       frame = frameOf(scene)
       focused = -1
+      showFocus()
       redraw()
     },
     focus(i) {
       focused = i ?? -1
-      redraw()
+      showFocus()
     },
     reset() {
       view = { ...HOME }
       redraw()
     },
     destroy() {
+      layer?.destroy()
       ro.disconnect()
       cancelAnimationFrame(queued)
+      overlay.replaceChildren()
       canvas.removeEventListener('pointerdown', down)
       canvas.removeEventListener('pointermove', move)
       canvas.removeEventListener('pointerup', up)

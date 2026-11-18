@@ -75,7 +75,7 @@
 /* ---- shape: the Scan view, night-graded straight on the void ---- */
 
 .bc-scan {
-  /* The metal's own colour, before solid.ts's studio light: a cool light grey. */
+  /* The metal's own colour, before mesh.ts's studio light: a cool light grey. */
   --scan-face: #b8c2cc;
   --scan-fail: var(--error-void);
   --scan-focus: var(--accent);
@@ -85,16 +85,83 @@
   min-height: 280px;
   background: var(--ground-void);
 }
+/* The canvas's colour is the metal's, which scan.ts reads for the shader. */
 .bc-scan__canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  color: var(--scan-face);
   touch-action: none;
   cursor: grab;
 }
 .bc-scan__canvas:active {
   cursor: grabbing;
+}
+/* The points and axes over the shape, placed by scan.ts each frame. Only the points take the
+   pointer; a drag anywhere else turns the shape. */
+.bc-scan__overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.bc-scan__mark {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.bc-scan__mark::before {
+  content: '';
+  position: absolute;
+  inset: 3.5px;
+  border: 1.5px solid var(--scan-fail);
+}
+.bc-scan__mark[data-held]::before {
+  background: var(--scan-fail);
+}
+/* The lock-on reticle: four corner brackets round the focused point. */
+.bc-scan__mark.is-focus::after {
+  --l: 5px;
+  content: '';
+  position: absolute;
+  inset: -4px;
+  background:
+    linear-gradient(var(--scan-focus), var(--scan-focus)) left top / var(--l) 1px no-repeat,
+    linear-gradient(var(--scan-focus), var(--scan-focus)) left top / 1px var(--l) no-repeat,
+    linear-gradient(var(--scan-focus), var(--scan-focus)) right top / var(--l) 1px no-repeat,
+    linear-gradient(var(--scan-focus), var(--scan-focus)) right top / 1px var(--l) no-repeat,
+    linear-gradient(var(--scan-focus), var(--scan-focus)) left bottom / var(--l) 1px no-repeat,
+    linear-gradient(var(--scan-focus), var(--scan-focus)) left bottom / 1px var(--l) no-repeat,
+    linear-gradient(var(--scan-focus), var(--scan-focus)) right bottom / var(--l) 1px no-repeat,
+    linear-gradient(var(--scan-focus), var(--scan-focus)) right bottom / 1px var(--l) no-repeat;
+}
+.bc-scan__triad {
+  position: absolute;
+  right: 4px;
+  bottom: 0;
+  width: 60px;
+  height: 60px;
+  overflow: visible;
+}
+.bc-scan__triad line {
+  stroke: var(--scan-annot);
+  stroke-width: 1;
+}
+.bc-scan__triad text {
+  fill: var(--scan-annot);
+  font:
+    9px ui-monospace,
+    monospace;
+  text-anchor: middle;
+  dominant-baseline: middle;
 }
 .bc-scan__empty {
   position: absolute;

@@ -33,11 +33,13 @@ export function ScanView({
   files?: ReactNode
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
+  const overlay = useRef<HTMLDivElement>(null)
   const handle = useRef<ScanHandle | null>(null)
   const pick = useRef(onPick)
   pick.current = onPick
   const [status, setStatus] = useState<Status>('loading')
   const [loaded, setLoaded] = useState<Loaded | null>(null)
+  const [gl, setGl] = useState(true)
 
   useEffect(() => {
     let live = true
@@ -69,7 +71,7 @@ export function ScanView({
   useEffect(() => {
     let live = true
     void import('./viewer').then(v => {
-      if (!live || !canvas.current) return
+      if (!live || !canvas.current || !overlay.current) return
       const scene = {
         positions: loaded?.shape.positions ?? EMPTY,
         normals: loaded?.shape.normals ?? EMPTY,
@@ -79,7 +81,10 @@ export function ScanView({
         marks,
       }
       if (handle.current) handle.current.set(scene)
-      else handle.current = v.mountScan(canvas.current, scene, i => pick.current(i))
+      else {
+        handle.current = v.mountScan(canvas.current, overlay.current, scene, i => pick.current(i))
+        setGl(handle.current.gl)
+      }
     })
     return () => {
       live = false
@@ -98,14 +103,18 @@ export function ScanView({
 
   // A result with no volume, such as the intersection of boxes that only touch, has no faces.
   const hollow = status === 'ready' && loaded?.triangles === 0
-  const empty = ((status !== 'ready' && status !== 'loading') || hollow) && !marks.length
-  const state = {
-    loading: 'loading shape',
-    ready: loaded ? `glb · ${loaded.triangles.toLocaleString('en')} triangles` : '',
-    missing: 'shape not published yet',
-    unreadable: 'shape file unreadable',
-    undrawn: 'no kernel drew this case',
-  }[status]
+  // The browser cannot draw the shape; the points are HTML, so they are still shown.
+  const noGl = status === 'ready' && !hollow && !gl
+  const empty = ((status !== 'ready' && status !== 'loading') || hollow || noGl) && !marks.length
+  const state = noGl
+    ? 'shape needs WebGL2'
+    : {
+        loading: 'loading shape',
+        ready: loaded ? `glb · ${loaded.triangles.toLocaleString('en')} triangles` : '',
+        missing: 'shape not published yet',
+        unreadable: 'shape file unreadable',
+        undrawn: 'no kernel drew this case',
+      }[status]
 
   return (
     <>
@@ -117,10 +126,11 @@ export function ScanView({
           aria-label={`${caption}: drag or use the arrow keys to turn`}
           onDoubleClick={() => handle.current?.reset()}
         />
+        <div ref={overlay} className="bc-scan__overlay" />
         {empty && (
           <div className="bc-scan__empty sc-hatch">
             <Annot>
-              {status === 'unreadable' || status === 'undrawn'
+              {status === 'unreadable' || status === 'undrawn' || noGl
                 ? state
                 : hollow
                   ? 'shape · empty'
