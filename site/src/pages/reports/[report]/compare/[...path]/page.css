@@ -454,83 +454,6 @@
   }
 }
 
-/* ---- kernels: a row each, the reason clamped; a phone stacks the reason under the rest ---- */
-
-.bc-kernels {
-  display: grid;
-}
-.bc-kernels__row {
-  display: grid;
-  grid-template-columns: minmax(180px, 240px) minmax(140px, 200px) 110px minmax(0, 1fr);
-  gap: var(--sp-6);
-  align-items: start;
-  padding: 18px 0;
-  border-bottom: var(--hairline-void-soft);
-  transition: box-shadow var(--dur-2) var(--ease-mech);
-}
-/* The kernel whose worst case is shown, marked as the docs mark where the reader is. */
-.bc-kernels__row[aria-current='true'] {
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.bc-kernels__row {
-  padding-left: var(--sp-4);
-}
-.bc-kernels__head {
-  padding: 22px 0 14px;
-  font: var(--fw-annot) var(--fs-micro-2) / 1 var(--font-display);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--void-ink-2);
-  align-items: end;
-}
-.bc-kernels__head > :nth-child(3),
-.bc-kernels__n {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.bc-kernels__n {
-  padding-top: 3px;
-  font: var(--fw-machine) 14px / 1 var(--font-machine);
-  color: var(--void-ink-1);
-}
-.bc-kernels__result {
-  display: grid;
-  gap: 6px;
-  padding-top: 3px;
-}
-.bc-kernels__gloss {
-  font: var(--fw-voice) 13px / 1.35 var(--font-voice);
-  color: var(--void-ink-2);
-}
-.bc-kernels__why {
-  display: grid;
-  gap: var(--sp-3);
-  justify-items: start;
-  min-width: 0;
-  padding-top: 1px;
-  font: var(--fw-voice) 15px / 1.45 var(--font-voice);
-  color: var(--void-ink-1);
-}
-.bc-kernels__why > .bc-annot {
-  font-size: var(--fs-micro-1);
-}
-.bc-why {
-  display: grid;
-  gap: 2px;
-  justify-items: start;
-  min-width: 0;
-}
-.bc-why__text {
-  overflow-wrap: anywhere;
-}
-.bc-why__text[data-clamp] {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-}
-.bc-why__more,
 .bc-kernels__show {
   padding: 0;
   border: none;
@@ -540,7 +463,6 @@
   font: var(--fw-voice) 13px / 1.4 var(--font-voice);
   cursor: pointer;
 }
-.bc-why__more:hover,
 .bc-kernels__show:hover {
   color: var(--accent);
   border-bottom-color: var(--accent);
@@ -600,30 +522,4 @@
 }
 .bc-points__none {
   margin: var(--sp-4) 0 0;
-}
-
-@media (max-width: 720px) {
-  .bc-kernels__head {
-    display: none;
-  }
-  .bc-kernels__row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      'name n'
-      'result result'
-      'why why';
-    gap: var(--sp-3) var(--sp-4);
-  }
-  .bc-kernels__row > :nth-child(1) {
-    grid-area: name;
-  }
-  .bc-kernels__row > :nth-child(2) {
-    grid-area: result;
-  }
-  .bc-kernels__row > :nth-child(3) {
-    grid-area: n;
-  }
-  .bc-kernels__row > :nth-child(4) {
-    grid-area: why;
-  }
 }

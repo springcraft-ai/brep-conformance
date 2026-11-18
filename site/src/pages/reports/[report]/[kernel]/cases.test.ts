@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { TIERS, type CaseRow, type Grade, type Kind, type Tier } from '@/data/results'
 import {
   byOperation,
-  caseHash,
+  caseSearch,
   duration,
   filterFromLocation,
   filterFromSearch,
@@ -65,6 +65,10 @@ const CASES = [
 ]
 
 describe('packCases', () => {
+  it('numbers each case among its test’s cases, from 1', () => {
+    expect(unpackCases(packCases(CASES)).map(r => r.n)).toEqual([1, 2, 1, 1, 2, 1, 1, 1])
+  })
+
   it('round-trips every field the table shows, in the report order', () => {
     const rows = unpackCases(packCases(CASES))
     expect(rows).toHaveLength(CASES.length)
@@ -113,8 +117,8 @@ describe('a row’s links', () => {
   })
 
   it('names the kernel in a case’s link only where the test’s page shows this report', () => {
-    expect(caseHash('k w', 'box-box-1f')).toBe('#kernel=k%20w&case=box-box-1f')
-    expect(caseHash(null, 'box-box-1f')).toBe('#case=box-box-1f')
+    expect(caseSearch('k w', 3)).toBe('?kernel=k%20w&case=3')
+    expect(caseSearch(null, 1)).toBe('?case=1')
   })
 })
 

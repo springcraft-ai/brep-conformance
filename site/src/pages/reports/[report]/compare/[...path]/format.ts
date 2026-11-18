@@ -1,4 +1,6 @@
+import type { Crumb } from '@/components'
 import { TIERS, type Grade, type Tier } from '@/data/results'
+import { url } from '@/site/href'
 import { fileName } from './files'
 
 // A measured value as the suite wrote it: counts whole, tiny and huge values in exponent form, the
@@ -15,9 +17,36 @@ export function point(p: readonly number[]): string {
   return p.map(value).join(', ')
 }
 
-// The test's path below its top-level directory, as its page names it: in words, not hyphens.
+// The last level of the test's path, as its page names it: in words, not hyphens.
 export function testName(test: string): string {
-  return (test.split('/').slice(1).join(' / ') || test).replaceAll('-', ' ')
+  return test.split('/').at(-1)!.replaceAll('-', ' ')
+}
+
+// Articles, conjunctions and short prepositions stay lower case inside a title.
+const MINOR = new Set(
+  'a an and as at but by for from in into nor of on onto or per the to via with'.split(' '),
+)
+
+// A test's or a level's name in title case, for the browser's title of its page.
+export function titleOf(path: string): string {
+  const words = testName(path).split(' ')
+  return words
+    .map((w, i) =>
+      i > 0 && i < words.length - 1 && MINOR.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1),
+    )
+    .join(' ')
+}
+
+// The pages a test or a level sits under: its report, then each level of its path above it.
+export function trailOf(suite: string, path: string): Crumb[] {
+  const parts = path.split('/')
+  return [
+    { label: `Report ${suite}`, href: url.report(suite) },
+    ...parts.slice(0, -1).map((label, i) => ({
+      label,
+      href: url.compare(suite, parts.slice(0, i + 1).join('/')),
+    })),
+  ]
 }
 
 const SHORT_HASH = 6

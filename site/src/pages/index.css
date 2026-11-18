@@ -221,6 +221,14 @@ a.hm-row__test {
   font: var(--fw-machine) var(--fs-read-4) / 1.2 var(--font-machine);
   color: var(--void-ink-2);
 }
+/* As an operation's open body does, it cuts off the last cell's hover margin, which would
+   otherwise widen the table past its column. */
+.hm-tests {
+  overflow: clip;
+}
+a.hm-row__test--flat {
+  padding-left: 0;
+}
 a.hm-row__test:hover {
   color: var(--accent);
 }
@@ -553,4 +561,8 @@ a.hm-cell:focus-visible .hm-bar {
 }
 .hm-bar--top .hm-bar__seg[data-grade='1e-7'] {
   background: var(--accent);
+}
+
+.hm-version {
+  color: var(--void-ink-2);
 }

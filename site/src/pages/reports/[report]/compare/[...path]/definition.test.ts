@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import contractMd from '../../../../../../doc/contract.md?raw'
-import apiMd from '../../../../../../doc/api.md?raw'
+import contractMd from '../../../../../../../doc/contract.md?raw'
+import apiMd from '../../../../../../../doc/api.md?raw'
 import { site } from '@/data/source'
 import { clausesOf, definitionOf } from './definition'
 

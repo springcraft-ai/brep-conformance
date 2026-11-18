@@ -14,7 +14,7 @@ interface Props {
 const badge: EndpointModule<Props> = {
   entries: () => {
     const s = site()
-    return latestByKernel(s.reports).map(r => ({
+    return latestByKernel(s.all).map(r => ({
       params: { kernel: r.identity.kernel },
       props: {
         kernel: r.identity.kernel,

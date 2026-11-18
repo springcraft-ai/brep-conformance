@@ -1,7 +1,9 @@
 import { site } from '@/data/source'
 import { readDoc } from '@/docs/source'
 import {
+  kernelSegment,
   leaderboard,
+  type SuiteView,
   type CaseRow,
   type Check,
   type Failure,
@@ -11,7 +13,15 @@ import {
   type TestEntry,
 } from '@/data/results'
 import type { PageEntry } from '@/site/page'
+import {
+  boardRows,
+  defaultCompare,
+  grid,
+  underPrefix,
+  type GridGroup,
+} from '../../../../_home/model'
 import { clausesOf, definitionOf, KIND_TEXT, type Definition } from './definition'
+import { titleOf } from './format'
 
 // The failing points a page carries per check; the sample synthesizes at most a dozen.
 const MAX_POINTS = 64
@@ -42,6 +52,8 @@ export interface CaseOption {
 
 export interface KernelView {
   kernel: string
+  // Its page in the report: kernelSegment.
+  segment: string
   version: string
   suite: string
   grade: Grade
@@ -55,7 +67,10 @@ export interface KernelView {
   worst: CaseView | null
 }
 
-export interface Props {
+export interface TestProps {
+  page: 'test'
+  // The report the page is in: a suite version.
+  suite: string
   test: string
   slug: string
   operation: string
@@ -66,6 +81,22 @@ export interface Props {
   kernels: KernelView[]
   caseList: CaseOption[]
 }
+
+// A level of the suite's tree above its tests, such as booleans/degenerate: the leaderboard's
+// table of the tests under it.
+export interface LevelProps {
+  page: 'level'
+  suite: string
+  level: string
+  kernels: string[]
+  // Each kernel's page in the report, in `kernels` order: kernelSegment.
+  segments: string[]
+  // The kernels the table compares at first, as the leaderboard does.
+  shown: string[]
+  groups: GridGroup[]
+}
+
+export type Props = TestProps | LevelProps
 
 let docs: { clauses: Record<string, string>; api: string } | undefined
 const specs = () =>
@@ -82,7 +113,8 @@ function caseView(c: CaseRow): CaseView {
   }
 }
 
-export function propsOf(t: TestEntry, latest: Report[]): Props {
+// `all` is every report read, which names each kernel's page.
+export function propsOf(t: TestEntry, latest: Report[], all: Report[] = latest): TestProps {
   const kernels: KernelView[] = []
   const rowsOf: Map<string, CaseRow>[] = []
   const board = leaderboard(latest).map(r => r.kernel)
@@ -94,6 +126,7 @@ export function propsOf(t: TestEntry, latest: Report[]): Props {
     const worst = rows.find(c => c.grade === k.grade)
     kernels.push({
       kernel: r.identity.kernel,
+      segment: kernelSegment(all, r),
       version: r.identity.version,
       suite: r.methodology.suite,
       grade: k.grade,
@@ -117,6 +150,8 @@ export function propsOf(t: TestEntry, latest: Report[]): Props {
     ]
   })
   return {
+    page: 'test',
+    suite: latest[0]?.methodology.suite ?? '',
     test: t.test,
     slug: t.slug,
     operation: t.operation,
@@ -129,12 +164,47 @@ export function propsOf(t: TestEntry, latest: Report[]): Props {
   }
 }
 
+// Every level above a test in the suite's tree, each once, in the order the tests come.
+export function levelsOf(tests: string[]): string[] {
+  const levels = tests.flatMap(t =>
+    t
+      .split('/')
+      .slice(0, -1)
+      .map((_, i, parts) => parts.slice(0, i + 1).join('/')),
+  )
+  return [...new Set(levels)].filter(l => !tests.includes(l))
+}
+
+export function levelPropsOf(v: SuiteView, level: string): LevelProps {
+  const kernels = v.leaderboard.map(r => r.kernel)
+  return {
+    page: 'level',
+    suite: v.suite,
+    level,
+    kernels,
+    segments: v.leaderboard.map(r => r.segment),
+    shown: defaultCompare(boardRows(v.leaderboard)),
+    groups: grid(
+      v.tests.filter(t => underPrefix(t.test, level)),
+      kernels,
+    ),
+  }
+}
+
 export function entries(): PageEntry<Props>[] {
   const s = site()
-  return s.tests.map(t => ({
-    params: { op: t.operation, test: t.slug },
-    props: propsOf(t, s.latest),
-    title: t.test,
-    description: `${t.test}: its definition, checks and each kernel's result on it.`,
-  }))
+  return s.suites.flatMap(v => [
+    ...v.tests.map(t => ({
+      params: { report: v.suite, path: t.test },
+      props: propsOf(t, v.latest, s.all),
+      title: titleOf(t.test),
+      description: `${t.test}: its definition, checks and each kernel's result on it.`,
+    })),
+    ...levelsOf(v.tests.map(t => t.test)).map(level => ({
+      params: { report: v.suite, path: level },
+      props: levelPropsOf(v, level),
+      title: titleOf(level),
+      description: `Each kernel's result on every test under ${level}.`,
+    })),
+  ])
 }

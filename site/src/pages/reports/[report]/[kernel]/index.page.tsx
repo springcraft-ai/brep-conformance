@@ -63,6 +63,7 @@ export default function ReportPage(props: Props) {
   return (
     <div className="fn-page rp">
       <PageHead
+        trail={[{ label: `Report ${m.suite}`, href: url.report(m.suite) }]}
         title={
           <>
             {id.name} <span className="rp-version">{fmt.version(id.version)}</span>
@@ -77,21 +78,6 @@ export default function ReportPage(props: Props) {
           {id.adapter && ` · adapter ${repoName(id.adapter.repo)} ${id.adapter.commit.slice(0, 7)}`}
         </p>
       </div>
-      {props.current && (
-        <p className="rp-current">
-          <Annot>not the release ranked</Annot>
-          <span>
-            The results page ranks{' '}
-            <a
-              className="rp-release"
-              href={url.report(props.current.suite, id.kernel, props.current.version)}
-            >
-              {id.name} {fmt.version(props.current.version)}
-            </a>
-            , its latest release on suite {props.current.suite}.
-          </span>
-        </p>
-      )}
 
       <Section label="result" aside="select a grade to list its cases">
         <div className="rp-result">
@@ -99,7 +85,7 @@ export default function ReportPage(props: Props) {
             <span className="rp-headline__value">{fmt.pct(summary.passRate)}</span>
             <Annot>pass at 1e-7 mm, over all {summary.total} cases</Annot>
             {standing && (
-              <a className="rp-standing" href={url.home()}>
+              <a className="rp-standing" href={url.report(m.suite)}>
                 {ordinal(standing.place)} of {standing.of} kernels
                 {standing.speedFactor !== null &&
                   (standing.speedFactor < 1.005
@@ -236,6 +222,7 @@ export default function ReportPage(props: Props) {
         >
           <CaseTable
             rows={rows}
+            suite={m.suite}
             kernel={props.shown ? id.kernel : null}
             filter={filter}
             opening={opening}
@@ -310,7 +297,7 @@ export default function ReportPage(props: Props) {
                   <a
                     key={`${r.suite}/${r.version}`}
                     className="rp-release"
-                    href={url.report(r.suite, id.kernel, r.version)}
+                    href={url.kernel(r.suite, r.segment)}
                   >
                     {label}
                   </a>

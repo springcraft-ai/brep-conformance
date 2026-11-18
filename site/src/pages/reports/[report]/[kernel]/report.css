@@ -13,16 +13,6 @@
   overflow-wrap: anywhere;
 }
 
-.rp-current {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-3) var(--sp-4);
-  align-items: baseline;
-  margin: var(--sp-5) 0 0;
-  color: var(--void-ink-2);
-  font: var(--fw-voice) 13px / 1.6 var(--font-voice);
-}
-
 /* ---- result: headline left, counts, grade distribution right ---- */
 
 .rp-result {

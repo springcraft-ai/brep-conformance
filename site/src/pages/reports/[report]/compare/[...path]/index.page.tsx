@@ -13,8 +13,9 @@ import {
 } from '@/components'
 import { GRADES, type Grade } from '@/data/results'
 import { url } from '@/site/href'
-import { drawnBy, kernelOrder, point, shortCaseIds, testName, value } from './format'
-import type { CaseOption, CheckView, KernelView, Props } from './index.data'
+import { drawnBy, kernelOrder, point, shortCaseIds, testName, trailOf, value } from './format'
+import type { CaseOption, CheckView, KernelView, Props, TestProps } from './index.data'
+import { LevelPage } from './LevelPage'
 import type { Mark } from './scan'
 import { CaseKernels, filesOf, useFiles } from './CaseKernels'
 import { ask, displayOf } from './files'
@@ -36,6 +37,26 @@ const placed = (inside: boolean) => (inside ? 'inside' : 'outside')
 // Where the browser keeps the kernel the reader chose to see.
 const CHOSEN_KEY = 'brep-conformance:drawn-by'
 
+// Names the case shown, by its number in the list, and the kernel whose drawing the reader chose, in
+// the address, so a reload or a copied link opens on the same view. It replaces the entry: a click
+// adds no step to go back.
+function showInUrl(kernel: string | null, n: number) {
+  const u = new URL(location.href)
+  u.searchParams.delete('kernel')
+  u.searchParams.delete('case')
+  if (kernel) u.searchParams.set('kernel', kernel)
+  u.searchParams.set('case', String(n))
+  history.replaceState(history.state, '', u)
+}
+
+// The case a link names: its number in the list, from 1, or its id.
+function caseAt(caseList: CaseOption[], v: string | null): CaseOption | null {
+  if (v === null) return null
+  return /^[1-9]\d*$/.test(v)
+    ? (caseList[Number(v) - 1] ?? null)
+    : (caseList.find(c => c.id === v) ?? null)
+}
+
 // The grades under which a kernel made no result: a wrong result ('fail') is still a solid to see.
 const NO_RESULT = new Set<Grade>(['refused', 'crash', 'timeout', 'unsupported'])
 const noResult = (g: Grade | null) => (g && NO_RESULT.has(g) ? g : null)
@@ -44,7 +65,7 @@ const noResult = (g: Grade | null) => (g && NO_RESULT.has(g) ? g : null)
 function KernelName({ k }: { k: KernelView }) {
   return (
     <span className="tp-kernel">
-      <a className="tp-kernel__name" href={url.report(k.suite, k.kernel, k.version)}>
+      <a className="tp-kernel__name" href={url.kernel(k.suite, k.segment)}>
         {k.kernel}
       </a>
       <span className="tp-kernel__version">{fmt.version(k.version)}</span>
@@ -57,7 +78,7 @@ function withPoints(kernels: KernelView[]): KernelView[] {
   return kernels.filter(k => k.worst?.checks.some(c => c.points.length))
 }
 
-function Definition({ definition, operation, kind, kindText }: Props) {
+function Definition({ definition, operation, kind, kindText }: TestProps) {
   return (
     <details className="bc-section bc-defs">
       <summary className="bc-section__label">
@@ -140,35 +161,9 @@ function ChecksOf({ k }: { k: KernelView }) {
   )
 }
 
-const FAILURE_GLOSS = {
-  geometry: 'the shape is wrong',
-  measurement: 'a measured value is off',
-} as const
-
-const LONG_WHY = 220
-
 // A kernel whose worst case put points on the wrong side, which its reason says: a failure of
 // validity or of a measurement misplaces none. Only then is there a point the report could list.
 const misplaces = (k: KernelView) => k.grade === 'fail' && /\bpoints?\b/i.test(k.why)
-
-// A kernel's reason, a repeated message said once; a long one shows three lines until asked.
-function Why({ text }: { text: string }) {
-  const [all, setAll] = useState(false)
-  const short = fmt.condense(text)
-  const long = short.length > LONG_WHY
-  return (
-    <span className="bc-why">
-      <span className="bc-why__text" data-clamp={long && !all ? '' : undefined}>
-        {short}
-      </span>
-      {long && (
-        <button type="button" className="bc-why__more sc-focus" onClick={() => setAll(!all)}>
-          {all ? 'show less' : 'show all'}
-        </button>
-      )}
-    </span>
-  )
-}
 
 const warm = (c: CaseOption) => c.files.forEach(f => f && filesOf(f).forEach(u => void ask(u)))
 
@@ -273,8 +268,12 @@ function CaseList({
   )
 }
 
-export default function TestPage(props: Props) {
-  const { test, operation, kind, cases, kernels, caseList } = props
+export default function ComparePage(props: Props) {
+  return props.page === 'level' ? <LevelPage {...props} /> : <TestPage {...props} />
+}
+
+function TestPage(props: TestProps) {
+  const { suite, test, cases, kernels, caseList } = props
   const showable = withPoints(kernels)
   const [selected, setSelected] = useState<string | null>(
     (showable[0] ?? kernels.find(k => k.worst))?.kernel ?? null,
@@ -293,6 +292,7 @@ export default function TestPage(props: Props) {
   }, [])
   const draw = (k: string) => {
     setDrawer(k)
+    showInUrl(k, caseList.findIndex(c => c.id === shownId) + 1)
     setChosen(k)
     try {
       localStorage.setItem(CHOSEN_KEY, k)
@@ -309,20 +309,20 @@ export default function TestPage(props: Props) {
     [caseList, kernels],
   )
 
-  // A link may name the kernel and the case to show: #kernel=<id>&case=<id>.
+  // A link may name the kernel and the case to show: ?kernel=<id>&case=<number>, or the case's id.
   useEffect(() => {
     const read = () => {
-      const p = new URLSearchParams(location.hash.slice(1))
+      const p = new URLSearchParams(location.search)
       const k = p.get('kernel')
       if (k && kernels.some(x => x.kernel === k && x.worst)) setSelected(k)
       if (!p.has('kernel') && !p.has('case')) return
       setDrawer(k && kernels.some(x => x.kernel === k) ? k : null)
-      setPicked(caseList.find(x => x.id === p.get('case')) ?? null)
+      setPicked(caseAt(caseList, p.get('case')))
       setFocus(null)
     }
     read()
-    window.addEventListener('hashchange', read)
-    return () => window.removeEventListener('hashchange', read)
+    window.addEventListener('popstate', read)
+    return () => window.removeEventListener('popstate', read)
   }, [kernels, caseList])
 
   const current = kernels.find(k => k.kernel === selected && k.worst) ?? null
@@ -359,14 +359,9 @@ export default function TestPage(props: Props) {
     [current, onWorst],
   )
   const marks: Mark[] = useMemo(() => rows.map(r => ({ p: r.p, held: r.got })), [rows])
-  const choose = (k: string) => {
-    setSelected(k)
-    setDrawer(null)
-    setPicked(null)
-    setFocus(null)
-  }
   const pickCase = (c: CaseOption) => {
     setPicked(c)
+    showInUrl(null, caseList.indexOf(c) + 1)
     setDrawer(null)
     setFocus(null)
   }
@@ -376,61 +371,7 @@ export default function TestPage(props: Props) {
 
   return (
     <div className="fn-page tp">
-      <PageHead title={testName(test)} />
-      <div className="fn-tools">
-        <p className="fn-lede">
-          <a href={`${url.home()}#${operation}`} title={`All ${operation} tests`}>
-            {operation}
-          </a>{' '}
-          · {kind} test · {cases} {cases === 1 ? 'case' : 'cases'}
-        </p>
-      </div>
-      <div className="bc-kernels" role="table" aria-label="Each kernel on this test">
-        <div className="bc-kernels__row bc-kernels__head" role="row">
-          <span role="columnheader">kernel</span>
-          <span role="columnheader">result</span>
-          <span role="columnheader">cases at 1e-7</span>
-          <span role="columnheader">why, on its worst case</span>
-        </div>
-        {kernels.map(k => {
-          const on = onWorst && current?.kernel === k.kernel
-          return (
-            <div
-              key={k.kernel}
-              className="bc-kernels__row"
-              role="row"
-              aria-current={on || undefined}
-            >
-              <span role="rowheader">
-                <KernelName k={k} />
-              </span>
-              <span className="bc-kernels__result" role="cell">
-                <GradeLabel grade={k.grade} />
-                {k.failure && <span className="bc-kernels__gloss">{FAILURE_GLOSS[k.failure]}</span>}
-              </span>
-              <span className="bc-machine bc-kernels__n" role="cell">
-                {k.passing}/{k.total}
-              </span>
-              <span className="bc-kernels__why" role="cell">
-                {k.why ? <Why text={k.why} /> : '–'}
-                {k.worst &&
-                  (on ? (
-                    <span className="bc-annot">showing its worst case</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="bc-kernels__show sc-focus"
-                      onClick={() => choose(k.kernel)}
-                    >
-                      show its worst case
-                    </button>
-                  ))}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-
+      <PageHead trail={trailOf(suite, test)} title={testName(test)} />
       <Section
         label="cases"
         aside={`${cases} ${cases === 1 ? 'case' : 'cases'} × ${kernels.length} kernels`}

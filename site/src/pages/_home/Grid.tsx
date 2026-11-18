@@ -15,6 +15,7 @@ import {
   total,
   type Cell,
   type Filter,
+  type GridTest,
   type GridGroup,
 } from './model'
 import { TierBar } from './TierBar'
@@ -84,16 +85,20 @@ export function Grid({
   kernels,
   shown,
   suite,
-  versions,
+  pages,
+  level,
   q,
   onSearch,
 }: {
   groups: GridGroup[]
   kernels: string[]
   shown: string[]
-  // Every kernel in the grid is on this suite version.
+  // The report the grid is of, a suite version, and each kernel's page in it.
   suite: string
-  versions: Record<string, string>
+  pages: Record<string, string>
+  // The level of the suite's tree the grid is the page of, such as booleans/degenerate: its tests
+  // are listed alone, named by their path below it, with no operation's row above them.
+  level?: string
   q: string
   onSearch: (q: string) => void
 }) {
@@ -152,7 +157,7 @@ export function Grid({
   const isOpen = (op: string) => open[op] ?? searching
   const names = cols.map(i => kernels[i]!)
   const caseLink = (kernel: string, test: string) =>
-    `${url.report(suite, kernel, versions[kernel]!)}?test=${encodeURIComponent(test)}#cases`
+    `${url.kernel(suite, pages[kernel]!)}?test=${encodeURIComponent(test)}#cases`
 
   return (
     <div ref={root} className="hm-grid" style={{ ['--hm-k' as string]: names.length }}>
@@ -186,7 +191,7 @@ export function Grid({
       </div>
       <div className="hm-grid__scroll">
         <div className="hm-grid__head">
-          <span className="bc-annot">area · test</span>
+          <span className="bc-annot">{level ? 'test' : 'area · test'}</span>
           {/* A kernel's name scopes the filters to its results; again, back to every kernel's. */}
           {names.map(k => {
             const on = scope !== null && focus === k
@@ -205,78 +210,92 @@ export function Grid({
             )
           })}
         </div>
-        {visible.map(g => (
-          <details
-            key={g.operation}
-            id={g.operation}
-            className="hm-op"
-            open={isOpen(g.operation)}
-            onToggle={e => {
-              const v = (e.currentTarget as HTMLDetailsElement).open
-              if (v !== isOpen(g.operation)) setOpen(o => ({ ...o, [g.operation]: v }))
-            }}
-          >
-            <summary className="hm-row hm-row--op" data-row={g.operation}>
-              <span className="hm-row__name">
-                <span className="hm-op__name">{g.operation}</span>
-                <span className="hm-op__count">{g.tests.length}</span>
-              </span>
-              {g.cells.map((c, i) => (
-                <span key={names[i]} className="hm-cell">
-                  <Share cell={c} best={i === opWinner(g)} />
-                  <TierBar
-                    thin
-                    top={i === opWinner(g)}
-                    counts={c?.counts ?? []}
-                    label={caseTitle(names[i]!, g.operation, c)}
-                  />
+        {level !== undefined ? (
+          <div className="hm-tests">
+            {tests.map(t =>
+              testRow(
+                t,
+                t.test
+                  .slice(level.length + 1)
+                  .replaceAll('/', ' ')
+                  .replaceAll('-', ' '),
+              ),
+            )}
+          </div>
+        ) : (
+          visible.map(g => (
+            <details
+              key={g.operation}
+              id={g.operation}
+              className="hm-op"
+              open={isOpen(g.operation)}
+              onToggle={e => {
+                const v = (e.currentTarget as HTMLDetailsElement).open
+                if (v !== isOpen(g.operation)) setOpen(o => ({ ...o, [g.operation]: v }))
+              }}
+            >
+              <summary className="hm-row hm-row--op" data-row={g.operation}>
+                <span className="hm-row__name">
+                  <span className="hm-op__name">{g.operation}</span>
+                  <span className="hm-op__count">{g.tests.length}</span>
                 </span>
-              ))}
-            </summary>
-            {g.tests.map(t => {
-              const rel = relativeTimes(t.cells)
-              const timed = rel.filter(r => r !== null).length
-              return (
-                <div key={t.slug} className="hm-row" data-row={`${g.operation}/${t.slug}`}>
-                  <a className="hm-row__name hm-row__test" href={url.test(g.operation, t.slug)}>
-                    {t.slug.replaceAll('-', ' ')}
-                  </a>
-                  {t.cells.map((c, i) => {
-                    const title = caseTitle(names[i]!, t.slug, c)
-                    if (!c)
-                      return (
-                        <span key={names[i]} className="hm-cell hm-cell--none bc-annot">
-                          not run
-                        </span>
-                      )
-                    return (
-                      <a
-                        key={names[i]}
-                        className="hm-cell"
-                        data-grade={c.grade}
-                        href={caseLink(names[i]!, t.test)}
-                        title={`${title} · open these cases`}
-                      >
-                        <Frac cell={c} best={i === testWinner(t.cells)} />
-                        <TierBar
-                          thin
-                          top={i === testWinner(t.cells)}
-                          counts={c.counts}
-                          label={title}
-                        />
-                        <Time cell={c} rel={rel[i]!} compared={timed > 1} />
-                      </a>
-                    )
-                  })}
-                </div>
-              )
-            })}
-          </details>
-        ))}
+                {g.cells.map((c, i) => (
+                  <span key={names[i]} className="hm-cell">
+                    <Share cell={c} best={i === opWinner(g)} />
+                    <TierBar
+                      thin
+                      top={i === opWinner(g)}
+                      counts={c?.counts ?? []}
+                      label={caseTitle(names[i]!, g.operation, c)}
+                    />
+                  </span>
+                ))}
+              </summary>
+              {g.tests.map(t => testRow(t, t.slug.replaceAll('-', ' ')))}
+            </details>
+          ))
+        )}
         {!visible.length && <p className="bc-annot hm-grid__empty">no test matches</p>}
       </div>
     </div>
   )
+
+  function testRow(t: GridTest, name: string) {
+    const rel = relativeTimes(t.cells)
+    const timed = rel.filter(r => r !== null).length
+    return (
+      <div key={t.test} className="hm-row" data-row={t.test}>
+        <a
+          className={`hm-row__name hm-row__test${level !== undefined ? ' hm-row__test--flat' : ''}`}
+          href={url.compare(suite, t.test)}
+        >
+          {name}
+        </a>
+        {t.cells.map((c, i) => {
+          const title = caseTitle(names[i]!, t.slug, c)
+          if (!c)
+            return (
+              <span key={names[i]} className="hm-cell hm-cell--none bc-annot">
+                not run
+              </span>
+            )
+          return (
+            <a
+              key={names[i]}
+              className="hm-cell"
+              data-grade={c.grade}
+              href={caseLink(names[i]!, t.test)}
+              title={`${title} · open these cases`}
+            >
+              <Frac cell={c} best={i === testWinner(t.cells)} />
+              <TierBar thin top={i === testWinner(t.cells)} counts={c.counts} label={title} />
+              <Time cell={c} rel={rel[i]!} compared={timed > 1} />
+            </a>
+          )
+        })}
+      </div>
+    )
+  }
 }
 
 function Share({ cell, best }: { cell: Cell | null; best: boolean }) {

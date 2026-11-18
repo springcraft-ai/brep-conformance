@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { site } from '@/data/source'
 import { shortCaseIds, stepLabel } from './format'
-import { propsOf } from './index.data'
+import { levelsOf, propsOf } from './index.data'
 
 describe('propsOf', () => {
   const s = site()
@@ -80,5 +80,15 @@ describe('propsOf', () => {
   it('quotes its area’s section of api.md on every page but a part’s', () => {
     for (const p of pages.filter(p => p.operation !== 'parts'))
       expect(p.definition?.signatures.length).toBeGreaterThan(0)
+  })
+})
+
+describe('levelsOf', () => {
+  it('lists every level above a test once, and no test', () => {
+    expect(levelsOf(['booleans/a/x', 'booleans/a/y', 'booleans/b', 'fillets/z'])).toEqual([
+      'booleans',
+      'booleans/a',
+      'fillets',
+    ])
   })
 })

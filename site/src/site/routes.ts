@@ -1,8 +1,12 @@
-// File-based routes. Under src/pages/, a directory is a path segment and `[name]` a parameter:
+// File-based routes. Under src/pages/, a directory is a path segment, `[name]` a parameter of one
+// segment, and `[...name]` one of one or more segments:
 //   index.page.tsx            -> /
 //   about.page.tsx            -> /about/
 //   reports/[kernel]/index.page.tsx -> /reports/<kernel>/
+//   compare/[...path]/index.page.tsx -> /compare/<a>/<b>/…/
 //   badges/[kernel].svg.ts    -> /badges/<kernel>.svg  (an endpoint: any extension before .ts)
+
+import { segment } from './href'
 
 export type Params = Record<string, string>
 
@@ -32,9 +36,13 @@ export function routeOf(module: string): Route {
   } else {
     throw new Error(`${module}: not a page (*.page.tsx) or an endpoint (*.<ext>.ts)`)
   }
-  const params = [...pattern.matchAll(/\[([a-zA-Z0-9_]+)\]/g)].map(m => m[1]!)
+  const params = [...pattern.matchAll(PARAM)].map(m => m[2]!)
   return { module, kind, pattern, params }
 }
+
+// `[name]`, or `[...name]` for a parameter that spans segments; group 1 is the dots.
+const PARAM = /\[(\.\.\.)?([a-zA-Z0-9_]+)\]/g
+const isRest = (segment: string) => segment.startsWith('[...')
 
 // The data module that sits beside a page: index.page.tsx -> index.data.ts.
 export function dataModuleOf(module: string): string {
@@ -46,19 +54,23 @@ function escape(s: string): string {
 }
 
 export function matchRoute(route: Route, path: string): Params | null {
-  const parts = route.pattern.split(/(\[[a-zA-Z0-9_]+\])/)
-  const re = parts.map(p => (/^\[.+\]$/.test(p) ? '([^/]+)' : escape(p))).join('')
+  const parts = route.pattern.split(/(\[(?:\.\.\.)?[a-zA-Z0-9_]+\])/)
+  const re = parts
+    .map(p => (!/^\[.+\]$/.test(p) ? escape(p) : isRest(p) ? '([^/]+(?:/[^/]+)*)' : '([^/]+)'))
+    .join('')
   const m = new RegExp(`^${re}$`).exec(path)
   if (!m) return null
-  return Object.fromEntries(route.params.map((k, i) => [k, decodeURIComponent(m[i + 1]!)]))
+  const decode = (v: string) => v.split('/').map(decodeURIComponent).join('/')
+  return Object.fromEntries(route.params.map((k, i) => [k, decode(m[i + 1]!)]))
 }
 
 export function pathOf(route: Route, params: Params): string {
-  return route.pattern.replace(/\[([a-zA-Z0-9_]+)\]/g, (_, k: string) => {
+  return route.pattern.replace(PARAM, (_, rest: string | undefined, k: string) => {
     const v = params[k]
-    if (!v || v.includes('/') || v === '.' || v === '..')
+    const segments = v?.split('/') ?? []
+    if (!v || (!rest && segments.length > 1) || segments.some(s => !s || s === '.' || s === '..'))
       throw new Error(`${route.module}: bad param ${k}=${v}`)
-    return encodeURIComponent(v)
+    return segments.map(segment).join('/')
   })
 }
 
@@ -69,9 +81,11 @@ export function fileOf(path: string): string {
   return rel === '' || rel.endsWith('/') ? `${rel}index.html` : rel
 }
 
-// Most specific first, so /reports/latest/ would win over /reports/[kernel]/.
+// Most specific first, so /reports/latest/ would win over /reports/[kernel]/, and a parameter of one
+// segment over one that spans segments.
 export function sortRoutes(routes: Route[]): Route[] {
-  const score = (r: Route) => r.pattern.split('/').map(s => (s.includes('[') ? 1 : 0))
+  const score = (r: Route) =>
+    r.pattern.split('/').map(s => (isRest(s) ? 2 : s.includes('[') ? 1 : 0))
   return [...routes].sort((a, b) => {
     const sa = score(a)
     const sb = score(b)

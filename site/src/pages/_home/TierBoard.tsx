@@ -191,7 +191,7 @@ export function TierBoard({
                   </td>
                 )}
                 <td className="hm-td--kernel">
-                  <a className="hm-kname" href={url.report(r.suite, r.kernel, r.version)}>
+                  <a className="hm-kname" href={url.kernel(r.suite, r.segment)}>
                     {r.kernel}
                   </a>
                   <span className="hm-license">
@@ -217,7 +217,7 @@ export function TierBoard({
                       label={`${r.kernel}: ${n(r.passing)} of ${n(r.total)} cases at 1e-7`}
                       top={r.kernel === b.rate}
                       href={g =>
-                        `${url.report(r.suite, r.kernel, r.version)}?grade=${bandGrades(g).join(',')}#cases`
+                        `${url.kernel(r.suite, r.segment)}?grade=${bandGrades(g).join(',')}#cases`
                       }
                     />
                   </BarCard>

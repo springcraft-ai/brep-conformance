@@ -450,8 +450,19 @@ export function caseTimes(reports: Report[]): Record<string, CaseTime | null> {
   )
 }
 
+// The segment that names a kernel's page in its report's URL: the kernel's name, or name@version
+// where the suite holds more than one release of the kernel. `reports` is every report read.
+export function kernelSegment(reports: Report[], r: Report): string {
+  const releases = reports.filter(
+    o => o.methodology.suite === r.methodology.suite && o.identity.kernel === r.identity.kernel,
+  )
+  return releases.length > 1 ? `${r.identity.kernel}@${r.identity.version}` : r.identity.kernel
+}
+
 export interface LeaderRow {
   kernel: string
+  // The kernel's page in its report: kernelSegment.
+  segment: string
   name: string
   version: string
   suite: string
@@ -462,13 +473,15 @@ export interface LeaderRow {
   time: CaseTime | null
 }
 
-// Ranked by the headline alone, ties by name: no kernel gets a place of its own.
-export function leaderboard(latest: Report[]): LeaderRow[] {
+// Ranked by the headline alone, ties by name: no kernel gets a place of its own. `all` is every
+// report read, which names each kernel's page.
+export function leaderboard(latest: Report[], all: Report[] = latest): LeaderRow[] {
   const speed = speedFactors(latest)
   const time = caseTimes(latest)
   return latest
     .map(r => ({
       kernel: r.identity.kernel,
+      segment: kernelSegment(all, r),
       name: r.identity.name,
       version: r.identity.version,
       suite: r.methodology.suite,
@@ -583,25 +596,42 @@ export function operationIndex(latest: Report[]): OperationEntry[] {
     .sort((a, b) => a.operation.localeCompare(b.operation))
 }
 
-export interface Site {
-  reports: Report[]
-  latest: Report[]
+// One report of the site: every kernel run on one suite version, at /reports/<suite>/.
+export interface SuiteView {
   suite: string
+  // Every report on the suite, older releases of a kernel included.
+  reports: Report[]
+  // Each kernel's latest release on the suite: the ones its pages compare.
+  latest: Report[]
   kernels: string[]
   leaderboard: LeaderRow[]
   tests: TestEntry[]
   operations: OperationEntry[]
 }
 
-export function buildSite(reports: Report[]): Site {
-  const latest = latestReports(reports)
+export function suiteView(reports: Report[], suite: string): SuiteView {
+  const on = reports.filter(r => r.methodology.suite === suite)
+  const latest = latestByKernel(on)
   return {
-    reports,
+    suite,
+    reports: on,
     latest,
-    suite: currentSuite(reports),
     kernels: latest.map(r => r.identity.kernel),
-    leaderboard: leaderboard(latest),
+    leaderboard: leaderboard(latest, reports),
     tests: testIndex(latest),
     operations: operationIndex(latest),
   }
+}
+
+// The current suite's view, which the home page shows, and every suite's, newest first.
+export interface Site extends SuiteView {
+  all: Report[]
+  suites: SuiteView[]
+}
+
+export function buildSite(reports: Report[]): Site {
+  const names = [...new Set(reports.map(r => r.methodology.suite))].sort(compareVersions).reverse()
+  const suites = names.map(s => suiteView(reports, s))
+  const current = suites.find(v => v.suite === currentSuite(reports)) ?? suiteView([], '')
+  return { ...current, all: reports, suites }
 }

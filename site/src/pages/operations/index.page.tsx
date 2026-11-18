@@ -57,7 +57,7 @@ export default function OperationsIndex({ total, suites, kernels, groups }: Prop
               </th>
               {kernels.map(k => (
                 <th key={k.kernel} scope="col" className="fn-kernel">
-                  <a href={url.report(k.suite, k.kernel, k.version)}>
+                  <a href={url.kernel(k.suite, k.segment)}>
                     <span>{k.kernel}</span>
                     <span className="fn-run" role="tooltip">
                       {fmt.version(k.version)}

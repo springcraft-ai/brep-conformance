@@ -4,10 +4,36 @@ export function Annot({ children }: { children: ReactNode }) {
   return <span className="bc-annot">{children}</span>
 }
 
-// The page's display title on the left, its registration labels pinned to the far corner.
-export function PageHead({ title, corner }: { title: ReactNode; corner?: ReactNode[] }) {
+// One page above this one in its breadcrumb.
+export interface Crumb {
+  label: string
+  href: string
+}
+
+// The page's display title on the left, its registration labels pinned to the far corner, and
+// above the title the pages it sits under.
+export function PageHead({
+  title,
+  corner,
+  trail,
+}: {
+  title: ReactNode
+  corner?: ReactNode[]
+  trail?: Crumb[]
+}) {
   return (
-    <div className="bc-head">
+    <div className={trail ? 'bc-head bc-head--trail' : 'bc-head'}>
+      {trail && (
+        <nav className="bc-crumbs" aria-label="Breadcrumb">
+          <ol>
+            {trail.map((c, i) => (
+              <li key={i}>
+                <a href={c.href}>{c.label}</a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )}
       <h1 className="bc-display">{title}</h1>
       {corner && (
         <div className="bc-head__corner">

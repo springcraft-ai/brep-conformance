@@ -24,8 +24,8 @@ describe('routeOf', () => {
   })
 
   it('pairs a page with its data module', () => {
-    expect(dataModuleOf('./pages/tests/[op]/[test]/index.page.tsx')).toBe(
-      './pages/tests/[op]/[test]/index.data.ts',
+    expect(dataModuleOf('./pages/reports/[report]/[kernel]/index.page.tsx')).toBe(
+      './pages/reports/[report]/[kernel]/index.data.ts',
     )
   })
 })
@@ -54,6 +54,18 @@ describe('matchRoute and pathOf', () => {
     expect(() => pathOf(report, { kernel: '..', version: '1' })).toThrow()
   })
 
+  it('matches and writes a parameter that spans segments', () => {
+    const compare = routeOf('./pages/reports/[report]/compare/[...path]/index.page.tsx')
+    expect(compare.params).toEqual(['report', 'path'])
+    const params = { report: '1.0.0', path: 'booleans/degenerate/equal cylinders' }
+    const path = pathOf(compare, params)
+    expect(path).toBe('/reports/1.0.0/compare/booleans/degenerate/equal%20cylinders/')
+    expect(matchRoute(compare, path)).toEqual(params)
+    expect(matchRoute(compare, '/reports/1.0.0/compare/')).toBeNull()
+    expect(() => pathOf(compare, { report: '1.0.0', path: 'booleans//x' })).toThrow()
+    expect(() => pathOf(compare, { report: '1.0.0', path: 'booleans/../x' })).toThrow()
+  })
+
   it('writes the file a link to an escaped param reaches once the host decodes it', () => {
     const path = pathOf(report, { kernel: 'k', version: '1.2.0+abc def' })
     expect(path).toBe('/reports/k/1.2.0%2Babc%20def/')
@@ -77,5 +89,16 @@ describe('sortRoutes', () => {
       routeOf('./pages/reports/latest/index.page.tsx'),
     ])
     expect(sorted.map(r => r.pattern)).toEqual(['/reports/latest/', '/reports/[kernel]/'])
+  })
+
+  it('puts a parameter of one segment ahead of one that spans segments', () => {
+    const sorted = sortRoutes([
+      routeOf('./pages/reports/[report]/[...path]/index.page.tsx'),
+      routeOf('./pages/reports/[report]/[kernel]/index.page.tsx'),
+    ])
+    expect(sorted.map(r => r.pattern)).toEqual([
+      '/reports/[report]/[kernel]/',
+      '/reports/[report]/[...path]/',
+    ])
   })
 })

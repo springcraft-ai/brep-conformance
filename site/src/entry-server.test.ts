@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { kernelSegment } from '@/data/results'
+import { levelsOf } from './pages/reports/[report]/compare/[...path]/index.data'
 import { site } from '@/data/source'
 import { prerender, render, routes } from './entry-server'
 import { operations } from './pages/operations/doc'
@@ -7,29 +9,32 @@ describe('the site', () => {
   const files = prerender(null)
   const byFile = new Map(files.map(f => [f.file, f]))
 
-  it('discovers the five page routes from src/pages', () => {
+  it('discovers the page routes from src/pages', () => {
     expect(routes.map(r => r.pattern)).toEqual(
       expect.arrayContaining([
         '/',
-        '/reports/[suite]/[kernel]/[version]/',
-        '/tests/[op]/[test]/',
+        '/reports/[report]/',
+        '/reports/[report]/[kernel]/',
+        '/reports/[report]/compare/[...path]/',
         '/operations/[op]/',
         '/badges/[kernel].svg',
       ]),
     )
   })
 
-  it('renders a page for every report, test and operation, and a badge per kernel', () => {
+  it('renders every report, its kernels and its tests, each operation, and a badge per kernel', () => {
     const s = site()
     expect(byFile.has('index.html')).toBe(true)
     expect(byFile.has('404.html')).toBe(true)
-    for (const r of s.reports) {
-      const { kernel, version } = r.identity
-      const at = `reports/${r.methodology.suite}/${kernel}/${version}/index.html`
-      expect(byFile.has(at)).toBe(true)
+    for (const v of s.suites) {
+      expect(byFile.has(`reports/${v.suite}/index.html`)).toBe(true)
+      for (const r of v.reports)
+        expect(byFile.has(`reports/${v.suite}/${kernelSegment(s.all, r)}/index.html`)).toBe(true)
+      for (const t of v.tests)
+        expect(byFile.has(`reports/${v.suite}/compare/${t.test}/index.html`)).toBe(true)
+      for (const l of levelsOf(v.tests.map(t => t.test)))
+        expect(byFile.has(`reports/${v.suite}/compare/${l}/index.html`)).toBe(true)
     }
-    for (const t of s.tests)
-      expect(byFile.has(`tests/${t.operation}/${t.slug}/index.html`)).toBe(true)
     for (const o of operations().operations)
       expect(byFile.has(`operations/${o.id}/index.html`)).toBe(true)
     for (const k of s.kernels) expect(byFile.get(`badges/${k}.svg`)?.type).toBe('image/svg+xml')
@@ -75,6 +80,10 @@ describe('the site', () => {
   it('renders one URL for the dev server, and 404 for an unknown page', () => {
     expect(render(`/badges/${site().kernels[0]}.svg`)?.status).toBe(200)
     expect(render('/reports/0.0.0/nobody/0/')?.status).toBe(404)
+    // The reports have no index yet.
+    expect(render('/reports/')?.status).toBe(404)
+    expect(render(`/reports/${site().suite}/compare/booleans/`)?.status).toBe(200)
+    expect(render(`/reports/${site().suite}/compare/nothing/`)?.status).toBe(404)
     expect(render('/src/main.ts')).toBeNull()
   })
 })

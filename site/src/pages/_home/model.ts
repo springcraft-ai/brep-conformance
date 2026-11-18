@@ -64,6 +64,8 @@ export interface GridGroup {
 export interface BoardRow {
   rank: number
   kernel: string
+  // The kernel's page in the report: kernelSegment.
+  segment: string
   version: string
   suite: string
   rate: number
@@ -110,6 +112,7 @@ export function boardRows(board: LeaderRow[]): BoardRow[] {
     return {
       rank: i + 1,
       kernel: r.kernel,
+      segment: r.segment,
       version: r.version,
       suite: r.suite,
       rate: r.summary.passRate,
@@ -237,6 +240,11 @@ export function relativeTimes(cells: (Cell | null)[]): (number | null)[] {
   const known = timed.filter((t): t is number => t !== null)
   const best = known.length ? Math.min(...known) : null
   return timed.map(t => (t === null || best === null ? null : t / best))
+}
+
+// A test at or under a level of the suite's tree, such as booleans/degenerate.
+export function underPrefix(test: string, prefix: string): boolean {
+  return test === prefix || test.startsWith(`${prefix}/`)
 }
 
 export function matchesQuery(test: GridTest, operation: string, q: string): boolean {

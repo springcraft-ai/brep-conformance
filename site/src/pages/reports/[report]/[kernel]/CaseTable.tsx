@@ -5,7 +5,7 @@ import { fmt, GradeLabel, GradeMark, gradeLabel, SearchBox, Table, type Column }
 import { GRADES } from '@/data/results'
 import { url } from '@/site/href'
 import {
-  caseHash,
+  caseSearch,
   filterToSearch,
   gradesOf,
   groupByTest,
@@ -27,13 +27,16 @@ const PAGE_SIZE = 50
 // It filters by grade and area, which the bars above set too, and by its search box.
 export function CaseTable({
   rows,
+  suite,
   kernel,
   filter,
   opening,
   onFilter,
 }: {
   rows: Row[]
-  // The kernel as the tests' pages show it: null when they show another of its reports.
+  // The report the cases are in, whose compare pages the tests link to.
+  suite: string
+  // The kernel as the compare pages show it: null when they show another of its releases.
   kernel: string | null
   filter: Filter
   // The view the report opens on.
@@ -191,6 +194,7 @@ export function CaseTable({
           <TestGroup
             key={g.test}
             group={g}
+            suite={suite}
             kernel={kernel}
             open={open[g.test] ?? groups.length === 1}
             onToggle={v => setOpen(o => ({ ...o, [g.test]: v }))}
@@ -207,16 +211,18 @@ export function CaseTable({
 
 function TestGroup({
   group: g,
+  suite,
   kernel,
   open,
   onToggle,
 }: {
   group: Group
+  suite: string
   kernel: string | null
   open: boolean
   onToggle: (open: boolean) => void
 }) {
-  const test = url.test(g.operation, g.slug)
+  const test = url.compare(suite, g.test)
   // One reason every shown case shares is the group's own line; anything else needs the column:
   // several reasons, or one that only some of the cases give.
   const perCase = g.whys.length > 1 || (g.whys.length === 1 && g.reasoned < g.rows.length)
@@ -234,7 +240,7 @@ function TestGroup({
         r.paged && r.listed ? (
           <a
             className="rp-case"
-            href={test + caseHash(kernel, r.id)}
+            href={test + caseSearch(kernel, r.n)}
             title={`${r.id} on the test’s page`}
           >
             {shortCase(r.id)}

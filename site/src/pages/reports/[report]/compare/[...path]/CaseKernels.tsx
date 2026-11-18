@@ -132,7 +132,7 @@ export function CaseKernels({
       sortable: false,
       render: r => (
         <a
-          href={`${url.report(r.kernel.suite, r.kernel.kernel, r.kernel.version)}?${q}#cases`}
+          href={`${url.kernel(r.kernel.suite, r.kernel.segment)}?${q}#cases`}
           title={`this case in ${r.kernel.kernel}’s report`}
         >
           {r.kernel.kernel}

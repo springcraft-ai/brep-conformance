@@ -86,7 +86,24 @@ every kernel shown passed in full.
 ## Leaderboard
 
 One row per kernel: its latest release on the current suite version, the highest suite version among
-the reports. Each report has its page at `/reports/<suite>/<kernel>/<version>/`, ranked or not. A
-version that is not a release number, such as springrep's source hash, is ordered by when it ran.
-Rows rank by pass rate, then by kernel id. A kernel's license comes from
+the reports. A version that is not a release number, such as springrep's source hash, is ordered by
+when it ran. Rows rank by pass rate, then by kernel id. A kernel's license comes from
 [`kernels.ts`](../src/data/kernels.ts), not the report. No kernel is placed or coloured apart.
+
+## Pages
+
+Each suite version is a report of the site, and every page but the home page sits inside one, so a
+link to it keeps naming the same results once a newer suite is published:
+
+| Path                                    | Page                                                   |
+| --------------------------------------- | ------------------------------------------------------ |
+| `/`                                     | The current suite's leaderboard                        |
+| `/reports/<suite>/`                     | That suite's leaderboard                               |
+| `/reports/<suite>/<kernel>/`            | One kernel release on it                               |
+| `/reports/<suite>/compare/<test path>/` | One test, every kernel; the path as the suite names it |
+| `/reports/<suite>/compare/<level>/`     | The table of the tests under a level of that path      |
+
+A kernel's segment is its name, or `<kernel>@<version>` where the suite has more than one release of
+it. A level is any part of a test's path above the test, such as `booleans` or
+`booleans/degenerate`. A compare page's breadcrumb leads up through the page of each level to the
+report. `/reports/` has no page.

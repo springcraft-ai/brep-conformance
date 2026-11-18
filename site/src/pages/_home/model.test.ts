@@ -10,6 +10,7 @@ import {
   grid,
   keep,
   matchesQuery,
+  underPrefix,
   shownShare,
   relativeTimes,
   toggleCompare,
@@ -113,6 +114,7 @@ describe('boardRows', () => {
   const summary = summarize(cases('1e-7', '1e-6'))
   const row = (kernel: string, factor: number | null) => ({
     kernel,
+    segment: kernel,
     name: kernel,
     version: '1.0.0',
     suite: '0.9.0',
@@ -215,6 +217,14 @@ describe('matchesQuery', () => {
     expect(matchesQuery(t, 'booleans', 'sphere bool')).toBe(true)
     expect(matchesQuery(t, 'booleans', 'sphere fillet')).toBe(false)
     expect(matchesQuery(t, 'booleans', '  ')).toBe(true)
+  })
+})
+
+describe('underPrefix', () => {
+  it('keeps a test at or under the level, not one that only starts with the same letters', () => {
+    expect(underPrefix('booleans/degenerate/a', 'booleans/degenerate')).toBe(true)
+    expect(underPrefix('booleans/degenerate/a', 'booleans/degenerate/a')).toBe(true)
+    expect(underPrefix('booleans/degenerated/a', 'booleans/degenerate')).toBe(false)
   })
 })
 

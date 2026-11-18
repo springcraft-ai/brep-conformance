@@ -15,10 +15,30 @@ export const hydrate = true
 
 const n = (x: number) => x.toLocaleString('en-US')
 
-export default function Home({ suite, cases, kernels, runs, board, groups }: Props) {
-  const versions = Object.fromEntries(board.map(r => [r.kernel, r.version]))
+export default function Home({
+  home,
+  suite,
+  cases,
+  kernels,
+  segments,
+  runs,
+  board,
+  groups,
+}: Props) {
+  const pages = Object.fromEntries(kernels.map((k, i) => [k, segments[i]!]))
   const [picked, setPicked] = useState(() => defaultCompare(board))
   const [q, setQ] = useUrlQuery()
+  const head = home ? (
+    <PageHead title="B-rep kernel leaderboard" />
+  ) : (
+    <PageHead
+      title={
+        <>
+          Report <span className="hm-version">{suite}</span>
+        </>
+      }
+    />
+  )
 
   const compare = (kernel: string) => setPicked(p => toggleCompare(p, kernel, kernels))
   const canCompare = kernels.length > COMPARE_MAX
@@ -27,7 +47,7 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
   if (board.length === 0)
     return (
       <div className="hm-home">
-        <PageHead title="B-rep kernel leaderboard" />
+        {head}
         <p className="hm-tagline">
           An open test suite for exact B-rep CAD kernels. A case passes only at 1e-7 mm.
         </p>
@@ -42,7 +62,7 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
   const b = bests(board)
   return (
     <div className="hm-home">
-      <PageHead title="B-rep kernel leaderboard" />
+      {head}
 
       <section className="hm-lead">
         <div className="hm-board__head">
@@ -59,7 +79,7 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
             <li key={r.kernel} className="hm-card">
               <span className="hm-card__rank">{r.rank}</span>
               <span className="hm-card__kernel">
-                <a className="hm-kname" href={url.report(r.suite, r.kernel, r.version)}>
+                <a className="hm-kname" href={url.kernel(r.suite, r.segment)}>
                   {r.kernel}
                 </a>
                 <span className="hm-license">{fmt.version(r.version)}</span>
@@ -115,7 +135,7 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
             kernels={kernels}
             shown={picked}
             suite={suite}
-            versions={versions}
+            pages={pages}
             q={q}
             onSearch={setQ}
           />

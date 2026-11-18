@@ -1,6 +1,40 @@
 import { describe, expect, it } from 'vitest'
 import type { Grade } from '@/data/results'
-import { drawnBy, kernelOrder, point, stepLabel, shortCaseIds, testName, value } from './format'
+import {
+  drawnBy,
+  kernelOrder,
+  point,
+  stepLabel,
+  shortCaseIds,
+  testName,
+  titleOf,
+  trailOf,
+  value,
+} from './format'
+
+describe('trailOf', () => {
+  it('climbs from a test to its report through the page of each level', () => {
+    expect(trailOf('1.0.0', 'booleans/degenerate/equal-cylinders-crossing')).toEqual([
+      { label: 'Report 1.0.0', href: '/reports/1.0.0/' },
+      { label: 'booleans', href: '/reports/1.0.0/compare/booleans/' },
+      { label: 'degenerate', href: '/reports/1.0.0/compare/booleans/degenerate/' },
+    ])
+    expect(trailOf('1.0.0', 'fillets/box-all-edges').map(c => c.label)).toEqual([
+      'Report 1.0.0',
+      'fillets',
+    ])
+  })
+})
+
+describe('titleOf', () => {
+  it('capitalizes each word but the minor ones inside the title', () => {
+    expect(titleOf('booleans/coincident/thread-crest-on-a-shank-from-where-it-runs-out')).toBe(
+      'Thread Crest on a Shank from Where It Runs Out',
+    )
+    expect(titleOf('booleans')).toBe('Booleans')
+    expect(titleOf('x/a-solid-with-itself')).toBe('A Solid with Itself')
+  })
+})
 
 describe('value', () => {
   it('writes counts whole, small values in exponent form, the rest to six figures', () => {
@@ -14,8 +48,8 @@ describe('value', () => {
 })
 
 describe('testName', () => {
-  it('drops the top-level directory and reads hyphens as spaces', () => {
-    expect(testName('booleans/overlap/spheres')).toBe('overlap / spheres')
+  it('keeps only the last level and reads hyphens as spaces', () => {
+    expect(testName('booleans/overlap/spheres')).toBe('spheres')
     expect(testName('modify/offset-drilled-block-hole-fills')).toBe(
       'offset drilled block hole fills',
     )

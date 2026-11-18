@@ -23,6 +23,8 @@ export function pageKey(operation: string, slug: string): string {
 export interface Row {
   order: number
   id: string
+  // Its number among its test's cases, from 1, in the suite's order: what its test's page lists.
+  n: number
   test: string
   slug: string
   operation: string
@@ -80,11 +82,13 @@ export function packCases(cases: CaseRow[], pages?: TestPages): PackedCases {
 export function unpackCases(packed: PackedCases): Row[] {
   const unpaged = new Set(packed.unpaged)
   const unlisted = new Set(packed.unlisted)
+  const counts = packed.tests.map(() => 0)
   return packed.rows.map(([id, t, k, g, w, timeMs], order) => {
     const [test, slug, operation] = packed.tests[t]!
     return {
       order,
       id,
+      n: ++counts[t]!,
       test,
       slug,
       operation,
@@ -226,10 +230,10 @@ export function sameFilter(a: Filter, b: Filter): boolean {
   return key(a) === key(b)
 }
 
-// What a test's page reads to show one case, as one kernel drew it where the kernel is named.
-export function caseHash(kernel: string | null, id: string): string {
-  const e = encodeURIComponent
-  return `#${kernel ? `kernel=${e(kernel)}&` : ''}case=${e(id)}`
+// What a test's page reads to show one case, by its number, as one kernel drew it where the kernel
+// is named.
+export function caseSearch(kernel: string | null, n: number): string {
+  return `?${kernel ? `kernel=${encodeURIComponent(kernel)}&` : ''}case=${n}`
 }
 
 // The six characters of a case id's hash that a table shows; the whole id is the case's name.
