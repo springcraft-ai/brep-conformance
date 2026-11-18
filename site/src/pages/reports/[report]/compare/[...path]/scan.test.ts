@@ -3,6 +3,7 @@ import { overlayOf } from './glb'
 import type { Vec3 } from './vec'
 import {
   camera,
+  drawnAt,
   frameOf,
   HOME,
   homeOf,
@@ -175,6 +176,27 @@ describe('overlayGeometry, a query’s answers', () => {
     expect(Array.from(g.inside)).toEqual([1, 0, 0])
     expect(Array.from(g.points)).toEqual([2, 0, 0])
     expect(Array.from(g.quiet)).toEqual([3, 0, 0])
+  })
+
+  it('says where each spread probe point is drawn, so a mark on it is drawn there too', () => {
+    const g = overlayOf({
+      sides: [
+        { at: [5, 0, 0], side: 'on' },
+        { at: [5, 0, -0.01], side: 'in' },
+        { at: [5, 0, 0.01], side: 'out' },
+      ],
+    })
+    const o = overlayGeometry(g, within)
+    expect(o.moved.map(([from]) => from)).toEqual([
+      [5, 0, -0.01],
+      [5, 0, 0.01],
+    ])
+    const [, inTo] = o.moved[0]!
+    const [, outTo] = o.moved[1]!
+    expect(inTo[2]).toBeCloseTo(o.inside[2]!)
+    expect(outTo[2]).toBeCloseTo(o.quiet[2]!)
+    expect(drawnAt(o.moved, [5, 0, -0.01])).toEqual(inTo)
+    expect(drawnAt(o.moved, [1, 2, 3])).toEqual([1, 2, 3])
   })
 
   it('spreads a probe of three points across the surface, joined by a stick, so they show apart', () => {

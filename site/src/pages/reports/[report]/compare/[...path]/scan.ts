@@ -220,6 +220,12 @@ export function frameOf(scene: Scene): { lo: Vec3; hi: Vec3 } {
   return b
 }
 
+// Where `p` is drawn: the place a probe point was spread to, if it is one, else where it is.
+export function drawnAt(moved: readonly [Vec3, Vec3][], p: Vec3): Vec3 {
+  const hit = moved.find(([f]) => Math.hypot(f[0] - p[0], f[1] - p[1], f[2] - p[2]) < 1e-6)
+  return hit ? hit[1] : p
+}
+
 // The marks, the focus reticle and the axes over the GPU's drawing.
 function overlay(
   ctx: CanvasRenderingContext2D,
@@ -227,12 +233,13 @@ function overlay(
   c: Camera,
   col: Colors,
   focus: number,
+  moved: readonly [Vec3, Vec3][],
 ) {
   ctx.clearRect(0, 0, c.w, c.h)
 
   ctx.lineWidth = 1.5
   scene.marks.forEach((m, i) => {
-    const [x, y] = project(c, ...m.p)
+    const [x, y] = project(c, ...drawnAt(moved, m.p))
     ctx.strokeStyle = col.fail
     ctx.fillStyle = col.fail
     if (m.held) ctx.fillRect(x - 3.5, y - 3.5, 7, 7)
@@ -299,6 +306,7 @@ export function overlayGeometry(
       hiddenLines: none,
       sticks: none,
       seen: none,
+      moved: [],
       convex: none,
       concave: none,
       flat: none,
@@ -395,6 +403,7 @@ export function overlayGeometry(
   // to tell apart; they are spread along the line through the three, and joined by a stick.
   const near = (p: Vec3, q: Vec3) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < PROBE_NEAR
   const used = new Set<number>()
+  const moved: [Vec3, Vec3][] = []
   o.sides.forEach((s, i) => {
     if (s.side !== 'on') return
     const pick = (side: Side) =>
@@ -414,10 +423,12 @@ export function overlayGeometry(
     if (inner) {
       used.add(ii)
       inside.push(...spread(-1))
+      moved.push([inner, spread(-1) as Vec3])
     }
     if (outer) {
       used.add(oi)
       quiet.push(...spread(1))
+      moved.push([outer, spread(1) as Vec3])
     }
     sticks.push(...(inner ? spread(-1) : s.at), ...(outer ? spread(1) : s.at))
   })
@@ -476,6 +487,7 @@ export function overlayGeometry(
     hiddenLines: dashesOf(lines),
     sticks: Float32Array.from(sticks),
     seen: Float32Array.from(seen),
+    moved,
     convex: Float32Array.from(convex),
     concave: Float32Array.from(concave),
     flat: Float32Array.from(flat),
@@ -558,7 +570,9 @@ export function mountScan(
   let queued = 0
   const colors = colorsOf(canvas)
   renderer.set(scene, scene.alt, scene.ghosts)
-  renderer.setOverlay(overlayGeometry(scene.overlay, frame))
+  let geometry = overlayGeometry(scene.overlay, frame)
+  let moved = geometry.moved
+  renderer.setOverlay(geometry)
 
   const render = () => {
     queued = 0
@@ -597,7 +611,7 @@ export function mountScan(
       },
     )
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    overlay(ctx, scene, c, colors, focused)
+    overlay(ctx, scene, c, colors, focused, moved)
   }
   const redraw = () => {
     if (!queued) queued = requestAnimationFrame(render)
@@ -659,7 +673,7 @@ export function mountScan(
       let best = -1
       let bestD = 12
       scene.marks.forEach((m, i) => {
-        const [x, y] = project(c, ...m.p)
+        const [x, y] = project(c, ...drawnAt(moved, m.p))
         const d = Math.hypot(x - (e.clientX - r.left), y - (e.clientY - r.top))
         if (d < bestD) [best, bestD] = [i, d]
       })
@@ -736,7 +750,9 @@ export function mountScan(
       frame = frameOf(scene)
       focused = -1
       renderer.set(scene, scene.alt, scene.ghosts)
-      renderer.setOverlay(overlayGeometry(scene.overlay, frame))
+      geometry = overlayGeometry(scene.overlay, frame)
+      moved = geometry.moved
+      renderer.setOverlay(geometry)
       redraw()
     },
     focus(i) {

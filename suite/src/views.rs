@@ -596,7 +596,7 @@ pub fn views(c: &Case) -> Value {
         extra["curvature"] = Value::Array(frames);
         vec![noted(
             "solid",
-            "Dots mark the points: each asks for the principal curvatures where the boundary lies nearest it. There, ticks run along the two principal directions: blue where the surface bends outward, violet where inward, grey where it is flat.",
+            "Each point lies a little off the surface, inside or out; the kernel must find where the surface lies nearest it, at the end of its stick, and give the principal curvatures there. Ticks run along their directions: blue where the surface bends outward, violet where inward, grey where it is flat.",
             vec![solid("main", a, None)],
         )]
     } else if let Some(dr) = &c.exact.drawing {

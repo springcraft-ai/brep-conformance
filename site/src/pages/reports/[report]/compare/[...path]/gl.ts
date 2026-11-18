@@ -198,6 +198,8 @@ export interface OverlayGeometry {
   quiet: Float32Array
   // A point's ball, its radius in model units.
   ball: number
+  // Points drawn away from where they are, a classify probe's: each from where it is to where drawn.
+  moved: [[number, number, number], [number, number, number]][]
 }
 
 const PLANE_ALPHA = 0.16
