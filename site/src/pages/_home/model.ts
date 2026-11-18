@@ -73,7 +73,6 @@ export interface BoardRow {
   // A kernel's time over the fastest kernel's, test by test; sorts ascending as faster, and a
   // kernel with no comparable test sorts last.
   speed: number
-  speedFactor: number | null
   // The tests the factor is taken over.
   speedGroups: number
   time: CaseTime | null
@@ -81,8 +80,6 @@ export interface BoardRow {
   medianMs: number
   license: string | null
   source: string | null
-  // The suite's maintainer makes this kernel.
-  maintainers: boolean
   // The adapter's repository, from the report of an official run; null on any other.
   adapter: string | null
 }
@@ -120,13 +117,11 @@ export function boardRows(board: LeaderRow[]): BoardRow[] {
       total: r.summary.total,
       counts: countsOf(r.summary.grades),
       speed: r.speed.factor ?? Number.POSITIVE_INFINITY,
-      speedFactor: r.speed.factor,
       speedGroups: r.speed.groups,
       time: r.time,
       medianMs: r.time?.median ?? Number.POSITIVE_INFINITY,
       license: info?.license ?? null,
       source: info?.source ?? null,
-      maintainers: info?.maintainers === true,
       adapter: r.adapter ? repoName(r.adapter.repo) : null,
     }
   })

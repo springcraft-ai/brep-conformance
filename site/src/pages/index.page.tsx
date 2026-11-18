@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Annot, fmt, PageHead, Section } from '@/components'
+import { fmt, PageHead, Section } from '@/components'
 import { queryFromUrl, useChromeSearch } from '@/components/search'
 import { EmptyState } from '@/ds'
 import { href, url } from '@/site/href'
@@ -103,10 +103,6 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
                   </dd>
                 </div>
               </dl>
-              <Annot>
-                {fmt.factor(r.speedFactor)} the fastest
-                {r.maintainers && ' · made by the suite’s maintainer'}
-              </Annot>
             </li>
           ))}
         </ol>

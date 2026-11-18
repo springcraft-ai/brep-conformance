@@ -130,7 +130,6 @@ describe('boardRows', () => {
       [2, 'b', null],
     ])
     expect(rows[1]!.speed).toBe(Number.POSITIVE_INFINITY)
-    expect(rows[0]!.speedFactor).toBe(1.5)
     expect(rows[1]!.medianMs).toBe(Number.POSITIVE_INFINITY)
     expect(rows[0]!.medianMs).toBe(4)
     expect(rows[0]!.counts[at('1e-6')]).toBe(1)
@@ -139,11 +138,6 @@ describe('boardRows', () => {
   it('states a known kernel’s license and leaves an unknown one empty', () => {
     expect(boardRows([row('solidcore', 1)])[0]!.license).toBe('Apache-2.0')
     expect(boardRows([row('nope', 1)])[0]!.license).toBeNull()
-  })
-
-  it('says which kernel the suite’s maintainer makes', () => {
-    expect(boardRows([row('springrep', 1)])[0]!.maintainers).toBe(true)
-    expect(boardRows([row('solidcore', 1)])[0]!.maintainers).toBe(false)
   })
 })
 
