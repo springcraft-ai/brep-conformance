@@ -8,7 +8,7 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-arris",
-        "commit": "f5e98500def3995712a8e614d29149509b3a440c",
+        "commit": "9cf83d9fc0319c74d2aa078d3ed2fb76a228cf76",
         "license": "MIT",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/arris-adapter"
@@ -23,7 +23,7 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-occt",
-        "commit": "594b6c6a8d7d368f33886472029c445ead9194c1",
+        "commit": "90eeae474f3216b0e12d077203ef207e23219f7a",
         "license": "MIT",
         "build": ["uv sync -q --frozen --project ."],
         "run": "{dir}/.venv/bin/python -I {dir}/adapter.py"
