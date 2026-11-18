@@ -7617,7 +7617,14 @@ mod tests {
     #[test]
     fn the_default_seed_draws_the_same_ids_on_every_platform() {
         let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
-        assert_eq!(format!("{:016x}", fnv(&ids.join("\n"))), "b7506d6ac5027e9a");
+        let got = format!("{:016x}", fnv(&ids.join("\n")));
+        if got != "b7506d6ac5027e9a" {
+            // Every id, so a run elsewhere can be compared with this one case by case.
+            for id in &ids {
+                eprintln!("id {id}");
+            }
+        }
+        assert_eq!(got, "b7506d6ac5027e9a");
     }
 
     #[test]
