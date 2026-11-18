@@ -26,10 +26,6 @@ export type Result = Grade
 // report names that folder as `assets`; this is for a report written before it did.
 export const ASSET_BASE = 'https://cdn.springcraft.ai/brep-conformance'
 
-export function assetBaseOf(suite: string, kernel: string, version: string): string {
-  return [ASSET_BASE, ...[suite, kernel, version].map(encodeURIComponent)].join('/')
-}
-
 // The folder a report's files are in, without its closing slash: null where the run wrote none.
 // A report is its kernel's own word, so `assets` must be the report's own folder on the suite's
 // CDN: no other host, and no other kernel's folder.
@@ -40,10 +36,10 @@ function assetFolder(
   version: string,
   at: string,
 ): string | null {
-  if (assets === undefined) return assetBaseOf(suite, kernel, version)
   if (assets === null) return null
   const own = `${ASSET_BASE}/${suite}/${kernel}/${version}/`
-  if (assets !== own) throw new Error(`${at}.assets: ${String(assets)} is not ${own}`)
+  if (assets !== undefined && assets !== own)
+    throw new Error(`${at}.assets: ${String(assets)} is not ${own}`)
   return own.slice(0, -1)
 }
 
@@ -183,7 +179,7 @@ function tierOf(result: Result): Tier | null {
   return (TIERS as readonly string[]).includes(result) ? (result as Tier) : null
 }
 
-// Must match the rule publish-assets.sh holds a key to: a path of plain names.
+// One part of a key: a plain name, so a key can hold no query, fragment, escape or climb.
 const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/
 
 // A report is its kernel's own word, so a key may not climb out of that kernel's files.
@@ -527,8 +523,14 @@ export function testIndex(latest: Report[]): TestEntry[] {
     }
   }
   for (const [key, entry] of tests) {
+    const listed = new Set<string>()
     for (const [kernel, cs] of rows.get(key)!) {
-      if (!entry.cases.length) entry.cases = cs.map(c => c.id)
+      // Every kernel's cases, each once: a case only a later kernel ran is still one of the test's.
+      for (const c of cs) {
+        if (listed.has(c.id)) continue
+        listed.add(c.id)
+        entry.cases.push(c.id)
+      }
       const grade = worstGrade(cs.map(c => c.grade))
       const worst = cs.find(c => c.grade === grade)!
       entry.kernels[kernel] = {

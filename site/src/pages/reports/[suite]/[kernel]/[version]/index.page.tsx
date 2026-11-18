@@ -239,7 +239,7 @@ export default function ReportPage(props: Props) {
         >
           <CaseTable
             rows={rows}
-            kernel={props.current ? null : id.kernel}
+            kernel={props.shown ? id.kernel : null}
             filter={filter}
             opening={opening}
             onFilter={applyFilter}

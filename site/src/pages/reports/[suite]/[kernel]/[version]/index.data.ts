@@ -33,6 +33,8 @@ export interface Props {
   releases: Release[]
   // The release the leaderboard and the tests' pages show for this kernel, when it is not this one.
   current: Release | null
+  // Whether the tests' pages show this report: it is its kernel's latest on the current suite.
+  shown: boolean
   license: string | null
   adapterLicense: string | null
   // The kernel's own maintainers who review its adapter; null for a kernel not in the registry.
@@ -82,6 +84,7 @@ export function entries(): PageEntry<Props>[] {
         standIns: r.standIns,
         cases: packCases(r.cases, pages),
         releases,
+        shown: isShown,
         current:
           !shown || isShown
             ? null

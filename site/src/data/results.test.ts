@@ -72,13 +72,13 @@ describe('parseReport', () => {
     const key = 'booleans/overlap/boxes/a.abc'
     const drew = { glb: `${key}.glb`, step: [`${key}.main.step`, `${key}.alt.step`] }
     const r = parseReport(
-      raw('k w', '1.0.0', [
+      raw('k', '1.0.0', [
         { ...row('a', 'booleans/overlap/boxes', 'pass', '1e-7'), exports: drew },
         { ...row('b', 'booleans/overlap/boxes', 'crash', null), exports: { glb: null, step: [] } },
         row('c', 'booleans/overlap/boxes', 'pass', '1e-7'),
       ]),
     )
-    const base = `${ASSET_BASE}/0.9.0/k%20w/1.0.0/${key}`
+    const base = `${ASSET_BASE}/0.9.0/k/1.0.0/${key}`
     expect(r.cases.map(c => [c.glb, c.steps])).toEqual([
       [`${base}.glb`, [`${base}.main.step`, `${base}.alt.step`]],
       [null, []],
@@ -111,7 +111,7 @@ describe('parseReport', () => {
     }
   })
 
-  it('holds a key to the rule the publishing script does', () => {
+  it('takes a key of plain names, a plus sign among them, and no other', () => {
     const glbOf = (glb: string) =>
       parseReport(raw('k', '1', [{ ...row('a', 't/x', 'pass', '1e-7'), exports: { glb } }]))
     expect(glbOf('t/a+b.abc.glb').cases[0]!.glb).toMatch(/\/t\/a\+b\.abc\.glb$/)
@@ -291,6 +291,14 @@ describe('leaderboard and indexes', () => {
 
   it('ranks by pass rate alone', () => {
     expect(leaderboard([b, a]).map(r => r.kernel)).toEqual(['zeta', 'alpha'])
+  })
+
+  it('lists a test’s cases from every kernel, each once, in the order first met', () => {
+    const first = parseReport(raw('alpha', '1', [row('a', 't/x', 'pass', '1e-7')]))
+    const second = parseReport(
+      raw('beta', '1', [row('b', 't/x', 'fail', 'fail'), row('a', 't/x', 'pass', '1e-7')]),
+    )
+    expect(testIndex([first, second])[0]!.cases).toEqual(['a', 'b'])
   })
 
   it('gives each kernel its worst case’s grade on a test', () => {

@@ -27,9 +27,8 @@ A test's URL segment is its path without the area, joined by dashes: `booleans/o
 Every kernel draws its own shape files, and the site shows no others. A case's `exports` holds the
 key of its drawing as `glb`, or null, and in the list `step` the key of a STEP file for each solid
 the case shows: one, two, or none. A case with no `exports` has no files. A key is a path of plain
-names ending in `.glb` or `.step`, such as `<test>/<id>.<hash>.glb`, by the rule
-[`publish-assets.sh`](../../publish-assets.sh) holds it to; the site refuses a report with any
-other.
+names ending in `.glb` or `.step`, such as `<test>/<id>.<hash>.glb`; the site refuses a report with
+any other.
 
 A file's URL is the report's `assets`, its kernel's folder, followed by the key. `assets` must be
 `https://cdn.springcraft.ai/brep-conformance/<suite>/<kernel>/<version>/`: the suite's CDN, then the
