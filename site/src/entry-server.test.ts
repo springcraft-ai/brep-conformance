@@ -49,6 +49,29 @@ describe('the site', () => {
     )
   })
 
+  it('gives the home page its own title and what a shared link shows', () => {
+    const home = byFile.get('index.html')!.body
+    expect(home).toContain(
+      '<title>Open conformance test suite for B-rep CAD kernels | brep-conformance</title>',
+    )
+    expect(home).toMatch(/<meta name="description" content="An open conformance test suite/)
+    expect(home).toContain(
+      '<meta property="og:title" content="brep-conformance, an open test suite for B-rep CAD kernels">',
+    )
+    expect(home).toMatch(
+      /<meta property="og:description" content="Every kernel is checked the same/,
+    )
+  })
+
+  it('shows a page’s own title and description in a shared link, and the site’s where it has none', () => {
+    const docs = byFile.get('docs/index.html')!.body
+    expect(docs).toContain('<meta property="og:title" content="docs · brep-conformance">')
+    expect(docs).not.toMatch(/og:description" content="Every kernel is checked/)
+    expect(byFile.get('404.html')!.body).toMatch(
+      /og:description" content="Every kernel is checked the same way/,
+    )
+  })
+
   it('renders one URL for the dev server, and 404 for an unknown page', () => {
     expect(render(`/badges/${site().kernels[0]}.svg`)?.status).toBe(200)
     expect(render('/reports/0.0.0/nobody/0/')?.status).toBe(404)

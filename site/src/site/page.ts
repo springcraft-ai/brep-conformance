@@ -24,6 +24,10 @@ export interface PageEntry<P = Record<string, unknown>> {
   props: P
   title: string
   description?: string
+  // The whole <title>, for a page that does not take the site's name after its own.
+  fullTitle?: string
+  // What a link to the page shows when shared, where that differs from its title and description.
+  social?: { title: string; description: string }
 }
 
 // A page's data: <name>.data.ts beside <name>.page.tsx. Server only. Returns one entry per URL the

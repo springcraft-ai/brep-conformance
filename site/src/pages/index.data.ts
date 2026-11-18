@@ -1,5 +1,6 @@
 import { runDays } from '@/components/format'
 import { site } from '@/data/source'
+import { SITE_NAME, SOCIAL_DESCRIPTION, SOCIAL_TITLE } from '@/site/meta'
 import type { PageEntry } from '@/site/page'
 import { boardRows, grid, type BoardRow, type GridGroup } from './_home/model'
 
@@ -29,8 +30,11 @@ export function entries(): PageEntry<Props>[] {
         groups: grid(s.tests, kernels),
       },
       title: 'results',
+      fullTitle: `Open conformance test suite for B-rep CAD kernels | ${SITE_NAME}`,
       description:
-        'An MIT-licensed conformance suite for exact B-rep kernels, and every kernel’s results on it.',
+        'An open conformance test suite for B-rep CAD kernels. Every kernel runs the same cases, ' +
+        'with right answers worked out from the math. MIT licensed.',
+      social: { title: SOCIAL_TITLE, description: SOCIAL_DESCRIPTION },
     },
   ]
 }

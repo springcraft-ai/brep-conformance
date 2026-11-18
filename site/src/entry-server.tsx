@@ -3,6 +3,7 @@ import type { Manifest } from 'vite'
 import { Shell, type NavItem } from '@/components/Shell'
 import { site } from '@/data/source'
 import { href } from '@/site/href'
+import { SITE_NAME, SOCIAL_DESCRIPTION } from '@/site/meta'
 import type { DataModule, EndpointModule, PageEntry, PageModule, Params } from '@/site/page'
 import {
   dataModuleOf,
@@ -49,6 +50,8 @@ interface Entry {
   props: Record<string, unknown>
   title: string
   description?: string
+  fullTitle?: string
+  social?: { title: string; description: string }
 }
 
 function entriesOf(route: Route): Entry[] {
@@ -140,7 +143,11 @@ function renderPage(module: string, entry: Entry, path: string, manifest: Manife
       tail.push(`<script type="module" src="${href(manifest[CLIENT_ENTRY]!.file)}"></script>`)
     }
   }
-  const title = entry.title ? `${entry.title} · brep-conformance` : 'brep-conformance'
+  const title = entry.fullTitle ?? (entry.title ? `${entry.title} · ${SITE_NAME}` : SITE_NAME)
+  const social = {
+    title: entry.social?.title ?? title,
+    description: entry.social?.description ?? entry.description ?? SOCIAL_DESCRIPTION,
+  }
   return [
     '<!doctype html>',
     '<html lang="en">',
@@ -152,7 +159,7 @@ function renderPage(module: string, entry: Entry, path: string, manifest: Manife
     '<style>html{background:#000}</style>',
     `<title>${esc(title)}</title>`,
     entry.description ? `<meta name="description" content="${esc(entry.description)}">` : '',
-    ...share(title, entry.description, path),
+    ...share(social.title, social.description, path),
     `<link rel="icon" href="${href('/favicon.svg')}" type="image/svg+xml">`,
     ...head,
     '</head>',
