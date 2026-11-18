@@ -38,6 +38,12 @@ The crate's own version is separate from the protocol's version.
 brep-protocol = "1"
 ```
 
+To add a kernel to the suite, follow
+[Add your kernel](https://github.com/springcraft-ai/brep-conformance/blob/main/doc/overview.md#add-your-kernel).
+It is built around
+[`examples/box_kernel.rs`](https://github.com/springcraft-ai/brep-conformance/blob/main/protocol/examples/box_kernel.rs),
+a complete adapter for a kernel that makes only boxes, which the suite runs and scores end to end.
+
 An adapter implements `Kernel` with one call of its kernel per method, and calls `serve` from
 `main`:
 
