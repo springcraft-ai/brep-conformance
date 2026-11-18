@@ -1,8 +1,5 @@
 # Introduction
 
-What the suite is and how it scores a kernel. [The API](api.md) defines the functions, and
-[the contract](contract.md) how an answer is judged.
-
 ## What this is
 
 brep-conformance is a test suite and a benchmark for exact B-rep kernels: the geometry engines under
@@ -18,7 +15,7 @@ It is for people who build kernels, and for people who choose one.
 ## How it works
 
 - **The suite draws cases.** A case is a few calls: make two solids, combine them, measure the
-  result. Each belongs to a test, such as "booleans of crossing cylinders".
+  result. Each case belongs to a test, such as "booleans of crossing cylinders".
 - **An adapter passes each call to the kernel.** An adapter is a small program that answers the
   suite's calls with the kernel's own functions. It adds no geometry of its own.
 - **The suite checks the answers.** No expected value comes from a kernel. Volumes, areas and
