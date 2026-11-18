@@ -3,6 +3,8 @@
 The B-rep operations that the [brep-conformance](https://github.com/springcraft-ai/brep-conformance)
 suite calls, as Rust types, a `Kernel` trait, and a binding to the suite's line protocol.
 
+The suite's results and documentation are at <https://springcraft-ai.github.io/brep-conformance/>.
+
 ## Overview
 
 The suite does not link a kernel. It starts the kernel's adapter as a separate process and sends it

@@ -1,7 +1,8 @@
 # site
 
-The suite's public results site: a leaderboard, a page per report, test and operation, and badges,
-built as static files for GitHub Pages in the Springcraft Alt-1 design system.
+The suite's public results site, at <https://springcraft-ai.github.io/brep-conformance/>: a
+leaderboard, a page per report, test and operation, and badges, built as static files for GitHub
+Pages in the Springcraft Alt-1 design system.
 
 ## Overview
 

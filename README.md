@@ -1,5 +1,7 @@
 # brep-conformance
 
+**Results and documentation: <https://springcraft-ai.github.io/brep-conformance/>**
+
 A kernel-neutral conformance suite for B-rep operations: generated cases, checks drawn from a
 written contract, and a runner that drives any kernel through its adapter, run as a separate
 process.
