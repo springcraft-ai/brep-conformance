@@ -433,6 +433,5 @@ export class Renderer {
       this.gl.deleteVertexArray(part.vao)
       this.gl.deleteBuffer(part.buffer)
     }
-    this.gl.getExtension('WEBGL_lose_context')?.loseContext()
   }
 }
