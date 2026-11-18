@@ -11,11 +11,8 @@
     animation: none;
   }
 }
-/* The test grid's bars wait for their row to come into view, then fill as the leaderboard's do. */
-.hm-grid--play .hm-row:not(.is-done) .hm-bar__seg {
-  clip-path: inset(0 100% 0 0);
-}
-.hm-grid--play .hm-row.is-lit .hm-bar__seg {
+/* The test grid's operation bars fill once as the page loads, as the leaderboard's do. */
+.hm-grid--play .hm-row--op .hm-bar__seg {
   animation: hm-fill 1100ms var(--ease-mech) var(--fill-at, 0ms) both;
 }
 

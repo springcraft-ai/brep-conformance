@@ -46,10 +46,10 @@
 }
 .bc-def__sig {
   display: block;
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--void-ink-1);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .bc-def p {
   margin: 0;
@@ -357,6 +357,8 @@
 .bc-caselist__scroll {
   max-height: 520px;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--void-ink-4) transparent;
   border-top: var(--hairline-void-soft);
   border-bottom: var(--hairline-void-soft);
 }

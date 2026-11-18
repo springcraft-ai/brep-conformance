@@ -21,54 +21,34 @@ import { TierBar } from './TierBar'
 
 const ANY_KERNEL = 'any'
 
-// A row's bars fill and its shares count up the first time it comes into view, as the leaderboard's
-// do, and never again; a test row first comes into view when its operation is first opened. With
-// reduced motion everything is drawn as it is.
+// The operations' bars fill and their shares count up once, as the page loads, as the
+// leaderboard's do; the tests under them are drawn as they are. With reduced motion everything is
+// drawn as it is.
 const COUNT_MS = 1100
-function countUp(row: Element) {
-  for (const el of row.querySelectorAll<HTMLElement>('[data-to]')) {
-    const text = el.firstChild
-    if (!text) continue
-    const to = Number(el.dataset.to)
-    const t0 = performance.now()
-    const step = (t: number) => {
-      const x = Math.min(1, Math.max(0, (t - t0) / COUNT_MS))
-      text.nodeValue = (to * (1 - Math.pow(1 - x, 3))).toFixed(1) + '%'
-      if (x < 1) requestAnimationFrame(step)
-    }
-    requestAnimationFrame(step)
+// The last block's fill starts as late as the fill time itself, then takes that long again.
+const PLAY_MS = 2 * COUNT_MS
+function countUp(el: HTMLElement) {
+  const text = el.firstChild
+  if (!text) return
+  const to = Number(el.dataset.to)
+  const t0 = performance.now()
+  const step = (t: number) => {
+    const x = Math.min(1, Math.max(0, (t - t0) / COUNT_MS))
+    text.nodeValue = (to * (1 - Math.pow(1 - x, 3))).toFixed(1) + '%'
+    if (x < 1) requestAnimationFrame(step)
   }
+  requestAnimationFrame(step)
 }
-function useRowsPlay(root: React.RefObject<HTMLDivElement | null>) {
-  const io = useRef<IntersectionObserver | null>(null)
-  const seen = useRef(new WeakSet<Element>())
-  // The rows that have played, by name: a row the filter or the search draws again is shown as it
-  // is, not played twice.
-  const played = useRef(new Set<string>())
+function usePlayOnLoad(root: React.RefObject<HTMLDivElement | null>) {
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    root.current?.classList.add('hm-grid--play')
-    io.current = new IntersectionObserver(entries => {
-      for (const e of entries) {
-        if (!e.isIntersecting) continue
-        e.target.classList.add('is-lit')
-        countUp(e.target)
-        played.current.add((e.target as HTMLElement).dataset.row ?? '')
-        io.current?.unobserve(e.target)
-      }
-    })
-    return () => io.current?.disconnect()
+    const el = root.current
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    el.classList.add('hm-grid--play')
+    for (const n of el.querySelectorAll<HTMLElement>('.hm-row--op [data-to]')) countUp(n)
+    // Dropped once played, so an operation the filter or the search draws again is not replayed.
+    const t = setTimeout(() => el.classList.remove('hm-grid--play'), PLAY_MS)
+    return () => clearTimeout(t)
   }, [root])
-  // Rows come and go with the filter and the search: each new one is watched once.
-  useEffect(() => {
-    if (!io.current || !root.current) return
-    for (const row of root.current.querySelectorAll<HTMLElement>('.hm-row[data-row]')) {
-      if (seen.current.has(row)) continue
-      seen.current.add(row)
-      if (played.current.has(row.dataset.row!)) row.classList.add('is-done')
-      else io.current.observe(row)
-    }
-  })
 }
 
 // A row's one winner, the only cell in it marked in the accent: the highest share passing at 1e-7,
@@ -116,7 +96,7 @@ export function Grid({
   q: string
 }) {
   const root = useRef<HTMLDivElement>(null)
-  useRowsPlay(root)
+  usePlayOnLoad(root)
   const [filter, setFilter] = useState<Filter>('all')
   const [focus, setFocus] = useState(ANY_KERNEL)
   const [open, setOpen] = useState<Record<string, boolean>>({})
