@@ -2,7 +2,7 @@ import { useEffect, useState, type MouseEvent } from 'react'
 import { Annot, GradeLabel, Table, type Column } from '@/components'
 import type { Grade } from '@/data/results'
 import { url } from '@/site/href'
-import { fileName, probe, type FileState } from './files'
+import { ask, fileName, stateOf, type FileState } from './files'
 import { stepLabel } from './format'
 import type { CaseFiles, KernelView } from './index.data'
 
@@ -13,31 +13,35 @@ interface Row {
   wrote: CaseFiles | null
 }
 
-// Asks the CDN for each file once it is on show, so a link to a file that is not there never
-// takes the reader to the CDN's own error.
-function useFileStates(urls: string[]): Record<string, FileState> {
-  const [states, setStates] = useState<Record<string, FileState>>({})
+// Asks the CDN for each file on show, so a link to a file that is not there never takes the reader
+// to the CDN's own error. Answers are kept, so a case seen before is drawn as it was left.
+function useFileStates(urls: string[]): (url: string) => FileState {
+  const [, learnt] = useState(0)
   const key = urls.join('\n')
   useEffect(() => {
-    const stop = new AbortController()
-    setStates({})
+    let live = true
     for (const u of key ? key.split('\n') : [])
-      void probe(u, fetch, stop.signal).then(state => {
-        if (!stop.signal.aborted) setStates(known => ({ ...known, [u]: state }))
-      })
-    return () => stop.abort()
+      if (stateOf(u) === 'unknown') void ask(u).then(() => live && learnt(n => n + 1))
+    return () => {
+      live = false
+    }
   }, [key])
-  return states
+  return stateOf
 }
 
 // A browser ignores `download` for a file on another origin and opens it instead, so the page
 // fetches the file and saves it under its own name.
 function FileLink({ href, label, state }: { href: string; label: string; state: FileState }) {
   const [failed, setFailed] = useState(false)
-  if (state === 'missing' || failed)
+  // A file not yet answered for holds its place as plain text, so nothing moves when it is.
+  if (state !== 'ok' || failed)
     return (
-      <span className="bc-dl bc-dl--missing" title="This file is not on the CDN yet">
-        {label} <Annot>not published</Annot>
+      <span
+        className="bc-dl"
+        data-state={failed ? 'missing' : state}
+        title={state === 'unknown' && !failed ? undefined : 'This file is not on the CDN yet'}
+      >
+        {label}
       </span>
     )
   const save = async (e: MouseEvent) => {
@@ -62,7 +66,7 @@ function FileLink({ href, label, state }: { href: string; label: string; state: 
   )
 }
 
-const filesOf = (f: CaseFiles): string[] => [...(f.glb ? [f.glb] : []), ...f.steps]
+export const filesOf = (f: CaseFiles): string[] => [...(f.glb ? [f.glb] : []), ...f.steps]
 
 // What each kernel made of the case shown: its result, whose drawing the viewer holds, and the
 // files it wrote.
@@ -84,7 +88,7 @@ export function CaseKernels({
   drawn: number | null
   onDraw: (kernel: string) => void
 }) {
-  const states = useFileStates(files.flatMap(f => (f ? filesOf(f) : [])))
+  const state = useFileStates(files.flatMap(f => (f ? filesOf(f) : [])))
   const rows: Row[] = kernels.map((kernel, i) => ({
     i,
     kernel,
@@ -123,7 +127,7 @@ export function CaseKernels({
       render: r =>
         !r.wrote?.glb ? (
           <Annot>no drawing</Annot>
-        ) : states[r.wrote.glb] === 'missing' ? (
+        ) : state(r.wrote.glb) === 'missing' ? (
           <Annot>not published</Annot>
         ) : r.i === drawn ? (
           <Annot>shown</Annot>
@@ -144,8 +148,6 @@ export function CaseKernels({
       render: r =>
         !r.wrote ? (
           <Annot>no files</Annot>
-        ) : filesOf(r.wrote).every(u => states[u] === 'missing') ? (
-          <Annot>not published</Annot>
         ) : (
           <span className="bc-casekernels__files">
             {r.wrote.glb && (
@@ -153,17 +155,13 @@ export function CaseKernels({
                 key={r.wrote.glb}
                 href={r.wrote.glb}
                 label="glb"
-                state={states[r.wrote.glb] ?? 'unknown'}
+                state={state(r.wrote.glb)}
               />
             )}
             {r.wrote.steps.map(step => (
-              <FileLink
-                key={step}
-                href={step}
-                label={stepLabel(step)}
-                state={states[step] ?? 'unknown'}
-              />
+              <FileLink key={step} href={step} label={stepLabel(step)} state={state(step)} />
             ))}
+            {filesOf(r.wrote).every(u => state(u) === 'missing') && <Annot>not published</Annot>}
           </span>
         ),
     },

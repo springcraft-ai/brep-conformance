@@ -559,9 +559,17 @@
 .bc-dl {
   font: var(--fw-machine) 12px / 1.4 var(--font-machine);
 }
-/* A file the CDN does not hold is named and struck from the links, not left to fail on a click. */
-.bc-dl--missing {
+/* A file not yet answered for, or one the CDN does not hold, keeps its place as quiet text: it is
+   no link, so no click fails, and nothing moves when the answer comes. */
+.bc-dl[data-state] {
   color: var(--void-ink-3);
+}
+.bc-dl[data-state='missing'] {
+  text-decoration: line-through;
+}
+/* The words under viewer change with what is known; the column holds their widest. */
+.bc-casekernels td:nth-child(3) {
+  min-width: 13ch;
 }
 .bc-shape__note {
   align-self: center;

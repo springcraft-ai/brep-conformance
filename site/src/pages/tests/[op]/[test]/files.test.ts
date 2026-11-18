@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fileName, probe } from './files'
+import { ask, fileName, probe, stateOf } from './files'
 
 describe('fileName', () => {
   it('is the last part of the file’s address', () => {
@@ -32,5 +32,37 @@ describe('probe', () => {
       throw new TypeError('network')
     }) as unknown as typeof fetch
     expect(await probe('https://cdn.example/a.glb', failing)).toBe('unknown')
+  })
+})
+
+describe('ask', () => {
+  const counting = (ok: boolean) => {
+    const made = { requests: 0 }
+    const get = (async () => {
+      made.requests++
+      return { ok }
+    }) as unknown as typeof fetch
+    return { made, get }
+  }
+
+  it('asks for a file once, and answers from memory after', async () => {
+    const { made, get } = counting(false)
+    const url = 'https://cdn.example/ask/once.glb'
+    expect(stateOf(url)).toBe('unknown')
+    expect(await Promise.all([ask(url, get), ask(url, get)])).toEqual(['missing', 'missing'])
+    expect(await ask(url, get)).toBe('missing')
+    expect(made.requests).toBe(1)
+    expect(stateOf(url)).toBe('missing')
+  })
+
+  it('asks again for a file whose request could not be made', async () => {
+    const url = 'https://cdn.example/ask/again.glb'
+    const failing = (async () => {
+      throw new TypeError('network')
+    }) as unknown as typeof fetch
+    expect(await ask(url, failing)).toBe('unknown')
+    const { made, get } = counting(true)
+    expect(await ask(url, get)).toBe('ok')
+    expect(made.requests).toBe(1)
   })
 })

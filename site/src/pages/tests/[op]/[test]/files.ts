@@ -19,3 +19,28 @@ export async function probe(
     return 'unknown'
   }
 }
+
+const known = new Map<string, FileState>()
+const asking = new Map<string, Promise<FileState>>()
+
+// What the page has learnt of a file so far.
+export function stateOf(url: string): FileState {
+  return known.get(url) ?? 'unknown'
+}
+
+// Asks for a file once and remembers the answer, so a case seen before is not asked for again. A
+// request that could not be made is not remembered, and is made again when next asked for.
+export function ask(url: string, get: typeof fetch = fetch): Promise<FileState> {
+  const answered = known.get(url)
+  if (answered) return Promise.resolve(answered)
+  let pending = asking.get(url)
+  if (!pending) {
+    pending = probe(url, get).then(state => {
+      asking.delete(url)
+      if (state !== 'unknown') known.set(url, state)
+      return state
+    })
+    asking.set(url, pending)
+  }
+  return pending
+}

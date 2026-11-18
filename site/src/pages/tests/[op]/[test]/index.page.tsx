@@ -16,7 +16,8 @@ import { url } from '@/site/href'
 import { drawnBy, point, shortCaseIds, testName, value } from './format'
 import type { CaseOption, CheckView, KernelView, Props } from './index.data'
 import type { Mark } from './scan'
-import { CaseKernels } from './CaseKernels'
+import { CaseKernels, filesOf } from './CaseKernels'
+import { ask } from './files'
 import { ScanView } from './ScanView'
 import './page.css'
 
@@ -162,6 +163,8 @@ function Why({ text }: { text: string }) {
   )
 }
 
+const warm = (c: CaseOption) => c.files.forEach(f => f && filesOf(f).forEach(u => void ask(u)))
+
 // Every case of the test against every kernel, one mark each. A row shows that case's shape.
 function CaseList({
   caseList,
@@ -226,7 +229,13 @@ function CaseList({
           </thead>
           <tbody>
             {rows.map(c => (
-              <tr key={c.id} aria-selected={c.id === shownId}>
+              <tr
+                key={c.id}
+                aria-selected={c.id === shownId}
+                // Asked for on the way to the click, so the case's files are known when it shows.
+                onPointerEnter={() => warm(c)}
+                onFocus={() => warm(c)}
+              >
                 <th scope="row">
                   <button
                     type="button"
