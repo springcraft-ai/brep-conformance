@@ -134,6 +134,14 @@
   font-size: var(--fs-micro-1);
   color: var(--void-ink-2);
 }
+.bc-scan__by {
+  font-size: var(--fs-micro-1);
+  color: var(--void-ink-2);
+}
+.bc-scan__by b {
+  font-weight: inherit;
+  color: var(--accent);
+}
 /* Corner brackets: register the frame without enclosing it. */
 .bc-scan__corner {
   position: absolute;
@@ -202,10 +210,6 @@
   background: var(--void-ink-2);
 }
 
-.bc-shape__files {
-  display: flex;
-  gap: var(--sp-3);
-}
 .bc-points {
   margin-top: var(--sp-6);
 }
@@ -573,11 +577,12 @@
   cursor: progress;
 }
 /* The words under viewer change with what is known; the column holds their widest. */
+/* The accent of the viewer's "drawn by", so the row and the drawing read as one. */
+.bc-casekernels__shown .bc-annot {
+  color: var(--accent);
+}
 .bc-casekernels td:nth-child(3) {
   min-width: 13ch;
-}
-.bc-shape__note {
-  align-self: center;
 }
 .bc-points__none {
   margin: var(--sp-4) 0 0;

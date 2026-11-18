@@ -18,10 +18,13 @@ export function ScanView({
   onPick,
   files,
   unpublished = false,
+  by,
 }: {
   glb: string | null
   // No `glb` because every kernel's drawing is missing from the CDN, not because none drew it.
   unpublished?: boolean
+  // Whose drawing this is, shown under the case's name.
+  by?: ReactNode
   caption: string
   marks: Mark[]
   focus: number | null
@@ -125,6 +128,7 @@ export function ScanView({
         <div className="bc-scan__tl">
           <Annot>scan</Annot>
           <span className="bc-scan__case bc-machine">{caption}</span>
+          {by && <span className="bc-scan__by">{by}</span>}
         </div>
         <div className="bc-scan__tr">
           <Annot>{state}</Annot>

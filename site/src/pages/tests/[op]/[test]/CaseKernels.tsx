@@ -160,7 +160,9 @@ export function CaseKernels({
         ) : gone(r.wrote.glb) ? (
           <Annot>not published</Annot>
         ) : r.i === drawn ? (
-          <Annot>shown</Annot>
+          <span className="bc-casekernels__shown">
+            <Annot>shown</Annot>
+          </span>
         ) : (
           <button
             type="button"
@@ -204,6 +206,7 @@ export function CaseKernels({
         sortBy={null}
         rows={rows}
         columns={columns}
+        selected={drawn}
       />
     </div>
   )

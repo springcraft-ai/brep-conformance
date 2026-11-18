@@ -307,6 +307,7 @@ export default function TestPage(props: Props) {
       )
     : null
   const files = drawn === null ? null : shownCase!.files[drawn]!
+  const wanted = kernels.findIndex(k => k.kernel === (drawer ?? selected))
   // Drawn by some kernel, but by none the CDN holds yet.
   const unpublished = drawn === null && !!shownCase?.files.some(f => f?.glb)
   // A kernel's misplaced points belong to its worst case, so they show only over that shape.
@@ -425,13 +426,16 @@ export default function TestPage(props: Props) {
               marks={marks}
               focus={focus}
               onPick={setFocus}
-              files={
+              by={
                 drawn !== null && (
-                  <div className="bc-shape__files">
-                    <span className="bc-annot bc-shape__note">
-                      drawn by {kernels[drawn]!.kernel}
-                    </span>
-                  </div>
+                  <>
+                    {wanted >= 0 && wanted !== drawn && (
+                      <span className="bc-scan__instead">
+                        {kernels[wanted]!.kernel} has no drawing of this case ·{' '}
+                      </span>
+                    )}
+                    drawn by <b>{kernels[drawn]!.kernel}</b>
+                  </>
                 )
               }
             />
