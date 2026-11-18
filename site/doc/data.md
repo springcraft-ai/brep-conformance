@@ -37,10 +37,15 @@ another host or another kernel's files. It is null where the run wrote none, and
 before `assets` existed takes that same address.
 
 A test's page shows a case as the selected kernel drew it, and as the first kernel that drew it
-where that one wrote no drawing. Beside each kernel's result on the case it offers the files that
-kernel wrote: its drawing, and each STEP file, named by its solid's role where there are two. A
-kernel that wrote a STEP file and no drawing still has its STEP file offered, and no link waits on
-the viewer.
+where that one wrote no drawing. A table under the case has a row for each kernel: its result,
+whether the viewer shows its drawing, and the files it wrote, which are its drawing and each STEP
+file, named by its solid's role where there are two. A kernel that wrote a STEP file and no drawing
+still has its STEP file offered, and no link waits on the viewer.
+
+When a case is shown, the page asks the CDN for each of its files. A file the CDN does not hold is
+marked not published and is no link, so no click lands on the CDN's own error. A file that is there
+is fetched and saved under its own name, since a browser will not download a file from another
+origin by a link alone.
 
 The report does not yet say who wrote a kernel's adapter, which functions a test calls, or a failed
 check's numbers and failing points, so the site shows none of them.

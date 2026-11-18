@@ -13,9 +13,10 @@ import {
 } from '@/components'
 import { GRADES } from '@/data/results'
 import { url } from '@/site/href'
-import { drawnBy, point, stepLabel, shortCaseIds, testName, value } from './format'
+import { drawnBy, point, shortCaseIds, testName, value } from './format'
 import type { CaseOption, CheckView, KernelView, Props } from './index.data'
 import type { Mark } from './scan'
+import { CaseKernels } from './CaseKernels'
 import { ScanView } from './ScanView'
 import './page.css'
 
@@ -390,50 +391,15 @@ export default function TestPage(props: Props) {
                   <Annot>case</Annot>
                   <span className="bc-machine">{shownId}</span>
                 </span>
-                <ul>
-                  {kernels.map((k, i) => {
-                    const g = shownCase.grades[i]
-                    const wrote = shownCase.files[i]
-                    return (
-                      <li key={k.kernel}>
-                        <a
-                          href={`${url.report(k.suite, k.kernel, k.version)}?test=${encodeURIComponent(test)}&q=${encodeURIComponent(shownId)}#cases`}
-                          title={`this case in ${k.kernel}’s report`}
-                        >
-                          {k.kernel}
-                        </a>
-                        {g ? <GradeLabel grade={g} /> : <Annot>not run</Annot>}
-                        {k.worst?.id === shownId && <Annot>its worst case</Annot>}
-                        {shownCase.files[i]?.glb &&
-                          (i === drawn ? (
-                            <Annot>its shape shown</Annot>
-                          ) : (
-                            <button
-                              type="button"
-                              className="bc-kernels__show sc-focus"
-                              onClick={() => setDrawer(k.kernel)}
-                            >
-                              show its shape
-                            </button>
-                          ))}
-                        {wrote && (
-                          <span className="bc-thiscase__files">
-                            {wrote.glb && (
-                              <a className="bc-file bc-file--row" href={wrote.glb} download>
-                                glb
-                              </a>
-                            )}
-                            {wrote.steps.map(step => (
-                              <a key={step} className="bc-file bc-file--row" href={step} download>
-                                {stepLabel(step)}
-                              </a>
-                            ))}
-                          </span>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
+                <CaseKernels
+                  test={test}
+                  shownId={shownId}
+                  kernels={kernels}
+                  grades={shownCase.grades}
+                  files={shownCase.files}
+                  drawn={drawn}
+                  onDraw={setDrawer}
+                />
               </div>
             )}
             <ScanView
