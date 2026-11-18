@@ -229,6 +229,19 @@ export function enhance() {
     label()
     pre.after(more)
   }
+  // At the foot of the page the end of the docs would push the pinned contents up and its search
+  // box out of view: the contents get shorter instead.
+  const page = document.querySelector<HTMLElement>('.dx')
+  const fit = () => {
+    if (!page || getComputedStyle(nav).position !== 'sticky') {
+      nav.style.maxHeight = ''
+      return
+    }
+    const top = chrome?.getBoundingClientRect().bottom ?? 0
+    const room = page.getBoundingClientRect().bottom - top
+    nav.style.maxHeight = room < window.innerHeight - top ? `${Math.max(room, 0)}px` : ''
+  }
+  window.addEventListener('resize', fit)
   let queued = false
   window.addEventListener(
     'scroll',
@@ -237,6 +250,7 @@ export function enhance() {
       queued = true
       requestAnimationFrame(() => {
         queued = false
+        fit()
         spy()
       })
     },
@@ -250,5 +264,6 @@ export function enhance() {
   nav.addEventListener('click', e => {
     if ((e.target as HTMLElement).closest('a')) setMenu(false)
   })
+  fit()
   spy()
 }
