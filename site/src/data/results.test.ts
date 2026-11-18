@@ -293,12 +293,20 @@ describe('leaderboard and indexes', () => {
     expect(leaderboard([b, a]).map(r => r.kernel)).toEqual(['zeta', 'alpha'])
   })
 
-  it('lists a test’s cases from every kernel, each once, in the order first met', () => {
+  it('lists a test’s cases from every kernel, each once, in the suite’s order', () => {
     const first = parseReport(raw('alpha', '1', [row('a', 't/x', 'pass', '1e-7')]))
     const second = parseReport(
       raw('beta', '1', [row('b', 't/x', 'fail', 'fail'), row('a', 't/x', 'pass', '1e-7')]),
     )
-    expect(testIndex([first, second])[0]!.cases).toEqual(['a', 'b'])
+    expect(testIndex([first, second])[0]!.cases).toEqual(['b', 'a'])
+  })
+
+  it('places a case one kernel skipped where the suite runs it, whichever report comes first', () => {
+    const cs = ['1', '2', '3'].map(id => row(id, 't/x', 'pass', '1e-7'))
+    const skipped = parseReport(raw('alpha', '1', [cs[0]!, cs[2]!]))
+    const all = parseReport(raw('beta', '1', cs))
+    expect(testIndex([skipped, all])[0]!.cases).toEqual(['1', '2', '3'])
+    expect(testIndex([all, skipped])[0]!.cases).toEqual(['1', '2', '3'])
   })
 
   it('gives each kernel its worst case’s grade on a test', () => {

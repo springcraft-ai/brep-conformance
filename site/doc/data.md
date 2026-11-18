@@ -42,10 +42,13 @@ whether the viewer shows its drawing, and the files it wrote, which are its draw
 file, named by its solid's role where there are two. A kernel that wrote a STEP file and no drawing
 still has its STEP file offered, and no link waits on the viewer.
 
-When a case is shown, the page asks the CDN for each of its files. A file the CDN does not hold is
-marked not published and is no link, so no click lands on the CDN's own error. A file that is there
-is fetched and saved under its own name, since a browser will not download a file from another
-origin by a link alone.
+Every file is a link in the page's own HTML, so it works before the page's script runs. When a case
+is shown, the script asks the CDN for each of its files, once, and remembers the answer. Only a file
+the CDN says it does not hold stops being a link: it is struck through, and no click lands on the
+CDN's own error. A file the CDN could not be asked about, as where it allows no request from another
+origin, stays a link and opens in a new tab. Where the CDN has answered for a file, a click fetches
+it and saves it under its own name, since a browser will not download a file from another origin by
+a link alone.
 
 The report does not yet say who wrote a kernel's adapter, which functions a test calls, or a failed
 check's numbers and failing points, so the site shows none of them.

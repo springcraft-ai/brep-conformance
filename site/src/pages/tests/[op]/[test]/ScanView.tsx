@@ -17,8 +17,11 @@ export function ScanView({
   focus,
   onPick,
   files,
+  unpublished = false,
 }: {
   glb: string | null
+  // No `glb` because every kernel's drawing is missing from the CDN, not because none drew it.
+  unpublished?: boolean
   caption: string
   marks: Mark[]
   focus: number | null
@@ -36,7 +39,7 @@ export function ScanView({
     let live = true
     setLoaded(null)
     if (!glb) {
-      setStatus('undrawn')
+      setStatus(unpublished ? 'missing' : 'undrawn')
       return
     }
     setStatus('loading')
@@ -57,7 +60,7 @@ export function ScanView({
     return () => {
       live = false
     }
-  }, [glb])
+  }, [glb, unpublished])
 
   useEffect(() => {
     let live = true

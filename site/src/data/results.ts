@@ -525,11 +525,15 @@ export function testIndex(latest: Report[]): TestEntry[] {
   for (const [key, entry] of tests) {
     const listed = new Set<string>()
     for (const [kernel, cs] of rows.get(key)!) {
-      // Every kernel's cases, each once: a case only a later kernel ran is still one of the test's.
+      // Every kernel's cases, each once: a case only a later kernel ran is still one of the test's,
+      // placed after the case it follows in that kernel's report, so the order is the suite's.
+      let prev: string | null = null
       for (const c of cs) {
-        if (listed.has(c.id)) continue
-        listed.add(c.id)
-        entry.cases.push(c.id)
+        if (!listed.has(c.id)) {
+          listed.add(c.id)
+          entry.cases.splice(prev === null ? 0 : entry.cases.indexOf(prev) + 1, 0, c.id)
+        }
+        prev = c.id
       }
       const grade = worstGrade(cs.map(c => c.grade))
       const worst = cs.find(c => c.grade === grade)!

@@ -16,8 +16,8 @@ import { url } from '@/site/href'
 import { drawnBy, point, shortCaseIds, testName, value } from './format'
 import type { CaseOption, CheckView, KernelView, Props } from './index.data'
 import type { Mark } from './scan'
-import { CaseKernels, filesOf } from './CaseKernels'
-import { ask } from './files'
+import { CaseKernels, filesOf, useFiles } from './CaseKernels'
+import { ask, displayOf } from './files'
 import { ScanView } from './ScanView'
 import './page.css'
 
@@ -232,9 +232,9 @@ function CaseList({
               <tr
                 key={c.id}
                 aria-selected={c.id === shownId}
-                // Asked for on the way to the click, so the case's files are known when it shows.
-                onPointerEnter={() => warm(c)}
-                onFocus={() => warm(c)}
+                // Asked for on the press before the click, so the case's files are known sooner.
+                // Not on hover or focus: passing over a long list would ask for every case in it.
+                onPointerDown={() => warm(c)}
               >
                 <th scope="row">
                   <button
@@ -296,13 +296,19 @@ export default function TestPage(props: Props) {
   const shownId = picked?.id ?? current?.worst?.id ?? caseList[0]?.id ?? ''
   const shownCase = caseList.find(c => c.id === shownId) ?? null
   // A kernel that crashed on a case, or does not offer it, drew nothing: another's drawing shows.
+  // Nor has a kernel whose drawing the CDN does not hold anything to show.
+  const hydrated = useFiles()
   const drawn = shownCase
     ? drawnBy(
-        shownCase.files,
+        shownCase.files.map(f =>
+          f?.glb && displayOf(f.glb, hydrated) === 'missing' ? { ...f, glb: null } : f,
+        ),
         kernels.findIndex(k => k.kernel === (drawer ?? selected)),
       )
     : null
   const files = drawn === null ? null : shownCase!.files[drawn]!
+  // Drawn by some kernel, but by none the CDN holds yet.
+  const unpublished = drawn === null && !!shownCase?.files.some(f => f?.glb)
   // A kernel's misplaced points belong to its worst case, so they show only over that shape.
   const onWorst = current?.worst?.id === shownId
   const rows: PointRow[] = useMemo(
@@ -321,6 +327,7 @@ export default function TestPage(props: Props) {
   }
   const pickCase = (c: CaseOption) => {
     setPicked(c)
+    setDrawer(null)
     setFocus(null)
   }
   const failed = kernels.filter(k => k.worst)
@@ -413,12 +420,12 @@ export default function TestPage(props: Props) {
             )}
             <ScanView
               glb={files?.glb ?? null}
+              unpublished={unpublished}
               caption={shownId}
               marks={marks}
               focus={focus}
               onPick={setFocus}
               files={
-                files &&
                 drawn !== null && (
                   <div className="bc-shape__files">
                     <span className="bc-annot bc-shape__note">

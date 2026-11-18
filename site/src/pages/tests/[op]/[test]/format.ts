@@ -1,3 +1,5 @@
+import { fileName } from './files'
+
 // A measured value as the suite wrote it: counts whole, tiny and huge values in exponent form, the
 // rest to six significant figures with no trailing zeros.
 export function value(x: number): string {
@@ -49,6 +51,6 @@ export function drawnBy(
 // What a STEP file's link says: a case of one solid has one file, <id>.<hash>.step, and a case of
 // two has one each, <id>.<hash>.<role>.step, told apart by the role.
 export function stepLabel(url: string): string {
-  const parts = url.slice(url.lastIndexOf('/') + 1).split('.')
+  const parts = fileName(url).split('.')
   return parts.length > 3 ? `step · ${parts.at(-2)}` : 'step'
 }
