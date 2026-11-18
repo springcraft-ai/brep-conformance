@@ -108,7 +108,7 @@ counted:
 ## Reports
 
 A run's `--html FILE` option, and the command `brep-conformance-report RESULTS.json... --out FILE`,
-each write a report page for reading on the machine that wrote it. The page is one HTML file that
+each write a report page for reading on the machine that ran it. The page is one HTML file that
 holds its results, its styles and its scripts, and it asks the network for nothing. It is a view of
 the results file, not a format to read back.
 

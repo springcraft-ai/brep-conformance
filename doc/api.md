@@ -120,11 +120,11 @@ An adapter ignores fields it does not know. A command it does not know is refuse
 
 ### Implementations
 
-The crate [`brep-protocol`](../protocol/) is the Rust binding. It holds the values as types and a
-`Kernel` trait with a method per function. `serve` answers the protocol with any implementation of
-the trait, and `Remote` is an implementation of the trait that forwards to workers. An adapter need
-not use the crate, because the protocol is lines of JSON, which a program in any language can
-answer.
+The crate [`brep-protocol`](../protocol/) is the Rust binding. It holds four things: the values as
+types; a `Kernel` trait with a method per function; `serve`, which answers the protocol with any
+implementation of the trait; and `Remote`, an implementation of the trait that forwards to workers.
+An adapter need not use the crate, because the protocol is lines of JSON, which a program in any
+language can answer.
 
 ## Types
 
@@ -186,7 +186,7 @@ of `M` and then that row's part of `t`:
 
 A **solid set** is a bounded set of points that is equal to the closure of its interior. It may be
 empty, or it may be several separate pieces. Pieces may touch at points or along curves, but they
-never share an area of boundary, because sharing an area would make them one piece.
+never share an area of boundary, because sharing an area would make them one.
 
 A frame's **local coordinates** `(u, v, w)` name the point `o + u·x + v·y + w·z`. Every constructor
 below defines its solid in local coordinates, and the constructor's frame places the solid.
@@ -427,7 +427,7 @@ passes smoothly from one section to the next. How the side runs between sections
 interpolate differently, and no tool's interpolation is the answer.
 
 There must be two or more profiles and one height for each profile, and every height must be above
-the one before. Each profile must be one loop; sections with holes are not yet specified.
+the one before. Each profile is one loop; sections with holes are not yet specified.
 
 A section means the profile's region, not the way the profile's loop is written. The result does not
 depend on which segment a loop starts with, nor on how a curve is cut into segments, so the side has
@@ -534,7 +534,7 @@ polynomials in `f`, and its area is the integral of `√(1 + (f_u/size[0])² + (
 
 Every boolean returns the regularized set operation, which is the closure of the interior of the set
 result. The result may be empty. It may also be several pieces, touching as [Types](#types) allows.
-Pieces that share an area of boundary are returned as one piece. The operands are left as they were.
+Pieces that share an area of boundary are returned as one. The operands are left as they were.
 
 | Function                            | Fields            | Returns |
 | ----------------------------------- | ----------------- | ------- |
@@ -1289,7 +1289,7 @@ Asks where each of many points lies against the solid.
 Returns one answer for each point, in order. The answer is `"in"` where `s` holds the point clear of
 the boundary of `s`, `"on"` where the point lies on the boundary, and `"out"` otherwise. The
 boundary is every point within `ε` of a face, an edge or a vertex. A point further than `10·ε` from
-the boundary is `"in"` or `"out"`. A point between `ε` and `10·ε` from the boundary may be given as
+the boundary is `"in"` or `"out"`. A point off the boundary but within `10·ε` of it may be given as
 either or as `"on"`. A kernel that cannot place one of the points refuses the whole call. It does
 not answer for the other points alone.
 
@@ -1573,9 +1573,10 @@ boundary. `tolerance` must be positive.
 
 The mesh is closed. When positions within `10·ε` of each other are read as one vertex, every edge
 between two triangles is used once each way round. The triangles, which are counter-clockwise seen
-from outside, therefore all face outward. This lets a kernel that meshes each face on its own repeat
-the vertices along an edge, once for each face. The volume that the mesh bounds differs from the
-solid's volume by at most `tolerance` times the solid's area.
+from outside, therefore all face outward. Because positions within `10·ε` of each other are read as
+one vertex, a kernel that meshes each face on its own may repeat the vertices along an edge, once
+for each face. The volume that the mesh bounds differs from the solid's volume by at most
+`tolerance` times the solid's area.
 
 **Example.** Solid 1 is a 10 × 20 × 30 mm box with one corner at the origin.
 
