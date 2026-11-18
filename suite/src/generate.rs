@@ -2041,7 +2041,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 key = format!("{key}|{:016x}", fnv(&rounded_floats(&h)));
             }
             out.push(Case {
-                id: format!("{}-{:016x}", f.name, fnv(&key)),
+                id: format!("{}-{:016x}", f.name, fnv(&rounded_floats(&key))),
                 family: f.name,
                 test: "",
                 a,
@@ -2065,7 +2065,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 key = format!("{key}|{how:?}");
             }
             out.push(Case {
-                id: format!("{}-{:016x}", f.name, fnv(&key)),
+                id: format!("{}-{:016x}", f.name, fnv(&rounded_floats(&key))),
                 family: f.name,
                 test: "",
                 a,
@@ -2093,7 +2093,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 .collect();
             let key = format!("{name}@1|{}|{}", a.key(), nums.join(","));
             out.push(Case {
-                id: format!("{name}-{:016x}", fnv(&key)),
+                id: format!("{name}-{:016x}", fnv(&rounded_floats(&key))),
                 family: name,
                 test: "",
                 a: a.into(),
@@ -2121,7 +2121,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 .collect();
             let key = format!("{name}@1|{}|{}", a.key(), nums.join(","));
             out.push(Case {
-                id: format!("{name}-{:016x}", fnv(&key)),
+                id: format!("{name}-{:016x}", fnv(&rounded_floats(&key))),
                 family: name,
                 test: "",
                 a: a.into(),
@@ -2149,7 +2149,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 key = format!("{key}|{:016x}", fnv(&rounded_floats(&h)));
             }
             out.push(Case {
-                id: format!("{}-{:016x}", f.name, fnv(&key)),
+                id: format!("{}-{:016x}", f.name, fnv(&rounded_floats(&key))),
                 family: f.name,
                 test: "",
                 a,
@@ -2182,7 +2182,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 .collect();
             let key = format!("{}@{}|{}|{}", f.name, f.version, base.key(), nums.join(","));
             out.push(Case {
-                id: format!("{}-{:016x}", f.name, fnv(&key)),
+                id: format!("{}-{:016x}", f.name, fnv(&rounded_floats(&key))),
                 family: f.name,
                 test: "",
                 a: base.into(),
@@ -7618,13 +7618,13 @@ mod tests {
     fn the_default_seed_draws_the_same_ids_on_every_platform() {
         let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
         let got = format!("{:016x}", fnv(&ids.join("\n")));
-        if got != "b7506d6ac5027e9a" {
+        if got != "4ca696e4e8727ca2" {
             // Every id, so a run elsewhere can be compared with this one case by case.
             for id in &ids {
                 eprintln!("id {id}");
             }
         }
-        assert_eq!(got, "b7506d6ac5027e9a");
+        assert_eq!(got, "4ca696e4e8727ca2");
     }
 
     #[test]
