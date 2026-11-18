@@ -57,7 +57,7 @@ describe('keysOf', () => {
       ],
     })
     expect(keysOf(o, true)).toEqual([
-      { mark: 'dot', label: 'point and its normal' },
+      { mark: 'arrow', label: 'normal' },
       { mark: 'quiet', label: 'no normal: on a crease' },
     ])
   })

@@ -200,6 +200,21 @@
 .bc-key--hidden {
   border-top-style: dashed;
 }
+.bc-key--arrow {
+  position: relative;
+  width: 12px;
+  height: 0;
+  margin-right: 4px;
+  border-top: 2px solid var(--series-1);
+}
+.bc-key--arrow::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  border: 4px solid transparent;
+  border-left: 6px solid var(--series-1);
+}
 .bc-views {
   display: flex;
   flex-wrap: wrap;

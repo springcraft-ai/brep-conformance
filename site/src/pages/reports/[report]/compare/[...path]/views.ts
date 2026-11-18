@@ -89,7 +89,7 @@ export function firstView(views: GlbView[]): number {
   return i < 0 ? 0 : i
 }
 
-export type Mark = 'dot' | 'inside' | 'quiet' | 'seen' | 'hidden'
+export type Mark = 'dot' | 'inside' | 'quiet' | 'seen' | 'hidden' | 'arrow'
 
 // The key to the marks the overlay is drawn with, each once: a drawing's lines always, the
 // answers of a point query only while its points are shown.
@@ -106,7 +106,7 @@ export function keysOf(o: Overlay, points: boolean): { mark: Mark; label: string
   if (o.sides.some(s => s.side === 'in')) add('inside', 'inside')
   if (o.sides.some(s => s.side === 'on')) add('dot', 'on the boundary')
   if (o.sides.some(s => s.side === 'out')) add('quiet', 'outside')
-  if (o.normals.some(n => n.n)) add('dot', 'point and its normal')
+  if (o.normals.some(n => n.n)) add('arrow', 'normal')
   if (o.normals.some(n => !n.n)) add('quiet', 'no normal: on a crease')
   return keys
 }

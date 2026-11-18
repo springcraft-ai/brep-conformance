@@ -240,11 +240,12 @@ function overlay(
 
 // How far past the solid's box a plane is drawn, as a share of the box's size each way.
 const PLANE_MARGIN = 0.08
-// A hidden stretch's dash, and the gap after it; a normal's arrow and its barbs: each as a share of
-// the solid's size, so they read the same on a small part and a large one.
+// A hidden stretch's dash, and the gap after it; a normal's arrow: each as a share of the solid's
+// size, so they read the same on a small part and a large one.
 const DASH = 0.012
 const ARROW = 0.08
-const BARB = 0.3
+// A point's ball, its radius as a share of the solid's size.
+const BALL = 0.011
 
 // `ends` as dashes along the polyline `pts`, each `dash` long with as long a gap after it.
 function dashed(pts: readonly Vec3[], dash: number, ends: number[]) {
@@ -270,20 +271,6 @@ function dashed(pts: readonly Vec3[], dash: number, ends: number[]) {
   }
 }
 
-// An arrow from `at` along the unit `n`, `len` long, with two barbs back from its tip.
-function arrow(at: Vec3, n: Vec3, len: number, ends: number[]) {
-  const tip = [0, 1, 2].map(k => at[k]! + n[k]! * len)
-  ends.push(...at, ...tip)
-  const seed = Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]
-  const d = seed[0]! * n[0] + seed[1]! * n[1] + seed[2]! * n[2]
-  const u = seed.map((x, k) => x - d * n[k]!)
-  const ul = Math.hypot(...u)
-  for (const s of [1, -1]) {
-    const back = [0, 1, 2].map(k => tip[k]! + BARB * len * ((s * 0.6 * u[k]!) / ul - n[k]!))
-    ends.push(...tip, ...back)
-  }
-}
-
 // The case's overlay as the GPU draws it: a plane as the polygon it cuts from the box `within`
 // (the solid's, a little grown), which reaches past the solid on every side as an endless plane
 // does without filling the view; a box as its twelve edges; the points as they are.
@@ -299,9 +286,12 @@ export function overlayGeometry(
       box: none,
       points: none,
       lines: none,
+      hiddenLines: none,
+      arrows: none,
       dashes: none,
       inside: none,
       quiet: none,
+      ball: 0,
     }
   }
   let plane = none
@@ -370,6 +360,7 @@ export function overlayGeometry(
   const inside: number[] = []
   const quiet: number[] = []
   const lines: number[] = []
+  const arrows: number[] = []
   const dashes: number[] = []
   for (const l of o.lines) {
     if (l.seen)
@@ -391,8 +382,19 @@ export function overlayGeometry(
       quiet.push(...at)
       continue
     }
-    points.push(...at)
-    arrow(at, [n[0] / len, n[1] / len, n[2] / len], ARROW * size, lines)
+    arrows.push(...at, ...[0, 1, 2].map(k => at[k]! + (n[k]! / len) * ARROW * size))
+  }
+  // Pairs of points again as dashes, for where the solid hides them.
+  const dashesOf = (ends: number[]) => {
+    const out: number[] = []
+    for (let i = 0; i + 5 < ends.length; i += 6) {
+      const pair: Vec3[] = [
+        [ends[i]!, ends[i + 1]!, ends[i + 2]!],
+        [ends[i + 3]!, ends[i + 4]!, ends[i + 5]!],
+      ]
+      dashed(pair, DASH * size, out)
+    }
+    return Float32Array.from(out)
   }
   return {
     plane,
@@ -400,9 +402,12 @@ export function overlayGeometry(
     box,
     points: Float32Array.from(points),
     lines: Float32Array.from(lines),
+    hiddenLines: dashesOf(lines),
+    arrows: Float32Array.from(arrows),
     dashes: Float32Array.from(dashes),
     inside: Float32Array.from(inside),
     quiet: Float32Array.from(quiet),
+    ball: BALL * size,
   }
 }
 

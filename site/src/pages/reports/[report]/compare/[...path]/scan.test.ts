@@ -121,6 +121,22 @@ describe('overlayGeometry, a query’s answers', () => {
     expect(drawn).toBeLessThan(7)
   })
 
+  it('gives its guide lines again as dashes, for where the solid hides them', () => {
+    const g = overlayGeometry(
+      {
+        ...overlayOf({}),
+        closest: [{ at: [0, 0, 0], foot: [10, 0, 0], distance: 10 }],
+      },
+      within,
+    )
+    const dashes = segments(g.hiddenLines)
+    expect(dashes.length).toBeGreaterThan(5)
+    for (const [p, q] of dashes) for (const v of [p!, q!]) expect([v[1], v[2]]).toEqual([0, 0])
+    const drawn = dashes.reduce((s, [p, q]) => s + q![0]! - p![0]!, 0)
+    expect(drawn).toBeGreaterThan(3)
+    expect(drawn).toBeLessThan(7)
+  })
+
   it('draws a closest-point query as its point, the nearest point, and the segment between', () => {
     const g = overlayGeometry(
       {
@@ -170,19 +186,17 @@ describe('overlayGeometry, a query’s answers', () => {
       },
       within,
     )
-    expect(Array.from(g.points)).toEqual([1, 1, 1])
+    // A normal is drawn by its arrow alone, which starts at its point.
+    expect(g.points.length).toBe(0)
     expect(Array.from(g.quiet)).toEqual([4, 4, 4])
-    const [shaft, ...head] = segments(g.lines)
+    expect(g.lines.length).toBe(0)
+    // One segment from the point along its normal; the renderer draws the arrow round it.
+    const [shaft, ...rest] = segments(g.arrows)
+    expect(rest.length).toBe(0)
     expect(shaft![0]).toEqual([1, 1, 1])
     expect(shaft![1]![0]).toBeCloseTo(1)
     expect(shaft![1]![1]).toBeCloseTo(1)
     expect(shaft![1]![2]).toBeGreaterThan(1.2)
-    // Two barbs back from the tip.
-    expect(head.length).toBe(2)
-    for (const [p, q] of head) {
-      expect(p).toEqual(shaft![1])
-      expect(q![2]!).toBeLessThan(p![2]!)
-    }
   })
 })
 

@@ -100,49 +100,124 @@ uniform vec4 u_color;
 out vec4 o;
 void main() { o = vec4(u_color.rgb * u_color.a, u_color.a); }`
 
-// The overlay's points as round markers of a fixed size on screen, depth-tested like the rest,
-// so a point on the far side of the solid is hidden by it.
-const POINT_VERTEX = `#version 300 es
+// The overlay's marks, its arrows and balls, as solids.
+const MARK_VERTEX = `#version 300 es
 in vec3 a_pos;
+in vec3 a_nrm;
 uniform vec3 u_center, u_right, u_up, u_toward, u_scale;
-uniform float u_size;
+out vec3 v_nrm;
 void main() {
   vec3 d = a_pos - u_center;
   gl_Position = vec4(dot(d, u_right) * u_scale.x, dot(d, u_up) * u_scale.y,
                      -dot(d, u_toward) * u_scale.z, 1.0);
-  gl_PointSize = u_size;
+  v_nrm = a_nrm;
 }`
-// A disc of the colour with a thin dark rim, so it reads on a face in light or shade.
-const POINTS = `#version 300 es
+// Lit softly, mostly by ambient as a ghost is, so a ball reads as a mark and not as a part.
+const MARK = `#version 300 es
 precision highp float;
+in vec3 v_nrm;
+uniform vec3 u_light;
 uniform vec4 u_color;
 out vec4 o;
 void main() {
-  float r = length(gl_PointCoord * 2.0 - 1.0);
-  if (r > 1.0) discard;
-  vec3 c = r > 0.75 ? u_color.rgb * 0.35 : u_color.rgb;
-  o = vec4(c * u_color.a, u_color.a);
+  float d = max(dot(normalize(v_nrm), u_light), 0.0);
+  o = vec4(u_color.rgb * (0.75 + 0.25 * d) * u_color.a, u_color.a);
 }`
 
+// A flat arrow, a shaft and a head in one plane through its axis, turned about the axis each frame
+// to face the viewer as squarely as it can. Being flat in space, it foreshortens as it turns, its
+// head shortening as it points toward or away from the viewer, as a drawn arrow would.
+const RIBBON_VERTEX = `#version 300 es
+in vec3 a_pos;
+in vec3 a_b;
+in vec2 a_k;
+uniform vec3 u_center, u_right, u_up, u_toward, u_scale;
+uniform vec3 u_shape;
+void main() {
+  vec3 d = a_b - a_pos;
+  float len = length(d);
+  vec3 t = len > 0.0 ? d / len : vec3(0.0, 0.0, 1.0);
+  vec3 w = cross(t, u_toward);
+  w = length(w) > 1e-3 ? normalize(w) : u_right;
+  float head = u_shape.y * len;
+  vec3 base = a_pos + t * (len - head);
+  vec3 p;
+  if (a_k.x < 1.5) p = mix(a_pos, base, a_k.x) + w * a_k.y * u_shape.x * len;
+  else if (a_k.x < 2.5) p = a_b;
+  else p = base + w * a_k.y * u_shape.z * len;
+  vec3 q = p - u_center;
+  gl_Position = vec4(dot(q, u_right) * u_scale.x, dot(q, u_up) * u_scale.y,
+                     -dot(q, u_toward) * u_scale.z, 1.0);
+}`
+
+// A guide line as a band of fixed width on screen, which a GL line, one pixel wide, cannot be.
+const WIDE_VERTEX = `#version 300 es
+in vec3 a_pos;
+in vec3 a_b;
+in vec2 a_k;
+uniform vec3 u_center, u_right, u_up, u_toward, u_scale;
+uniform vec2 u_px;
+uniform float u_width;
+vec3 clip(vec3 p) {
+  vec3 d = p - u_center;
+  return vec3(dot(d, u_right) * u_scale.x, dot(d, u_up) * u_scale.y, -dot(d, u_toward) * u_scale.z);
+}
+void main() {
+  vec3 a = clip(a_pos);
+  vec3 b = clip(a_b);
+  vec2 sa = a.xy * u_px;
+  vec2 sb = b.xy * u_px;
+  float len = length(sb - sa);
+  vec2 t = len > 1e-4 ? (sb - sa) / len : vec2(1.0, 0.0);
+  vec2 s = mix(sa, sb, a_k.x) + vec2(-t.y, t.x) * a_k.y * 0.5 * u_width;
+  gl_Position = vec4(s / u_px, mix(a.z, b.z, a_k.x), 1.0);
+}`
 // The overlay as the GPU draws it, in model units: a plane as two triangles and its outline, a box
-// as its twelve edges, guide lines and the dashes of what a drawing hides, and points in three
-// colours.
+// as its twelve edges, guide lines and the dashes of what a drawing hides, arrows, and points as
+// balls in three colours.
 export interface OverlayGeometry {
   plane: Float32Array
   planeEdges: Float32Array
   box: Float32Array
   points: Float32Array
   lines: Float32Array
+  hiddenLines: Float32Array
+  // Each arrow as one segment, from its point to its tip.
+  arrows: Float32Array
   dashes: Float32Array
   inside: Float32Array
   quiet: Float32Array
+  // A point's ball, its radius in model units.
+  ball: number
 }
 
 const PLANE_ALPHA = 0.16
 const GUIDE_ALPHA = 0.85
 const HIDDEN_ALPHA = 0.35
-// A point marker's diameter in CSS pixels.
-const POINT_SIZE = 9
+// A guide line's width in CSS pixels.
+const LINE_WIDTH = 2
+// A mark's opacity where nothing hides it; an arrow's shaft half width, head length and head half
+// width, each as a share of its length.
+const MARK_ALPHA = 0.8
+const ARROW_SHAPE: [number, number, number] = [0.03, 0.3, 0.1]
+
+type OverlayPart =
+  | 'plane'
+  | 'planeEdges'
+  | 'box'
+  | 'points'
+  | 'inside'
+  | 'quiet'
+  | 'lines'
+  | 'hiddenLines'
+  | 'dashes'
+  | 'arrows'
+
+interface Part {
+  vao: WebGLVertexArrayObject | null
+  buffers: WebGLBuffer[]
+  count: number
+}
 
 interface Uploaded {
   faces: WebGLVertexArrayObject | null
@@ -167,6 +242,8 @@ function compile(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgr
   }
   gl.bindAttribLocation(p, 0, 'a_pos')
   gl.bindAttribLocation(p, 1, 'a_nrm')
+  gl.bindAttribLocation(p, 2, 'a_b')
+  gl.bindAttribLocation(p, 3, 'a_k')
   gl.linkProgram(p)
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p) ?? '')
   return p
@@ -207,17 +284,78 @@ export function prepare(m: Mesh): {
   return { pos, nrm, idx: null }
 }
 
+// Segments as the wide-line shader takes them: each vertex holds both ends of its segment and its
+// place on it, the start (0) or end (1) and its side (−1 or 1); with `head`, also a head's tip (2)
+// and its base either side (3). The shader widens them.
+export function wideOf(ends: Float32Array, head = false): Float32Array {
+  const shaft = [
+    [0, -1],
+    [1, -1],
+    [1, 1],
+    [0, -1],
+    [1, 1],
+    [0, 1],
+  ]
+  const tip = [
+    [2, 0],
+    [3, -1],
+    [3, 1],
+  ]
+  const places = head ? [...shaft, ...tip] : shaft
+  const out = new Float32Array((ends.length / 6) * places.length * 8)
+  let o = 0
+  for (let i = 0; i + 5 < ends.length; i += 6)
+    for (const [along, side] of places) {
+      out.set(ends.subarray(i, i + 6), o)
+      out[o + 6] = along!
+      out[o + 7] = side!
+      o += 8
+    }
+  return out
+}
+
+// A ball of radius `r` round each centre, as triangles winding counter-clockwise from outside.
+export function sphereMesh(
+  centres: Float32Array,
+  r: number,
+): { pos: Float32Array; nrm: Float32Array } {
+  const [RINGS, SIDES] = [10, 20]
+  const pos: number[] = []
+  const nrm: number[] = []
+  const at = (i: number, j: number) => {
+    const phi = (Math.PI * i) / RINGS
+    const th = (2 * Math.PI * j) / SIDES
+    return [Math.sin(phi) * Math.cos(th), Math.sin(phi) * Math.sin(th), Math.cos(phi)]
+  }
+  for (let c = 0; c + 2 < centres.length; c += 3) {
+    const o = [centres[c]!, centres[c + 1]!, centres[c + 2]!]
+    const put = (n: number[]) => {
+      pos.push(...n.map((x, k) => o[k]! + r * x))
+      nrm.push(...n)
+    }
+    for (let i = 0; i < RINGS; i++)
+      for (let j = 0; j < SIDES; j++) {
+        const [a, b, cc, d] = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)]
+        if (i > 0) for (const n of [a, b, d]) put(n)
+        if (i < RINGS - 1) for (const n of [b, cc, d]) put(n)
+      }
+  }
+  return { pos: Float32Array.from(pos), nrm: Float32Array.from(nrm) }
+}
+
 export class Renderer {
   private gl: WebGL2RenderingContext
   private faces: WebGLProgram
   private lines: WebGLProgram
   private far: WebGLProgram
-  private points: WebGLProgram
+  private wide: WebGLProgram
+  private marks: WebGLProgram
+  private ribbon: WebGLProgram
   private subject: Uploaded | null = null
   private alt: Uploaded | null = null
   private ghosts: { mesh: Uploaded; tone: 0 | 1 }[] = []
-  // The overlay, each part as positions only: its array and how many vertices it holds.
-  private overlay: { vao: WebGLVertexArrayObject | null; buffer: WebGLBuffer; count: number }[] = []
+  // The overlay's parts, each laid out for the program that draws it.
+  private overlay: Partial<Record<OverlayPart, Part>> = {}
 
   // Throws where the browser has no WebGL2.
   constructor(canvas: HTMLCanvasElement) {
@@ -227,29 +365,86 @@ export class Renderer {
     this.faces = compile(gl, VERTEX, FACES)
     this.lines = compile(gl, VERTEX, LINES)
     this.far = compile(gl, FAR_VERTEX, FAR)
-    this.points = compile(gl, POINT_VERTEX, POINTS)
+    this.wide = compile(gl, WIDE_VERTEX, LINES)
+    this.marks = compile(gl, MARK_VERTEX, MARK)
+    this.ribbon = compile(gl, RIBBON_VERTEX, LINES)
   }
 
-  // The overlay's parts, in the order `OverlayGeometry` lists them.
   setOverlay(o: OverlayGeometry) {
     const gl = this.gl
-    for (const part of this.overlay) {
-      gl.deleteVertexArray(part.vao)
-      gl.deleteBuffer(part.buffer)
-    }
-    const parts = [o.plane, o.planeEdges, o.box, o.points, o.lines, o.dashes, o.inside, o.quiet]
-    this.overlay = parts.map(data => {
+    this.freeOverlay()
+    // One buffer per attribute list: [data, [location, size, stride, offset] for each attribute].
+    const part = (lists: [Float32Array, number[][]][], vertices: number): Part => {
       const vao = gl.createVertexArray()
       gl.bindVertexArray(vao)
-      const buffer = gl.createBuffer()!
-      gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW)
-      gl.enableVertexAttribArray(0)
-      gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0)
+      const buffers = lists.map(([data, attributes]) => {
+        const b = gl.createBuffer()!
+        gl.bindBuffer(gl.ARRAY_BUFFER, b)
+        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW)
+        for (const [at, size, stride, offset] of attributes) {
+          gl.enableVertexAttribArray(at!)
+          gl.vertexAttribPointer(at!, size!, gl.FLOAT, false, stride! * 4, offset! * 4)
+        }
+        return b
+      })
       gl.vertexAttrib3f(1, 0, 0, 1)
       gl.bindVertexArray(null)
-      return { vao, buffer, count: data.length / 3 }
-    })
+      return { vao, buffers, count: vertices }
+    }
+    const plain = (data: Float32Array) => part([[data, [[0, 3, 0, 0]]]], data.length / 3)
+    const wide = (data: Float32Array) =>
+      part(
+        [
+          [
+            data,
+            [
+              [0, 3, 8, 0],
+              [2, 3, 8, 3],
+              [3, 2, 8, 6],
+            ],
+          ],
+        ],
+        data.length / 8,
+      )
+    const solid = (...meshes: { pos: Float32Array; nrm: Float32Array }[]) => {
+      const join = (k: 'pos' | 'nrm') => {
+        const out = new Float32Array(meshes.reduce((n, m) => n + m[k].length, 0))
+        let at = 0
+        for (const m of meshes) {
+          out.set(m[k], at)
+          at += m[k].length
+        }
+        return out
+      }
+      const [pos, nrm] = [join('pos'), join('nrm')]
+      return part(
+        [
+          [pos, [[0, 3, 0, 0]]],
+          [nrm, [[1, 3, 0, 0]]],
+        ],
+        pos.length / 3,
+      )
+    }
+    this.overlay = {
+      plane: plain(o.plane),
+      planeEdges: plain(o.planeEdges),
+      box: plain(o.box),
+      points: solid(sphereMesh(o.points, o.ball)),
+      inside: solid(sphereMesh(o.inside, o.ball)),
+      quiet: solid(sphereMesh(o.quiet, o.ball)),
+      lines: wide(wideOf(o.lines)),
+      hiddenLines: wide(wideOf(o.hiddenLines)),
+      dashes: wide(wideOf(o.dashes)),
+      arrows: wide(wideOf(o.arrows, true)),
+    }
+  }
+
+  private freeOverlay() {
+    for (const p of Object.values(this.overlay)) {
+      this.gl.deleteVertexArray(p.vao)
+      for (const b of p.buffers) this.gl.deleteBuffer(b)
+    }
+    this.overlay = {}
   }
 
   private upload(m: Mesh): Uploaded {
@@ -328,7 +523,8 @@ export class Renderer {
       gl.uniform3fv(u('u_up'), v.up)
       gl.uniform3fv(u('u_toward'), v.toward)
       gl.uniform3f(u('u_scale'), (2 * v.scale) / v.w, (2 * v.scale) / v.h, 1 / (2 * v.reach))
-      if (p === this.faces) {
+      gl.uniform2f(u('u_px'), v.w / 2, v.h / 2)
+      if (p === this.faces || p === this.marks) {
         gl.uniform3f(u('u_light'), light[0]! / len, light[1]! / len, light[2]! / len)
         gl.uniform1f(u('u_ambient'), AMBIENT)
       }
@@ -409,44 +605,62 @@ export class Renderer {
     // The overlay, depth-tested and writing no depth: the plane faint where nothing of the solid
     // is in front of it, then its outline and the box. A drawing's hidden stretches are behind the
     // solid by definition, so their dashes skip the test.
-    const [plane, planeEdges, box, points, lines, dashes, inside, quiet] = this.overlay
-    const draw = (part: (typeof this.overlay)[number] | undefined, mode: number) => {
+    const P = this.overlay
+    const draw = (part: Part | undefined, mode: number) => {
       if (!part?.count) return
       gl.bindVertexArray(part.vao)
       gl.drawArrays(mode, 0, part.count)
     }
+    const band = (width: number) => {
+      const c = uniforms(this.wide)
+      gl.uniform1f(gl.getUniformLocation(this.wide, 'u_width'), width * v.dpr)
+      return c
+    }
     gl.uniform4f(color, ...rgba(look.guide, PLANE_ALPHA))
-    draw(plane, gl.TRIANGLES)
+    draw(P.plane, gl.TRIANGLES)
     gl.uniform4f(color, ...rgba(look.guide, GUIDE_ALPHA))
-    draw(planeEdges, gl.LINES)
-    draw(box, gl.LINES)
-    if (dashes?.count) {
+    draw(P.planeEdges, gl.LINES)
+    draw(P.box, gl.LINES)
+    if (P.dashes?.count) {
       gl.disable(gl.DEPTH_TEST)
-      draw(dashes, gl.LINES)
+      gl.uniform4f(band(LINE_WIDTH), ...rgba(look.guide, GUIDE_ALPHA))
+      draw(P.dashes, gl.TRIANGLES)
       gl.enable(gl.DEPTH_TEST)
     }
-    // The guide lines and points, twice: faint where the solid hides them, as CAD draws hidden
-    // geometry, since a query's points sit inside the solid or on its faces; then in full where
-    // nothing does.
-    const marks = !!(lines?.count || points?.count || inside?.count || quiet?.count)
-    for (const [test, k] of [
-      [gl.GREATER, HIDDEN_ALPHA],
-      [gl.LEQUAL, 1],
-    ] as const) {
-      if (!marks) break
-      gl.depthFunc(test)
-      gl.uniform4f(uniforms(this.lines), ...rgba(look.guide, GUIDE_ALPHA * k))
-      draw(lines, gl.LINES)
-      const p = uniforms(this.points)
-      gl.uniform1f(gl.getUniformLocation(this.points, 'u_size'), POINT_SIZE * v.dpr)
-      for (const [part, rgb] of [
-        [quiet, look.quiet],
-        [inside, look.guide],
-        [points, look.dot],
-      ] as const) {
-        gl.uniform4f(p, ...rgba(rgb, k))
-        draw(part, gl.POINTS)
+    // The guide lines and marks, twice: where the solid hides them, as CAD draws hidden geometry,
+    // since a query's points sit inside the solid or on its faces, the lines dashed and the marks
+    // faint; then where nothing does. Marks are drawn light and a little clear, as a drawing's
+    // marks are, not as parts of the solid.
+    // Where balls overlap the first drawn shows, so the points asked about and those on the
+    // boundary come first, then those inside, then the rest.
+    const balls: [Part | undefined, Rgb][] = [
+      [P.points, look.dot],
+      [P.inside, look.guide],
+      [P.quiet, look.quiet],
+    ]
+    for (const hidden of [true, false]) {
+      gl.depthFunc(hidden ? gl.GREATER : gl.LEQUAL)
+      gl.uniform4f(band(LINE_WIDTH), ...rgba(look.guide, GUIDE_ALPHA))
+      draw(hidden ? P.hiddenLines : P.lines, gl.TRIANGLES)
+      // Each pixel takes one mark only, so where marks overlap they do not blend over each other.
+      gl.clear(gl.STENCIL_BUFFER_BIT)
+      gl.enable(gl.STENCIL_TEST)
+      gl.stencilFunc(gl.EQUAL, 0, 0xff)
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.INCR)
+      const k = hidden ? HIDDEN_ALPHA : MARK_ALPHA
+      const r = uniforms(this.ribbon)
+      gl.uniform3f(gl.getUniformLocation(this.ribbon, 'u_shape'), ...ARROW_SHAPE)
+      gl.uniform4f(r, ...rgba(look.guide, k))
+      draw(P.arrows, gl.TRIANGLES)
+      const c = uniforms(this.marks)
+      gl.enable(gl.CULL_FACE)
+      gl.cullFace(gl.BACK)
+      for (const [part, rgb] of balls) {
+        gl.uniform4f(c, ...rgba(rgb, k))
+        draw(part, gl.TRIANGLES)
       }
+      gl.disable(gl.CULL_FACE)
+      gl.disable(gl.STENCIL_TEST)
     }
     gl.depthFunc(gl.LEQUAL)
     gl.depthMask(true)
@@ -457,13 +671,8 @@ export class Renderer {
     this.free(this.subject)
     this.free(this.alt)
     for (const g of this.ghosts) this.free(g.mesh)
-    this.gl.deleteProgram(this.faces)
-    this.gl.deleteProgram(this.lines)
-    this.gl.deleteProgram(this.far)
-    this.gl.deleteProgram(this.points)
-    for (const part of this.overlay) {
-      this.gl.deleteVertexArray(part.vao)
-      this.gl.deleteBuffer(part.buffer)
-    }
+    for (const p of [this.faces, this.lines, this.far, this.wide, this.marks, this.ribbon])
+      this.gl.deleteProgram(p)
+    this.freeOverlay()
   }
 }
