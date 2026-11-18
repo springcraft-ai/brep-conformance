@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
 import { fmt, GradeMark, PageHead, SearchBox } from '@/components'
-import { queryFromUrl } from '@/components/search'
+import { useUrlQuery } from '@/components/search'
 import { href, url } from '@/site/href'
 import './operations.css'
 import type { Props } from './index.data'
@@ -13,8 +12,7 @@ export const hydrate = true
 // each column names its run and links to its report; how it does is the results page's, not this
 // one's. Its search box narrows the rows to the operations and groups that hold every word.
 export default function OperationsIndex({ total, suites, kernels, groups }: Props) {
-  const [q, setQ] = useState('')
-  useEffect(() => setQ(queryFromUrl()), [])
+  const [q, setQ] = useUrlQuery()
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const shown = groups
     .map(g => ({

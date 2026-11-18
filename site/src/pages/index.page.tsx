@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { fmt, PageHead, Section } from '@/components'
-import { queryFromUrl } from '@/components/search'
+import { useUrlQuery } from '@/components/search'
 import { EmptyState } from '@/ds'
 import { href, url } from '@/site/href'
 import { Grid } from './_home/Grid'
@@ -18,15 +18,7 @@ const n = (x: number) => x.toLocaleString('en-US')
 export default function Home({ suite, cases, kernels, runs, board, groups }: Props) {
   const versions = Object.fromEntries(board.map(r => [r.kernel, r.version]))
   const [picked, setPicked] = useState(() => defaultCompare(board))
-  const [q, setQ] = useState('')
-
-  useEffect(() => setQ(queryFromUrl()), [])
-  const search = (v: string) => {
-    setQ(v)
-    const { pathname, hash } = window.location
-    const query = v.trim() ? `?q=${encodeURIComponent(v)}` : ''
-    window.history.replaceState(null, '', pathname + query + hash)
-  }
+  const [q, setQ] = useUrlQuery()
 
   const compare = (kernel: string) => setPicked(p => toggleCompare(p, kernel, kernels))
   const canCompare = kernels.length > COMPARE_MAX
@@ -125,7 +117,7 @@ export default function Home({ suite, cases, kernels, runs, board, groups }: Pro
             suite={suite}
             versions={versions}
             q={q}
-            onSearch={search}
+            onSearch={setQ}
           />
         </Section>
       </div>
