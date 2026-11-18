@@ -1,0 +1,45 @@
+name: Propose a test
+description: A situation the suite does not test yet, with the operations it already has.
+labels: ['proposal: test']
+body:
+  - type: markdown
+    attributes:
+      value: >
+        A test earns its place by catching a failure the others miss. A maintainer decides whether
+        it goes in. A test that needs a new function brings that function's proposal with it.
+  - type: input
+    id: path
+    attributes:
+      label: Test path
+      description: Where it would sit, as doc/formats.md names tests.
+      placeholder: booleans/touching/cylinder-on-a-box-edge
+    validations:
+      required: true
+  - type: textarea
+    id: situation
+    attributes:
+      label: The situation
+      description: The solids and the operation, and what makes the case hard.
+    validations:
+      required: true
+  - type: input
+    id: operations
+    attributes:
+      label: Operations it calls
+      placeholder: make, intersection, volume
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: How the expected result is known
+      description: A closed form, or the suite's own sample; never a kernel's output.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: What it would catch
+      description: The failure it finds that the existing tests do not.
+    validations:
+      required: true

@@ -1,0 +1,46 @@
+name: A wrong test
+description: A case whose expected value is wrong, or a check that judges a correct answer a failure.
+labels: [test-bug]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        An expected value is a closed form or the suite's own sample, never a kernel's output. A
+        kernel that answers differently is evidence to look at, not the exact value.
+  - type: input
+    id: case
+    attributes:
+      label: Case
+      description: The test's path and the case's id, as the results name them.
+      placeholder: booleans/touching/sphere-in-a-cone, box-box-1a2b3c4d5e6f7a8b
+    validations:
+      required: true
+  - type: input
+    id: suite
+    attributes:
+      label: Suite version
+      description: The release or commit the case comes from; case ids belong to one release.
+    validations:
+      required: true
+  - type: dropdown
+    id: what
+    attributes:
+      label: What is wrong
+      options:
+        - The expected value is not the exact one
+        - A check judges a correct answer a failure
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: exact
+    attributes:
+      label: The exact value, and how you know it
+      description: The closed form or the working that gives the right answer.
+    validations:
+      required: true
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel
+      description: The kernel and release that showed it, if one did.

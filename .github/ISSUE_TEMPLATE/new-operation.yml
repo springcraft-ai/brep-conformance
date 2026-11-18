@@ -1,0 +1,41 @@
+name: Propose an operation
+description: A function for the specs, as doc/process.md says one enters them.
+labels: ['proposal: operation']
+body:
+  - type: markdown
+    attributes:
+      value: >
+        A function enters the specs when a test needs it, its result is decidable, and two
+        independent kernels implement it, as
+        [process.md](https://github.com/springcraft-ai/brep-conformance/blob/main/doc/process.md#adding-a-function)
+        says. A maintainer decides whether it goes in.
+  - type: textarea
+    id: definition
+    attributes:
+      label: The function and its definition
+      description: >
+        Its name, its parameters, and its result as a set of points, in your own words. Do not
+        quote a standard or a vendor's documentation.
+    validations:
+      required: true
+  - type: textarea
+    id: test
+    attributes:
+      label: The test that needs it
+      description: The situation a test would check with it.
+    validations:
+      required: true
+  - type: textarea
+    id: decidable
+    attributes:
+      label: Why its result is decidable
+      description: How the suite can tell, for any point, whether the result holds it.
+    validations:
+      required: true
+  - type: textarea
+    id: kernels
+    attributes:
+      label: Two kernels that implement it
+      description: Two independent kernels with one call for it, open-source ones by name.
+    validations:
+      required: true
