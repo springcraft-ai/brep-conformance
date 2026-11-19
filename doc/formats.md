@@ -177,8 +177,8 @@ which every glTF viewer takes as up. The file's `extras` carry the case's `id`, 
 the `kernel` that drew it, the case's `outcome` and `result`, and the views' `points`, `box` and
 `plane`. The file requires `KHR_mesh_quantization`, which three.js, Blender and `<model-viewer>`
 read. Positions are `SHORT` over the solid's box, and the node's `translation` and uniform `scale`
-take them back to millimetres. Normals are normalized `BYTE`. Both primitives are indexed, with
-`UNSIGNED_SHORT` where the vertices fit.
+take them back to millimetres. Normals are normalized `SHORT`, fine enough for reflection stripes to
+show where faces meet. Both primitives are indexed, with `UNSIGNED_SHORT` where the vertices fit.
 
 Each registered kernel's files are published under `<base>/<suite>/<kernel>/<version>/<key>`, the
 folder its report has on the results site. The base is compiled in from

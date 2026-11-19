@@ -103,18 +103,19 @@ impl Builder {
         )
     }
 
-    /// Unit normals as normalized BYTE, padded to four bytes.
+    /// Unit normals as normalized SHORT, padded to eight bytes.
     fn normals(&mut self, v: &[[f64; 3]]) -> usize {
         let bytes: Vec<u8> = v
             .iter()
             .flat_map(|n| {
-                let b = n.map(|c| (c.clamp(-1.0, 1.0) * 127.0).round() as i8 as u8);
-                [b[0], b[1], b[2], 0]
+                let s = n.map(|c| (c.clamp(-1.0, 1.0) * f64::from(i16::MAX)).round() as i16);
+                [s[0], s[1], s[2], 0]
             })
+            .flat_map(i16::to_le_bytes)
             .collect();
-        let view = self.view(&bytes, 34962, Some(4));
+        let view = self.view(&bytes, 34962, Some(8));
         self.accessor(
-            json!({"bufferView": view, "componentType": 5120, "normalized": true,
+            json!({"bufferView": view, "componentType": 5122, "normalized": true,
                              "count": v.len(), "type": "VEC3"}),
         )
     }
@@ -367,6 +368,48 @@ mod tests {
             .map(|e| vec![p[e[0]], p[e[1]]])
             .collect();
         Display { faces, edges }
+    }
+
+    #[test]
+    fn a_normal_decodes_within_a_ten_thousandth_of_its_direction() {
+        // Reflection stripes turn a normal's error into a visible wobble: 8 bits, a step of
+        // about 0.45 degrees, wobbles; 16 bits does not.
+        let l = 14f64.sqrt();
+        let n = [1.0 / l, 2.0 / l, -3.0 / l];
+        let d = Display {
+            faces: vec![DisplayFace {
+                positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                normals: vec![n; 3],
+                triangles: vec![[0, 1, 2]],
+            }],
+            edges: Vec::new(),
+        };
+        let views = [View {
+            name: "a",
+            note: None,
+            alt: None,
+            solids: vec![Solid {
+                key: "t".into(),
+                role: "main",
+                display: &d,
+            }],
+        }];
+        let g = glb(&views, json!({}), "test");
+        let (gltf, bin) = chunks(&g);
+        let prim = &gltf["meshes"][0]["primitives"][0];
+        let a = &gltf["accessors"][prim["attributes"]["NORMAL"].as_u64().unwrap() as usize];
+        assert_eq!(a["componentType"], 5122);
+        assert_eq!(a["normalized"], true);
+        let v = &gltf["bufferViews"][a["bufferView"].as_u64().unwrap() as usize];
+        let at = v["byteOffset"].as_u64().unwrap() as usize;
+        let step = v["byteStride"].as_u64().unwrap() as usize;
+        for i in 0..3 {
+            for (k, &c) in n.iter().enumerate() {
+                let o = at + i * step + 2 * k;
+                let q = f64::from(i16::from_le_bytes([bin[o], bin[o + 1]])) / 32767.0;
+                assert!((q - c).abs() <= 1e-4, "{i} {k}: {q} against {c}");
+            }
+        }
     }
 
     #[test]

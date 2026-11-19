@@ -3,9 +3,12 @@ import { box, glbOf, Z_UP_TO_Y_UP } from './fixture'
 import { overlayOf, parseGlb } from './glb'
 
 // A triangle and one edge as the suite writes them: positions as SHORT padded to 8 bytes, normals
-// as normalized BYTE, and the node's translation and scale taking them back.
-function quantized(required: string[]): ArrayBuffer {
-  const bin = new ArrayBuffer(48)
+// as normalized SHORT padded to 8 (BYTE padded to 4 in files written before), and the node's
+// translation and scale taking them back.
+function quantized(required: string[], normals: 'short' | 'byte' = 'short'): ArrayBuffer {
+  const stride = normals === 'short' ? 8 : 4
+  const at = 24 + 3 * stride
+  const bin = new ArrayBuffer(at + 12)
   const dv = new DataView(bin)
   const points = [
     [0, 0, 0],
@@ -13,8 +16,10 @@ function quantized(required: string[]): ArrayBuffer {
     [0, -2, 0],
   ]
   points.forEach((p, i) => p.forEach((x, k) => dv.setInt16(i * 8 + k * 2, x, true)))
-  for (let i = 0; i < 3; i++) dv.setInt8(24 + i * 4 + 2, 127)
-  ;[0, 1, 2, 0, 1, 0].forEach((x, i) => dv.setUint16(36 + i * 2, x, true))
+  for (let i = 0; i < 3; i++)
+    if (normals === 'short') dv.setInt16(24 + i * 8 + 4, 32767, true)
+    else dv.setInt8(24 + i * 4 + 2, 127)
+  ;[0, 1, 2, 0, 1, 0].forEach((x, i) => dv.setUint16(at + i * 2, x, true))
   const json = {
     asset: { version: '2.0' },
     extensionsUsed: required,
@@ -33,15 +38,21 @@ function quantized(required: string[]): ArrayBuffer {
         ],
       },
     ],
-    buffers: [{ byteLength: 48 }],
+    buffers: [{ byteLength: bin.byteLength }],
     bufferViews: [
       { buffer: 0, byteOffset: 0, byteLength: 24, byteStride: 8 },
-      { buffer: 0, byteOffset: 24, byteLength: 12, byteStride: 4 },
-      { buffer: 0, byteOffset: 36, byteLength: 12 },
+      { buffer: 0, byteOffset: 24, byteLength: 3 * stride, byteStride: stride },
+      { buffer: 0, byteOffset: at, byteLength: 12 },
     ],
     accessors: [
       { bufferView: 0, componentType: 5122, count: 3, type: 'VEC3' },
-      { bufferView: 1, componentType: 5120, normalized: true, count: 3, type: 'VEC3' },
+      {
+        bufferView: 1,
+        componentType: normals === 'short' ? 5122 : 5120,
+        normalized: true,
+        count: 3,
+        type: 'VEC3',
+      },
       { bufferView: 2, componentType: 5123, count: 3, type: 'SCALAR' },
       { bufferView: 2, byteOffset: 6, componentType: 5123, count: 2, type: 'SCALAR' },
     ],
@@ -77,8 +88,10 @@ describe('parseGlb', () => {
 
   it('reads no normals from a file without them, and turns the ones a file has', () => {
     expect(Array.from(parseGlb(glbOf(positions, triangles)).normals)).toEqual(new Array(24).fill(0))
-    const n = parseGlb(quantized(['KHR_mesh_quantization'])).normals
-    expect(Array.from(n)).toEqual([0, 0, 1, 0, 0, 1, 0, 0, 1])
+    for (const kind of ['short', 'byte'] as const) {
+      const n = parseGlb(quantized(['KHR_mesh_quantization'], kind)).normals
+      expect(Array.from(n), kind).toEqual([0, 0, 1, 0, 0, 1, 0, 0, 1])
+    }
   })
 
   it('keeps the file’s own edges when it has them', () => {
