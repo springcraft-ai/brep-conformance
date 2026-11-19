@@ -1082,7 +1082,8 @@ impl Rng {
 
 /// `debug` with every float rounded to nine significant digits. The values a case holds come out of
 /// `sin`, `cos` and the like, whose last bit differs between platforms' maths libraries; rounded,
-/// they hash the same everywhere. A number with no point and no exponent is an integer, and is kept.
+/// they hash the same everywhere, and what cancellation leaves of a zero hashes as zero. A number
+/// with no point and no exponent is an integer, and is kept.
 fn rounded_floats(debug: &str) -> String {
     let b = debug.as_bytes();
     let mut out = String::with_capacity(debug.len());
@@ -1107,6 +1108,9 @@ fn rounded_floats(debug: &str) -> String {
         }
         let token = &debug[i..j];
         match token.parse::<f64>() {
+            // Below a picometre a value is what cancellation left of a zero, whose bits and sign
+            // differ between platforms.
+            Ok(v) if token.contains(['.', 'e']) && v.abs() < 1e-12 => out.push_str("0e0"),
             Ok(v) if token.contains(['.', 'e']) => out.push_str(&format!("{v:.8e}")),
             _ => out.push_str(token),
         }
@@ -7628,13 +7632,13 @@ mod tests {
     fn the_default_seed_draws_the_same_ids_on_every_platform() {
         let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
         let got = format!("{:016x}", fnv(&ids.join("\n")));
-        if got != "b2e2602654b069d1" {
+        if got != "4095bb09151ed05f" {
             // Every id, so a run elsewhere can be compared with this one case by case.
             for id in &ids {
                 eprintln!("id {id}");
             }
         }
-        assert_eq!(got, "b2e2602654b069d1");
+        assert_eq!(got, "4095bb09151ed05f");
     }
 
     #[test]
@@ -7653,6 +7657,11 @@ mod tests {
         assert_eq!(
             rounded_floats("[[1.0, -2.5], Some(4e3)]"),
             "[[1.00000000e0, -2.50000000e0], Some(4.00000000e3)]"
+        );
+        // What cancellation leaves of a zero, whatever its sign, is a zero.
+        assert_eq!(
+            rounded_floats("-2.168404344971e-19,1.2e-19,-0.0,0.0"),
+            "0e0,0e0,0e0,0e0"
         );
     }
 
