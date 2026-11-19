@@ -7,6 +7,7 @@ import {
   latestByKernel,
   latestReports,
   leaderboard,
+  nistIndex,
   parseReport,
   speedFactors,
   summarize,
@@ -314,5 +315,73 @@ describe('leaderboard and indexes', () => {
     expect(t!.slug).toBe('x')
     expect(t!.kernels.zeta!.grade).toBe('1e-7')
     expect(t!.kernels.alpha!.grade).toBe('unsupported')
+  })
+})
+
+describe('nist', () => {
+  const read = {
+    file: 'ap203/a.stp',
+    stated_volume: 2,
+    stated_area: null,
+    ms: 9,
+    volume: 2,
+    area: 7,
+    valid: true,
+    agrees: true,
+  }
+  const refused = {
+    file: 'ap203/b.stp',
+    stated_volume: null,
+    stated_area: 5,
+    ms: 1,
+    outcome: 'refused',
+    error: 'no reader',
+  }
+
+  it('reads each NIST row, and none where the report has no record', () => {
+    const r = parseReport({ ...raw('k', '1.0.0', []), nist: [read, refused] })
+    expect(r.nist).toEqual([
+      {
+        file: 'ap203/a.stp',
+        statedVolume: 2,
+        statedArea: null,
+        volume: 2,
+        area: 7,
+        valid: true,
+        agrees: true,
+        ms: 9,
+        outcome: null,
+        error: null,
+      },
+      {
+        file: 'ap203/b.stp',
+        statedVolume: null,
+        statedArea: 5,
+        volume: null,
+        area: null,
+        valid: null,
+        agrees: null,
+        ms: 1,
+        outcome: 'refused',
+        error: 'no reader',
+      },
+    ])
+    expect(parseReport(raw('k', '1.0.0', [])).nist).toBeNull()
+    expect(parseReport({ ...raw('k', '1.0.0', []), nist: null }).nist).toBeNull()
+  })
+
+  it('lists every file any kernel read, with each kernel’s row or none', () => {
+    const a = parseReport({ ...raw('alpha', '1', []), nist: [read, refused] })
+    const b = parseReport({ ...raw('beta', '1', []), nist: [refused] })
+    const c = parseReport(raw('gamma', '1', []))
+    const index = nistIndex([a, b, c])
+    expect(index.kernels).toEqual(['alpha', 'beta'])
+    expect(index.files.map(f => f.file)).toEqual(['ap203/a.stp', 'ap203/b.stp'])
+    expect(index.files[0]!.statedVolume).toBe(2)
+    expect(index.files[0]!.kernels.alpha!.agrees).toBe(true)
+    expect(index.files[0]!.kernels.beta).toBeUndefined()
+    expect(index.files[1]!.statedArea).toBe(5)
+    expect(index.files[1]!.kernels.beta!.outcome).toBe('refused')
+    expect(nistIndex([c]).files).toEqual([])
   })
 })

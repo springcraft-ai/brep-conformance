@@ -3631,6 +3631,9 @@ pub fn nist<K: Kernel>(k: &K, dir: &std::path::Path) -> Result<Value, String> {
     let mut out = Vec::new();
     for (name, want) in files {
         let text = std::fs::read_to_string(dir.join(name)).map_err(|e| format!("{name}: {e}"))?;
+        // A worker lost on the file before ends every call as it ended until reset, as between
+        // cases: each file starts afresh.
+        k.reset();
         let t = Instant::now();
         let got = attempt(|| {
             let s = k.read_step(&text)?;
@@ -4045,6 +4048,76 @@ mod tests {
         judge(&mut pass, &c);
         assert_eq!(pass["result"], "1e-7");
         assert!(pass["why"].is_null());
+    }
+
+    /// A kernel whose STEP reader runs past the time limit on a file named slow, and which, as a
+    /// lost worker does, ends every later call the same way until it is reset.
+    struct Sticky(std::sync::atomic::AtomicBool);
+
+    impl Kernel for Sticky {
+        type Solid = ();
+        fn name(&self) -> String {
+            "sticky".into()
+        }
+        fn version(&self) -> String {
+            "0".into()
+        }
+        fn tolerance(&self) -> f64 {
+            TOLERANCE
+        }
+        fn make(&self, _p: &Primitive) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn union(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn intersection(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn difference(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn volume(&self, _s: &()) -> Result<f64, Refusal> {
+            Ok(1.0)
+        }
+        fn area(&self, _s: &()) -> Result<f64, Refusal> {
+            Ok(6.0)
+        }
+        fn check(&self, _s: &()) -> Result<Vec<String>, Refusal> {
+            Ok(Vec::new())
+        }
+        fn transform(&self, _s: &(), _m: [[f64; 4]; 3]) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn read_step(&self, text: &str) -> Result<(), Refusal> {
+            use std::sync::atomic::Ordering;
+            if text.contains("slow") || self.0.load(Ordering::SeqCst) {
+                self.0.store(true, Ordering::SeqCst);
+                std::panic::panic_any(brep_protocol::TimedOut("read_step".into()));
+            }
+            Ok(())
+        }
+        fn reset(&self) {
+            self.0.store(false, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn a_nist_file_that_times_out_is_not_charged_to_the_files_after_it() {
+        let dir = std::env::temp_dir().join(format!("nist-sticky-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("validation.json"),
+            r#"{"a.stp": {}, "b.stp": {"volume": 1.0}}"#,
+        )
+        .unwrap();
+        std::fs::write(dir.join("a.stp"), "slow").unwrap();
+        std::fs::write(dir.join("b.stp"), "quick").unwrap();
+        let rows = nist(&Sticky(Default::default()), &dir).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(rows[0]["outcome"], "timeout");
+        assert!(rows[1].get("outcome").is_none(), "{}", rows[1]);
+        assert_eq!(rows[1]["agrees"], true);
     }
 
     /// A kernel that makes and moves anything, and declines to place points in the way given.

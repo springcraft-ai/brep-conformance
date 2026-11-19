@@ -16,6 +16,8 @@ export const url = {
   // One test across a report's kernels, by its path, such as booleans/degenerate/equal-cylinders.
   compare: (report: string, test: string) =>
     href(`/reports/${e(report)}/compare/${test.split('/').map(e).join('/')}/`),
+  // NIST's STEP files as a report's kernels read them.
+  nist: (report: string) => href(`/reports/${e(report)}/nist/`),
   operation: (operation: string) => href(`/operations/${e(operation)}/`),
   badge: (kernel: string) => href(`/badges/${e(kernel)}.svg`),
 }

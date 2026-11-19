@@ -1,5 +1,5 @@
 import { runDays } from '@/components/format'
-import type { SuiteView } from '@/data/results'
+import { nistIndex, type SuiteView } from '@/data/results'
 import { site } from '@/data/source'
 import { SITE_NAME, SOCIAL_DESCRIPTION, SOCIAL_TITLE } from '@/site/meta'
 import type { PageEntry } from '@/site/page'
@@ -18,6 +18,8 @@ export interface Props {
   runs: string[]
   board: BoardRow[]
   groups: GridGroup[]
+  // Whether any run read NIST's files, which the report's NIST page lists.
+  nist: boolean
 }
 
 // The leaderboard of one report; the home page is the current one's.
@@ -33,6 +35,7 @@ export function propsOf(v: SuiteView, home: boolean): Props {
     runs: runDays(v.leaderboard.map(r => r.date)),
     board: boardRows(v.leaderboard),
     groups: grid(v.tests, kernels),
+    nist: nistIndex(v.latest).files.length > 0,
   }
 }
 

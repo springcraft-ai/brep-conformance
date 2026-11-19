@@ -24,6 +24,7 @@ export default function Home({
   runs,
   board,
   groups,
+  nist,
 }: Props) {
   const pages = Object.fromEntries(kernels.map((k, i) => [k, segments[i]!]))
   const [picked, setPicked] = useState(() => defaultCompare(board))
@@ -120,6 +121,7 @@ export default function Home({
           </a>
           <span className="hm-foot__meta bc-annot">
             <a href={href('/docs/#introduction-how-it-works')}>how scoring works</a>
+            {nist && <a href={url.nist(suite)}>NIST files, not scored</a>}
             <span>
               {runs.length > 0 && `${fmt.runs(runs)} · `}
               suite {suite} · {n(cases)} cases

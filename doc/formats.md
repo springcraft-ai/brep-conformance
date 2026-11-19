@@ -120,7 +120,8 @@ site reads. It holds `format` (the same number as the results file's), `kernel`,
 result) and `cases`. `cases` has one row per case, with `id`, `test`, `operation`, `kind`, `result`,
 `why`, `failure`, `time_ms`, `asset`, its test's `group_median_ms`, `group_low_confidence`, and,
 where files were drawn, `exports`: the `glb` key and the list of `step` keys, below the kernel's
-folder of [Assets](#assets).
+folder of [Assets](#assets). `nist` is the results file's own, one row per NIST file read, or null
+where the run read none; the `summary` does not count it.
 
 ## Operands
 

@@ -1,0 +1,54 @@
+/* The NIST page: the shared head and table, each kernel's word in its grade colour. */
+
+.nist-lede {
+  max-width: 72ch;
+  margin: 0 0 var(--sp-5);
+  color: var(--void-ink-2);
+}
+
+.nist-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-6);
+  margin: 0 0 var(--sp-6);
+  padding: 0;
+  list-style: none;
+}
+
+/* A narrow screen scrolls the table sideways rather than crushing its columns. */
+.nist-scroll {
+  overflow-x: auto;
+}
+
+.nist-file {
+  white-space: nowrap;
+}
+.nist-folder {
+  display: block;
+  color: var(--void-ink-2);
+  font-size: 0.85em;
+}
+
+.nist-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.nist-cell {
+  white-space: nowrap;
+}
+.nist-agrees {
+  color: var(--grade-1e-7);
+}
+.nist-read {
+  color: var(--grade-1e-5);
+}
+.nist-differs,
+.nist-failed {
+  color: var(--grade-fail);
+}
+.nist-none {
+  color: var(--grade-none);
+}
+.nist-flag {
+  color: var(--grade-fail);
+}
