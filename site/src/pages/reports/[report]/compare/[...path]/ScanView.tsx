@@ -280,12 +280,20 @@ export function ScanView({
           <span className="bc-views__zebra">
             <Menu
               label="zebra stripes"
-              trigger={<span className="bc-views__zebra-now">zebra {zebra ?? 'off'}</span>}
+              trigger={
+                <span
+                  className={
+                    zebra ? 'bc-views__zebra-now bc-views__zebra-now--on' : 'bc-views__zebra-now'
+                  }
+                >
+                  zebra
+                </span>
+              }
               align="right"
               tone="void"
               items={['off', ...Object.keys(DENSITIES)].map(id => ({
                 id,
-                label: `zebra ${id}`,
+                label: id,
                 intent: (zebra ?? 'off') === id ? ('armed' as const) : undefined,
               }))}
               onSelect={id => setZebra(id === 'off' ? null : (id as Density))}

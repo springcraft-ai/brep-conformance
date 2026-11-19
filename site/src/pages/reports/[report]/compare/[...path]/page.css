@@ -715,7 +715,6 @@
 }
 .bc-views__zebra-now {
   display: inline-block;
-  min-width: 12ch;
   padding-right: 1.2em;
   text-align: left;
   color: var(--void-ink-3);
@@ -725,6 +724,12 @@
 .bc-views__zebra:hover .bc-views__zebra-now,
 .bc-views__zebra :focus-visible .bc-views__zebra-now {
   color: var(--void-ink-1);
+}
+/* Lit while any lines are drawn, as the arrow beside it. */
+.bc-views__zebra-now--on,
+.bc-views__zebra:hover .bc-views__zebra-now--on,
+.bc-views__zebra:has(.bc-views__zebra-now--on)::after {
+  color: var(--accent);
 }
 .bc-views__zebra::after {
   content: '▾';
