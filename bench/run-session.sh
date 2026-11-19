@@ -53,7 +53,7 @@ one() {
     echo "=== $name: started $(date -u '+%H:%M:%S')"
     local t0=$SECONDS rc=0
     "$suite" --adapter "$root/bench/pin.sh $adapter" --threads "$threads" \
-        --glb "$shapes/$name" --step "$shapes/$name" \
+        --glb "$shapes/$name" --step "$shapes/$name" --nist "$root/nist" \
         --out "results/$name.json" "$@" > "results/$name.log" 2>&1 || rc=$?
     echo "=== $name: exit $rc after $((SECONDS - t0)) s"
     # A wrapper that could not place an adapter makes the suite record crashes for cases that
