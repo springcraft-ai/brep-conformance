@@ -4,7 +4,16 @@ import { Annot } from '@/components'
 import { zoomKeyOf } from './format'
 import type { Mark, ScanHandle } from './scan'
 import type { Loaded } from './viewer'
-import { firstView, ghostsOf, keysOf, operandsLabel, subjectOf, toneKeyOf, tonesOf } from './views'
+import {
+  firstView,
+  ghostsOf,
+  keysOf,
+  operandsLabel,
+  shownOverlay,
+  subjectOf,
+  toneKeyOf,
+  tonesOf,
+} from './views'
 
 type Status = 'loading' | 'ready' | 'missing' | 'unreadable' | 'undrawn'
 
@@ -57,6 +66,7 @@ export function ScanView({
   const [viewName, setViewName] = useState<string | null>(null)
   const [operands, setOperands] = useState(true)
   const [points, setPoints] = useState(true)
+  const [box, setBox] = useState(true)
   const o = loaded?.overlay
   const hasPoints = !!(
     o?.points.length ||
@@ -64,14 +74,10 @@ export function ScanView({
     o?.sides.length ||
     o?.normals.length
   )
-  // The case's overlay, its points and the answers drawn at them left out when they are off.
+  const hasBox = !!o?.box
   const overlay = useMemo(
-    () =>
-      loaded &&
-      (points
-        ? loaded.overlay
-        : { ...loaded.overlay, points: [], closest: [], sides: [], normals: [] }),
-    [loaded, points],
+    () => loaded && shownOverlay(loaded.overlay, { points, box }),
+    [loaded, points, box],
   )
   const keys = useMemo(() => (loaded ? keysOf(loaded.overlay, points) : []), [loaded, points])
 
@@ -105,6 +111,7 @@ export function ScanView({
     name: view?.name ?? '',
     toggle,
     hasPoints,
+    hasBox,
   }
   const kept = useRef(row)
   if (status !== 'loading') kept.current = row
@@ -263,6 +270,9 @@ export function ScanView({
           )}
           {shownRow.hasPoints && (
             <Checkbox tone="void" checked={points} onChange={setPoints} label="show points" />
+          )}
+          {shownRow.hasBox && (
+            <Checkbox tone="void" checked={box} onChange={setBox} label="show box" />
           )}
         </div>
       )}

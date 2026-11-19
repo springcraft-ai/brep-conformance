@@ -97,6 +97,17 @@ export function firstView(views: GlbView[]): number {
 export type Mark =
   'dot' | 'inside' | 'quiet' | 'seen' | 'hidden' | 'arrow' | 'convex' | 'concave' | 'flat'
 
+// The overlay as drawn: the points and the answers drawn at them, and the box, each left out when
+// switched off.
+export function shownOverlay(o: Overlay, show: { points: boolean; box: boolean }): Overlay {
+  if (show.points && show.box) return o
+  return {
+    ...o,
+    ...(show.points ? {} : { points: [], closest: [], sides: [], normals: [] }),
+    ...(show.box ? {} : { box: null }),
+  }
+}
+
 // The key to the marks the overlay is drawn with, each once: a drawing's lines always, the
 // answers of a point query only while its points are shown.
 export function keysOf(o: Overlay, points: boolean): { mark: Mark; label: string }[] {

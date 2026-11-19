@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { overlayOf, type GlbView, type Shape } from './glb'
-import { keysOf, toneKeyOf } from './views'
+import { keysOf, shownOverlay, toneKeyOf } from './views'
 
 const tri = (n: number): Shape => ({
   positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
@@ -99,5 +99,33 @@ describe('keysOf', () => {
       { mark: 'convex', label: 'bends outward' },
       { mark: 'flat', label: 'flat' },
     ])
+  })
+})
+
+describe('shownOverlay', () => {
+  const o = overlayOf({
+    points: [[0, 0, 0]],
+    box: [
+      [0, 0, 0],
+      [1, 1, 1],
+    ],
+    sides: [{ at: [0, 0, 0], side: 'in' }],
+  })
+
+  it('shows everything the case lays over its views by default', () => {
+    expect(shownOverlay(o, { points: true, box: true })).toBe(o)
+  })
+
+  it('leaves out the box alone, keeping the points', () => {
+    const s = shownOverlay(o, { points: true, box: false })
+    expect(s.box).toBeNull()
+    expect(s.points).toEqual(o.points)
+    expect(s.sides).toEqual(o.sides)
+  })
+
+  it('leaves out the points and their answers alone, keeping the box', () => {
+    const s = shownOverlay(o, { points: false, box: true })
+    expect(s.box).toEqual(o.box)
+    expect([s.points, s.sides, s.closest, s.normals]).toEqual([[], [], [], []])
   })
 })
