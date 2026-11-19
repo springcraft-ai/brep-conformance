@@ -86,7 +86,7 @@ void main() { o = vec4(0.0); }`
 const FACES = `#version 300 es
 precision highp float;
 in vec3 v_nrm;
-uniform vec3 u_light, u_toward, u_up;
+uniform vec3 u_light, u_toward, u_up, u_right;
 uniform vec4 u_color;
 uniform float u_ambient, u_zebra;
 out vec4 o;
@@ -94,7 +94,7 @@ ${ZEBRA_GLSL}
 void main() {
   vec3 n = normalize(v_nrm);
   if (u_zebra > 0.5) {
-    float b = zebra(n, u_toward, u_up);
+    float b = zebra(n, u_toward, u_up, u_right);
     vec3 c = mix(u_color.rgb * 0.15, mix(u_color.rgb, vec3(1.0), 0.7), b);
     o = vec4(c * u_color.a, u_color.a);
     return;
