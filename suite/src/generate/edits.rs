@@ -299,13 +299,16 @@ fn shell(points: Vec<Vec3>, t: f64) -> Feature {
     face_act(Act::Shell, points, t, None)
 }
 
-/// A frustum narrowing upward hollowed to walls `t` thick: open through its wide bottom, or closed
-/// round a void. Each result is one turned profile, the cone's wall moved in by `t` along its
-/// normal. At the wide bottom the nearest point of that wall to a point within it never lies past
-/// the rim, so the wall ends flat in the opening with nothing measured to the rim's edge.
+/// A frustum narrowing upward hollowed to walls `t` thick: open through its wide bottom or its
+/// narrow top, or closed round a void. Each result is one turned profile, the cone's wall moved in
+/// by `t` along its normal. At the wide bottom the nearest point of that wall to a point within it
+/// never lies past the rim, so the wall ends flat in the opening. At the narrow top the points
+/// between the opening and the rim's normal are nearest the rim, so the wall ends in an arc of
+/// radius `t` about it, short of the flat end by `t²(tan β − β)/2` in the meridian.
 #[derive(Clone, Copy)]
 pub(super) enum Opened {
     WideBottom,
+    NarrowTop,
     Closed,
 }
 
@@ -330,6 +333,24 @@ pub(super) fn frustum_shell(r: &mut Rng, opened: Opened) -> FeatureDraw {
             ]),
             vec![[0.0, 0.0, 0.0]],
         ),
+        Opened::NarrowTop => {
+            // The angle the cone's side leans in from upright, and where the rim's inward normal
+            // meets the wall's inner face.
+            let lean = (bottom - top).patan2(h);
+            let foot = [top - t * lean.pcos(), h - t * lean.psin()];
+            (
+                revolve(vec![
+                    line([0.0, 0.0], [bottom, 0.0]),
+                    line([bottom, 0.0], [top, h]),
+                    line([top, h], [top - t, h]),
+                    arc([top, h], t, PI, lean),
+                    line(foot, [inner(t), t]),
+                    line([inner(t), t], [0.0, t]),
+                    line([0.0, t], [0.0, 0.0]),
+                ]),
+                vec![[0.0, 0.0, h]],
+            )
+        }
         Opened::Closed => (
             revolve(vec![
                 line([0.0, 0.0], [bottom, 0.0]),

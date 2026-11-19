@@ -1024,6 +1024,12 @@ pub const FEATURE_FAMILIES: &[FeatureFamily] = &[
         draw: |r| edits::frustum_shell(r, edits::Opened::WideBottom),
     },
     FeatureFamily {
+        name: "frustum-shells-open-top",
+        version: 1,
+        count: 6,
+        draw: |r| edits::frustum_shell(r, edits::Opened::NarrowTop),
+    },
+    FeatureFamily {
         name: "frustum-shells-closed",
         version: 1,
         count: 6,
@@ -7914,13 +7920,13 @@ mod tests {
     fn the_default_seed_draws_the_same_ids_on_every_platform() {
         let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
         let got = format!("{:016x}", fnv(&ids.join("\n")));
-        if got != "f8971b8ba0b33c7d" {
+        if got != "774a036555981c84" {
             // Every id, so a run elsewhere can be compared with this one case by case.
             for id in &ids {
                 eprintln!("id {id}");
             }
         }
-        assert_eq!(got, "f8971b8ba0b33c7d");
+        assert_eq!(got, "774a036555981c84");
     }
 
     #[test]

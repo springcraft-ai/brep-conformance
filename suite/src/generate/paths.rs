@@ -287,7 +287,9 @@ pub fn test_path(c: &Case) -> &'static str {
         "deleted-bosses" | "deleted-root-rounds" | "deleted-inside-rounds" => {
             "modify/delete-faces-taking-material-away"
         }
-        "frustum-shells-open-bottom" | "frustum-shells-closed" => "modify/shell-frustum",
+        "frustum-shells-open-bottom" | "frustum-shells-open-top" | "frustum-shells-closed" => {
+            "modify/shell-frustum"
+        }
         "ball-shells" | "cone-shells-open-base" | "cone-shells-closed" => {
             "modify/shell-ball-or-cone"
         }
