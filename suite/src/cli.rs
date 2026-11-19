@@ -2,9 +2,12 @@
 //!
 //! ```text
 //! brep-conformance (--adapter "<command>" | --kernel NAME [--work DIR]) [--peer "<command>"]
-//!                  [--nist DIR] [--family A,B] [--timeout S] [--seed N] [--threads N] [--out FILE]
-//!                  [--glb DIR] [--step DIR] [--html FILE [--viewer viewer.wasm]]
+//!                  [--nist DIR] [--family A,B] [--timeout S] [--seed N] [--threads N] [--pin LIST]
+//!                  [--out FILE] [--glb DIR] [--step DIR] [--html FILE [--viewer viewer.wasm]]
 //! ```
+//!
+//! `--pin 24-47` runs each worker of the kernel's adapter on one of the listed cores alone, for
+//! timings on cores the system keeps for them; the results record the list. Linux only.
 //!
 //! `--kernel` makes an official run: the adapter the [registry](crate::registry) pins for that
 //! kernel, checked out and built under `--work` (`adapters` by default), which must report the
@@ -48,15 +51,26 @@ pub fn main() -> ExitCode {
             eprintln!(
                 "usage: brep-conformance (--adapter \"<command>\" | --kernel NAME [--work DIR]) \
                  [--peer \"<command>\"] [--nist DIR] [--family A,B] [--timeout S] [--seed N] \
-                 [--threads N] [--out FILE] [--glb DIR] [--step DIR] \
+                 [--threads N] [--pin LIST] [--out FILE] [--glb DIR] [--step DIR] \
                  [--html FILE [--viewer viewer.wasm]]"
             );
             return ExitCode::from(2);
         }
     };
     let seed: u64 = value("--seed").map_or(1, |s| s.parse().expect("--seed takes a number"));
+    let pin = match value("--pin").map(|list| brep_protocol::cores(&list)) {
+        Some(Ok(cores)) => Some(cores),
+        Some(Err(e)) => {
+            eprintln!("--pin: {e}");
+            return ExitCode::from(2);
+        }
+        None => None,
+    };
     let threads = value("--threads").map_or_else(
-        || std::thread::available_parallelism().map_or(4, |n| n.get()),
+        || match &pin {
+            Some(cores) => cores.len(),
+            None => std::thread::available_parallelism().map_or(4, |n| n.get()),
+        },
         |s| s.parse().expect("--threads takes a number"),
     );
     let out = PathBuf::from(value("--out").unwrap_or_else(|| "conformance-results.json".into()));
@@ -73,7 +87,7 @@ pub fn main() -> ExitCode {
 
     let limit = value("--timeout").map_or(120.0, |s| s.parse().expect("--timeout takes seconds"));
     let limit = std::time::Duration::from_secs_f64(limit);
-    let kernel = match Remote::new(adapter, threads, limit) {
+    let kernel = match Remote::pinned(adapter, threads, limit, pin.clone().unwrap_or_default()) {
         Ok(k) => k,
         Err(e) => {
             eprintln!("{e}");
@@ -121,6 +135,7 @@ pub fn main() -> ExitCode {
         step: value("--step").map(PathBuf::from),
     };
     let mut results = run::run(&kernel, &cases, threads, peer.as_ref(), &exports);
+    results["environment"]["pinned"] = serde_json::json!(pin);
     if let Some(e) = &official {
         results["adapter"] = e.stamp();
     }

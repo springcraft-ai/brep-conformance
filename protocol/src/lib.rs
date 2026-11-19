@@ -12,7 +12,7 @@ mod serve;
 mod wire;
 
 pub use model::Op;
-pub use remote::Remote;
+pub use remote::{Remote, cores};
 
 pub use serve::serve;
 

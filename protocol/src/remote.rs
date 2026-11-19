@@ -44,14 +44,55 @@ impl Drop for Worker {
     }
 }
 
+/// The cores a list such as `24-47` or `0,2,4-7` names, in its order, each once.
+pub fn cores(list: &str) -> Result<Vec<usize>, String> {
+    let bad = || format!("`{list}` is not a list of cores such as 24-47 or 0,2,4-7");
+    let mut out: Vec<usize> = Vec::new();
+    for part in list.split(',') {
+        let (a, b) = part.split_once('-').unwrap_or((part, part));
+        let (a, b): (usize, usize) = (a.parse().map_err(|_| bad())?, b.parse().map_err(|_| bad())?);
+        if a > b {
+            return Err(bad());
+        }
+        for c in a..=b {
+            if out.contains(&c) {
+                return Err(bad());
+            }
+            out.push(c);
+        }
+    }
+    Ok(out)
+}
+
 impl Worker {
-    fn spawn(command: &[String]) -> Result<Worker, String> {
+    /// Starts the worker, on `core` alone where one is given.
+    fn spawn(command: &[String], core: Option<usize>) -> Result<Worker, String> {
         let (program, args) = command.split_first().ok_or("the worker command is empty")?;
         let mut cmd = Command::new(program);
         cmd.args(args).stdin(Stdio::piped()).stdout(Stdio::piped());
         // Its own process group, so it and anything it starts go together.
         #[cfg(unix)]
         std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+        // Set in the child before it runs the adapter, so a launcher's children inherit it too.
+        #[cfg(target_os = "linux")]
+        if let Some(core) = core {
+            // SAFETY: the closure runs in the forked child before exec and makes one system call.
+            unsafe {
+                std::os::unix::process::CommandExt::pre_exec(&mut cmd, move || {
+                    let mut set: libc::cpu_set_t = std::mem::zeroed();
+                    libc::CPU_SET(core, &mut set);
+                    let size = std::mem::size_of::<libc::cpu_set_t>();
+                    if libc::sched_setaffinity(0, size, &set) != 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        if core.is_some() {
+            return Err("pinning a worker to a core needs Linux".into());
+        }
         let mut child = cmd
             .spawn()
             .map_err(|e| format!("starting the worker `{}`: {e}", command.join(" ")))?;
@@ -119,6 +160,8 @@ pub struct Remote {
     next: AtomicUsize,
     hello: Value,
     limit: Duration,
+    /// The core each worker runs on alone, by worker; empty where workers are not pinned.
+    pins: Vec<usize>,
 }
 
 thread_local! {
@@ -130,7 +173,25 @@ impl Remote {
     /// takes longer than `limit` is a crash: its worker is killed and replaced. A worker that
     /// speaks another version of the protocol is an error.
     pub fn new(command: Vec<String>, threads: usize, limit: Duration) -> Result<Remote, String> {
-        let mut first = Worker::spawn(&command)?;
+        Remote::pinned(command, threads, limit, Vec::new())
+    }
+
+    /// As [`Remote::new`], with worker `i` run on `cores[i]` alone, and a worker that replaces it
+    /// on the same core. Linux only; more threads than cores is an error.
+    pub fn pinned(
+        command: Vec<String>,
+        threads: usize,
+        limit: Duration,
+        cores: Vec<usize>,
+    ) -> Result<Remote, String> {
+        let threads = threads.max(1);
+        if !cores.is_empty() && threads > cores.len() {
+            return Err(format!(
+                "{threads} threads cannot each have one of {} cores",
+                cores.len()
+            ));
+        }
+        let mut first = Worker::spawn(&command, cores.first().copied())?;
         let hello = first
             .call(&json!({"cmd": "hello"}), limit)
             .ok()
@@ -143,7 +204,7 @@ impl Remote {
             ));
         }
         let mut workers = vec![Mutex::new(Some(first))];
-        workers.extend((1..threads.max(1)).map(|_| Mutex::new(None)));
+        workers.extend((1..threads).map(|_| Mutex::new(None)));
         let lost = workers.iter().map(|_| Mutex::new(None)).collect();
         Ok(Remote {
             command,
@@ -152,6 +213,7 @@ impl Remote {
             next: AtomicUsize::new(0),
             hello,
             limit,
+            pins: cores,
         })
     }
 
@@ -186,7 +248,7 @@ impl Remote {
         }
         let mut slot = self.workers[w].lock().unwrap_or_else(|p| p.into_inner());
         if slot.is_none() {
-            *slot = Some(Worker::spawn(&self.command)?);
+            *slot = Some(Worker::spawn(&self.command, self.pins.get(w).copied())?);
         }
         let reply = match slot.as_mut().map(|wk| wk.call(&req, self.limit)) {
             Some(Ok(reply)) => reply,
@@ -792,7 +854,7 @@ mod tests {
         // A worker run through a launcher (`uv run …`, here `sh`) is a grandchild: the shell
         // reports the pid of what it started, then waits as the worker would.
         let cmd = ["sh", "-c", "sleep 600 & echo $!; cat"].map(String::from);
-        let w = Worker::spawn(&cmd).unwrap();
+        let w = Worker::spawn(&cmd, None).unwrap();
         let pid: i32 = w.from.recv().unwrap().trim().parse().unwrap();
         // SAFETY: signal 0 only asks whether the process exists.
         let alive = || unsafe { libc::kill(pid, 0) } == 0;
@@ -815,6 +877,74 @@ mod tests {
              *) echo '{{\"ok\": 1}}';; esac; done"
         );
         ["sh", "-c", &script].map(String::from).to_vec()
+    }
+
+    #[test]
+    fn more_threads_than_pinned_cores_is_refused_before_any_worker_starts() {
+        let refused = Remote::pinned(scripted(""), 3, Duration::from_secs(10), vec![0, 1])
+            .err()
+            .unwrap_or_default();
+        assert!(
+            refused.contains("3 threads") && refused.contains("2 cores"),
+            "{refused}"
+        );
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    #[test]
+    fn pinning_is_refused_off_linux() {
+        let refused = Remote::pinned(scripted(""), 1, Duration::from_secs(10), vec![0])
+            .err()
+            .unwrap_or_default();
+        assert!(refused.contains("Linux"), "{refused}");
+    }
+
+    /// The cores this process may run on, from the kernel's own list.
+    #[cfg(target_os = "linux")]
+    fn allowed() -> Vec<usize> {
+        let status = std::fs::read_to_string("/proc/self/status").unwrap();
+        let list = status
+            .lines()
+            .find_map(|l| l.strip_prefix("Cpus_allowed_list:"))
+            .unwrap()
+            .trim()
+            .to_string();
+        crate::cores(&list).unwrap()
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn each_worker_runs_on_its_own_pinned_core_and_a_replacement_keeps_it() {
+        // Every request but hello is answered with the one core the worker may run on, as a
+        // handle; volume kills the worker.
+        let arms = r#"*'"volume"'*) exit 5;;
+            *'"read_step"'*) echo "{\"ok\": $(grep Cpus_allowed_list /proc/self/status | cut -f2)}";;"#;
+        let cores: Vec<usize> = allowed().into_iter().rev().take(2).collect();
+        assert_eq!(cores.len(), 2, "the test needs two cores");
+        let k = Remote::pinned(scripted(arms), 2, Duration::from_secs(10), cores.clone()).unwrap();
+        let here = k.read_step("a").unwrap();
+        let there = std::thread::scope(|s| s.spawn(|| k.read_step("b").unwrap()).join().unwrap());
+        assert_ne!(here.worker, there.worker);
+        for h in [here, there] {
+            assert_eq!(h.handle as usize, cores[h.worker]);
+        }
+        let died = std::panic::catch_unwind(AssertUnwindSafe(|| k.volume(&here)));
+        assert!(died.is_err());
+        k.reset();
+        let again = k.read_step("c").unwrap();
+        assert_eq!(
+            (again.worker, again.handle as usize),
+            (here.worker, cores[here.worker])
+        );
+    }
+
+    #[test]
+    fn a_core_list_reads_single_cores_and_ranges() {
+        assert_eq!(crate::cores("24-27,30").unwrap(), [24, 25, 26, 27, 30]);
+        assert_eq!(crate::cores("3").unwrap(), [3]);
+        for bad in ["", "5-2", "a", "1,,2", "1,1"] {
+            assert!(crate::cores(bad).is_err(), "{bad:?}");
+        }
     }
 
     #[test]

@@ -38,14 +38,16 @@ The run's fields:
 | `adapter`        | On an official run (`--kernel`): the adapter's `repo` and the `commit` it ran        |
 | `unsupported`    | The functions of the suite's protocol version that the kernel's `hello` leaves out   |
 | `stand_ins`      | For each primitive the kernel has no constructor for, the function sent in its place |
-| `environment`    | The machine's `os`, `arch` and `cores`, and the run's `threads`                      |
+| `environment`    | The machine's `os`, `arch`, `cores`; the run's `threads` and `pinned` cores or null  |
 | `unix`           | When the run ended, in seconds since 1970                                            |
 | `calibration_ms` | The time of the calibration workload on this kernel and machine                      |
 | `cases`          | One object per case, in generation order                                             |
 | `nist`           | With `--nist`, one row per file read; apart from the score                           |
 
 A kernel's `version` is a release number, or a digest of the source it was built from. `stand_ins`
-looks like `{"sphere": "revolve"}`, and [contract.md](contract.md) gives the solids sent.
+looks like `{"sphere": "revolve"}`, and [contract.md](contract.md) gives the solids sent. `pinned`
+lists the cores of `--pin`, worker `i` on the `i`-th alone; it is null where the workers ran
+wherever the system put them, so a run's times can be read with that in mind.
 
 A case's fields:
 

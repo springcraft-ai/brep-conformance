@@ -82,7 +82,9 @@ A run prints outcomes per test and failed checks per clause and writes every cas
 opens without the network, with the viewer when `--viewer` names its WebAssembly.
 `brep-conformance-report` makes the same page from results files, for several kernels side by side.
 `--seed N` draws another set of cases; `--threads N` sets the parallelism, one worker per thread;
-`--timeout S` sets the limit on one call, 120 s by default. The summary ends with each operation's
+`--pin 24-47` runs each worker on one listed core of its own, one thread per core unless `--threads`
+says fewer, for timings on isolated cores (Linux only); `--timeout S` sets the limit on one call,
+120 s by default. The summary ends with each operation's
 time in units of the run's calibration workload. `--peer "<command>"` starts a second kernel's
 adapter to read the STEP files this one writes, reported as interop apart from the score.
 `--nist DIR` reads NIST's STEP files there, which [`nist/fetch.py`](nist/fetch.py) downloads into
