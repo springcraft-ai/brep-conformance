@@ -70,6 +70,7 @@ export function Contents({ toc }: { toc: TocPart[] }) {
   const [on, setOn] = useState<{ id: string; group: string | null } | null>(null)
   const [menu, setMenu] = useState(false)
   const [maxHeight, setMaxHeight] = useState<number | undefined>(undefined)
+  const root = useRef<HTMLDivElement>(null)
   const nav = useRef<HTMLElement>(null)
   const current = useRef<HTMLAnchorElement>(null)
   const finding = wordsOf(q).length > 0
@@ -120,6 +121,22 @@ export function Contents({ toc }: { toc: TocPart[] }) {
     if (!finding) current.current?.scrollIntoView({ block: 'nearest' })
   }, [on, finding])
 
+  useEffect(() => {
+    if (!menu) return
+    const outside = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setMenu(false)
+    }
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenu(false)
+    }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', outside)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [menu])
+
   const link = (id: string, text: string, className?: string) => {
     const here = on?.id === id
     return (
@@ -138,7 +155,7 @@ export function Contents({ toc }: { toc: TocPart[] }) {
     .join(' ')
 
   return (
-    <div className={`dx-contents${menu ? ' dx-menu-open' : ''}`}>
+    <div ref={root} className={`dx-contents${menu ? ' dx-menu-open' : ''}`}>
       <button
         type="button"
         className="dx-menu sc-focus"
