@@ -1,6 +1,7 @@
 // The Scan view's solid on the GPU with WebGL2: lit faces, edges over them, and ghosts behind. A
 // ghost's fill shows only where the subject is not (by the stencil), and its edges only where the
 // subject does not hide them (by the subject's depth). The page ships no 3D library.
+import { ZEBRA_GLSL } from './zebra'
 import type { Vec3 } from './vec'
 
 export interface Mesh {
@@ -30,6 +31,8 @@ export interface View {
 }
 
 export interface Look {
+  // Zebra stripes on the subject's faces in place of their shading; the ghosts keep theirs.
+  zebra: boolean
   face: Rgb
   // The second subject's faces: a part's neighbour in an assembly, a mirror image, a piece.
   faceAlt: Rgb
@@ -78,16 +81,25 @@ out vec4 o;
 void main() { o = vec4(0.0); }`
 
 // Both sides of a face are lit alike, so a mesh wound either way, or an open one, reads as a
-// surface. The colour is written premultiplied, as the canvas composites it.
+// surface. The colour is written premultiplied, as the canvas composites it. With `u_zebra` on,
+// the face is striped by its normal instead, in a dark and a light shade of its own tone.
 const FACES = `#version 300 es
 precision highp float;
 in vec3 v_nrm;
-uniform vec3 u_light;
+uniform vec3 u_light, u_toward, u_up;
 uniform vec4 u_color;
-uniform float u_ambient;
+uniform float u_ambient, u_zebra;
 out vec4 o;
+${ZEBRA_GLSL}
 void main() {
-  float l = u_ambient + (1.0 - u_ambient) * abs(dot(normalize(v_nrm), u_light));
+  vec3 n = normalize(v_nrm);
+  if (u_zebra > 0.5) {
+    float b = zebra(n, u_toward, u_up);
+    vec3 c = mix(u_color.rgb * 0.15, mix(u_color.rgb, vec3(1.0), 0.7), b);
+    o = vec4(c * u_color.a, u_color.a);
+    return;
+  }
+  float l = u_ambient + (1.0 - u_ambient) * abs(dot(n, u_light));
   o = vec4(u_color.rgb * l * u_color.a, u_color.a);
 }`
 
@@ -550,6 +562,7 @@ export class Renderer {
       if (p === this.faces || p === this.marks) {
         gl.uniform3f(u('u_light'), light[0]! / len, light[1]! / len, light[2]! / len)
         gl.uniform1f(u('u_ambient'), AMBIENT)
+        gl.uniform1f(u('u_zebra'), p === this.faces && look.zebra ? 1 : 0)
       }
       return u('u_color')
     }
@@ -602,6 +615,7 @@ export class Renderer {
       gl.depthFunc(gl.EQUAL)
       gl.uniform4f(color, ...rgba(look.ghost[g.tone], GHOST_ALPHA))
       gl.uniform1f(gl.getUniformLocation(this.faces, 'u_ambient'), GHOST_AMBIENT)
+      gl.uniform1f(gl.getUniformLocation(this.faces, 'u_zebra'), 0)
       fill(g.mesh)
       gl.useProgram(this.far)
       gl.colorMask(false, false, false, false)

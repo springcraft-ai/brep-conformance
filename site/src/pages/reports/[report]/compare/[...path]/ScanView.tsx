@@ -34,7 +34,10 @@ export function ScanView({
   unpublished = false,
   by,
   missing = null,
+  stripes = false,
 }: {
+  // Whether to offer zebra stripes: on tests where how faces meet is what is checked.
+  stripes?: boolean
   // Why the drawing kernel has no result to show, as its grade, where it made none.
   missing?: string | null
   glb: string | null
@@ -65,6 +68,7 @@ export function ScanView({
   // The view shown, by name, so moving to another case or kernel keeps it where it can.
   const [viewName, setViewName] = useState<string | null>(null)
   const [operands, setOperands] = useState(true)
+  const [zebra, setZebra] = useState(false)
   const [points, setPoints] = useState(true)
   const [box, setBox] = useState(true)
   const o = loaded?.overlay
@@ -167,6 +171,7 @@ export function ScanView({
         marks,
         overlay: overlay ?? undefined,
         frame,
+        zebra: stripes && zebra,
       }
       if (handle.current) return handle.current.set(scene)
       try {
@@ -178,7 +183,7 @@ export function ScanView({
     return () => {
       live = false
     }
-  }, [loaded, tones, ghosts, marks, overlay, noGpu])
+  }, [loaded, tones, ghosts, marks, overlay, noGpu, stripes, zebra])
 
   useEffect(() => handle.current?.focus(focus), [focus, loaded, marks])
 
@@ -273,6 +278,9 @@ export function ScanView({
           )}
           {shownRow.hasBox && (
             <Checkbox tone="void" checked={box} onChange={setBox} label="show box" />
+          )}
+          {stripes && (
+            <Checkbox tone="void" checked={zebra} onChange={setZebra} label="zebra stripes" />
           )}
         </div>
       )}
