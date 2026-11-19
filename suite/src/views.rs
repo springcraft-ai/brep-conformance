@@ -435,14 +435,23 @@ pub fn views(c: &Case) -> Value {
             })
             .collect();
         extra["points"] = json!(pts);
-        vec![
-            noted(
-                "after",
-                "The expected result of every step, the starting solid faint behind it; dots mark the edges or faces the steps name.",
-                vec![solid("main", b, None), ghost_outside(a, b)],
-            ),
-            view("before", vec![solid("main", a, None)]),
-        ]
+        if c.test.starts_with("parts/") {
+            // A part's test is the finished shape; the blank its recipe starts from says little.
+            vec![noted(
+                "part",
+                "The finished part; dots mark the edges or faces its steps name.",
+                vec![solid("main", b, None)],
+            )]
+        } else {
+            vec![
+                noted(
+                    "after",
+                    "The expected result of every step, the starting solid faint behind it; dots mark the edges or faces the steps name.",
+                    vec![solid("main", b, None), ghost_outside(a, b)],
+                ),
+                view("before", vec![solid("main", a, None)]),
+            ]
+        }
     } else if c.refuse && c.exact.loft.is_none() {
         // A constructor's input the contract rules out: the input itself, as the suite reads it.
         vec![noted(
@@ -756,6 +765,30 @@ mod tests {
             }
         }
         assert!(seen.iter().all(|&n| n > 0), "{seen:?}");
+    }
+
+    #[test]
+    fn a_part_is_one_view_of_the_finished_part_and_other_chains_keep_before_and_after() {
+        let (mut parts, mut chains) = (0, 0);
+        for c in crate::generate::cases(1) {
+            if c.exact.chain.is_none() {
+                continue;
+            }
+            let spec = views(&c);
+            let v = spec["views"].as_array().unwrap();
+            let names: Vec<&str> = v.iter().map(|x| x["name"].as_str().unwrap()).collect();
+            if c.test.starts_with("parts/") {
+                parts += 1;
+                assert_eq!(names, ["part"], "{}", c.id);
+                let solids = v[0]["solids"].as_array().unwrap();
+                assert_eq!(solids.len(), 1, "{}", c.id);
+                assert_eq!(solids[0]["role"], "main", "{}", c.id);
+            } else {
+                chains += 1;
+                assert_eq!(names, ["after", "before"], "{}", c.id);
+            }
+        }
+        assert!(parts > 0 && chains > 0, "{parts} {chains}");
     }
 
     #[test]
