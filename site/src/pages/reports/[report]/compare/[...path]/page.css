@@ -704,3 +704,13 @@
     gap: 0 var(--sp-3);
   }
 }
+
+/* The zebra dropdown with its label beside it, so the row keeps the checkboxes' height. */
+.bc-views__zebra {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  align-self: center;
+  color: var(--void-ink-1);
+  font: var(--fw-voice) var(--fs-voice-2) / 1 var(--font-voice);
+}

@@ -277,14 +277,17 @@ export function ScanView({
           {shownRow.hasBox && (
             <Checkbox tone="void" checked={box} onChange={setBox} label="show box" />
           )}
-          <Select
-            label="zebra"
-            tone="void"
-            width={120}
-            options={['off', ...Object.keys(DENSITIES)]}
-            value={zebra ?? 'off'}
-            onChange={id => setZebra(id === 'off' ? null : (id as Density))}
-          />
+          <span className="bc-views__zebra">
+            <label htmlFor="bc-zebra">zebra</label>
+            <Select
+              id="bc-zebra"
+              tone="void"
+              width={104}
+              options={['off', ...Object.keys(DENSITIES)]}
+              value={zebra ?? 'off'}
+              onChange={id => setZebra(id === 'off' ? null : (id as Density))}
+            />
+          </span>
         </div>
       )}
       <p className="bc-shape__note" title={view?.note}>
