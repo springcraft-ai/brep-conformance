@@ -3,6 +3,7 @@
 // z up, turned by dragging.
 import { Renderer, type Mesh, type OverlayGeometry, type Rgb } from './gl'
 import type { Overlay, Side } from './glb'
+import type { Axis } from './section'
 import type { Vec3 } from './vec'
 
 export interface Mark {
@@ -15,6 +16,9 @@ export interface Mark {
 // is not, its edges only where the subject does not hide them.
 export interface Ghost extends Mesh {
   tone: 0 | 1
+  // A starting solid, drawn wherever it is nearer than the subject rather than only where the
+  // subject is not: a shell's result lies inside it, so it shows only over the opening.
+  over?: boolean
 }
 
 export interface Scene extends Mesh {
@@ -30,6 +34,9 @@ export interface Scene extends Mesh {
   // Zebra lines over the subject, this many over the half turn of the sky, to show where its faces
   // meet unevenly.
   zebra?: number
+  // The axis the subject and its ghosts are cut across, through the frame's centre, to show what
+  // their outside hides.
+  section?: Axis | null
 }
 
 export interface View {
@@ -42,6 +49,36 @@ export interface View {
 }
 
 export const HOME: View = { yaw: -Math.PI / 4 - 0.35, pitch: 0.5, zoom: 1, pan: [0, 0] }
+
+// The plane through the frame's centre across `axis`, as a normal and offset: a point p is kept
+// where n·p ≥ offset. The half kept is the one away from where the view opens, so the cut faces it.
+export function sectionPlane(
+  axis: Axis,
+  frame: { lo: Vec3; hi: Vec3 },
+): [number, number, number, number] {
+  const cp = Math.cos(HOME.pitch)
+  const toward = [cp * Math.cos(HOME.yaw), cp * Math.sin(HOME.yaw), Math.sin(HOME.pitch)][axis]!
+  const keep = toward > 0 ? -1 : 1
+  const n: [number, number, number] = [0, 0, 0]
+  n[axis] = keep
+  return [...n, (keep * (frame.lo[axis] + frame.hi[axis])) / 2]
+}
+
+// Two triangles on the section's plane reaching past the frame on every side, for the cut face.
+export function sectionQuad(axis: Axis, frame: { lo: Vec3; hi: Vec3 }): Float32Array {
+  const [u, w] = [(axis + 1) % 3, (axis + 2) % 3]
+  const pad = Math.max(...[0, 1, 2].map(k => frame.hi[k] - frame.lo[k]))
+  const corner = (a: number, b: number) => {
+    const p = [0, 0, 0]
+    p[axis] = (frame.lo[axis] + frame.hi[axis]) / 2
+    p[u] = a ? frame.hi[u] + pad : frame.lo[u] - pad
+    p[w] = b ? frame.hi[w] + pad : frame.lo[w] - pad
+    return p
+  }
+  return Float32Array.from(
+    [corner(0, 0), corner(1, 0), corner(1, 1), corner(0, 0), corner(1, 1), corner(0, 1)].flat(),
+  )
+}
 
 // The view a scene opens on: HOME, or for a case about a plane, HOME turned to look nearly along the
 // plane, a little from one side: the pieces either side of it, and the cut between them, are seen
@@ -142,6 +179,8 @@ interface Colors {
   face: Rgb
   faceAlt: Rgb
   ghost: [Rgb, Rgb]
+  // The solid's inside, where a section cuts it.
+  cut: Rgb
   fail: string
   // The overlay's dots; its box, plane and lines; and its points outside or with no answer.
   dot: Rgb
@@ -170,6 +209,7 @@ function colorsOf(el: Element): Colors {
     face: rgbOf(v('--scan-face', '#8a8c8e')),
     faceAlt: rgbOf(v('--scan-face-alt', '#7f97a8')),
     ghost: [rgbOf(v('--scan-ghost', '#4fb3ff')), rgbOf(v('--scan-ghost2', '#f5a200'))],
+    cut: rgbOf(v('--scan-cut', '#f5a200')),
     fail: v('--scan-fail', '#ff5a33'),
     dot: rgbOf(v('--scan-dot', '#f5a200')),
     guide: rgbOf(v('--scan-guide', '#a2a4a6')),
@@ -629,6 +669,14 @@ export function mountScan(
       },
       {
         zebra: scene.zebra ?? 0,
+        section:
+          scene.section == null
+            ? null
+            : {
+                plane: sectionPlane(scene.section, frame),
+                quad: sectionQuad(scene.section, frame),
+              },
+        cut: colors.cut,
         face: colors.face,
         faceAlt: colors.faceAlt,
         edge: colors.edge,

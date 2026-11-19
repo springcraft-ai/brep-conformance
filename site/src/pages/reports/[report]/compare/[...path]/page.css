@@ -45,6 +45,7 @@
   --scan-concave: var(--series-5);
   --scan-ghost: var(--series-1);
   --scan-ghost2: var(--series-3);
+  --scan-cut: var(--accent);
   position: relative;
   aspect-ratio: 16 / 9;
   min-height: 280px;

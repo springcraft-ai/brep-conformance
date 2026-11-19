@@ -34,6 +34,11 @@ export interface Look {
   // Zebra lines over the subject's faces, this many over the half turn of the sky, or 0 for none;
   // the ghosts are never lined.
   zebra: number
+  // The plane a section cuts along, as a normal and offset: what lies where n·p < offset is cut
+  // away. `quad` is two triangles on the plane covering the frame, where the cut face is drawn
+  // in `cut`. Null for no section.
+  section: { plane: [number, number, number, number]; quad: Float32Array } | null
+  cut: Rgb
   face: Rgb
   // The second subject's faces: a part's neighbour in an assembly, a mirror image, a piece.
   faceAlt: Rgb
@@ -64,13 +69,21 @@ in vec3 a_pos;
 in vec3 a_nrm;
 uniform vec3 u_center, u_right, u_up, u_toward, u_scale;
 out vec3 v_nrm;
+out vec3 v_pos;
 invariant gl_Position;
 void main() {
   vec3 d = a_pos - u_center;
   gl_Position = vec4(dot(d, u_right) * u_scale.x, dot(d, u_up) * u_scale.y,
                      -dot(d, u_toward) * u_scale.z, 1.0);
   v_nrm = a_nrm;
+  v_pos = a_pos;
 }`
+
+// The section's cut: a fragment on the cut-away side of `u_clip` is dropped. With no section the
+// plane is (0, 0, 0, -1), which keeps everything.
+const CLIP = `uniform vec4 u_clip;
+in vec3 v_pos;
+bool cut() { return dot(u_clip.xyz, v_pos) < u_clip.w; }`
 
 // The whole view at the far depth, to clear the depth a ghost wrote where the subject is not.
 const FAR_VERTEX = `#version 300 es
@@ -94,7 +107,9 @@ uniform vec4 u_color;
 uniform float u_ambient, u_zebra;
 out vec4 o;
 ${ZEBRA_GLSL}
+${CLIP}
 void main() {
+  if (cut()) discard;
   vec3 n = normalize(v_nrm);
   float l = u_ambient + (1.0 - u_ambient) * abs(dot(n, u_light));
   vec3 c = u_color.rgb * l;
@@ -114,6 +129,31 @@ precision highp float;
 uniform vec4 u_color;
 out vec4 o;
 void main() { o = vec4(u_color.rgb * u_color.a, u_color.a); }`
+
+// A section's cap: the cut face of the solid, flat in its own colour with a hatch of darker
+// lines one pixel wide running at 45 degrees, as a drawing marks cut material.
+const CAP = `#version 300 es
+precision highp float;
+uniform vec4 u_color;
+uniform float u_dpr;
+out vec4 o;
+void main() {
+  float period = floor(6.0 * u_dpr + 0.5);
+  bool line = mod(gl_FragCoord.x + gl_FragCoord.y, period) < u_dpr;
+  o = vec4(line ? u_color.rgb * 0.6 : u_color.rgb, 1.0);
+}`
+
+// Edges, cut by the section as the faces are. The overlay's plane and box are drawn with it too,
+// uncut.
+const EDGES = `#version 300 es
+precision highp float;
+uniform vec4 u_color;
+${CLIP}
+out vec4 o;
+void main() {
+  if (cut()) discard;
+  o = vec4(u_color.rgb * u_color.a, u_color.a);
+}`
 
 // The overlay's marks, its arrows and balls, as solids.
 const MARK_VERTEX = `#version 300 es
@@ -380,12 +420,14 @@ export class Renderer {
   private faces: WebGLProgram
   private lines: WebGLProgram
   private far: WebGLProgram
+  private cap: WebGLProgram
+  private capQuad: { vao: WebGLVertexArrayObject; buffer: WebGLBuffer }
   private wide: WebGLProgram
   private marks: WebGLProgram
   private ribbon: WebGLProgram
   private subject: Uploaded | null = null
   private alt: Uploaded | null = null
-  private ghosts: { mesh: Uploaded; tone: 0 | 1 }[] = []
+  private ghosts: { mesh: Uploaded; tone: 0 | 1; over: boolean }[] = []
   // The overlay's parts, each laid out for the program that draws it.
   private overlay: Partial<Record<OverlayPart, Part>> = {}
 
@@ -395,8 +437,18 @@ export class Renderer {
     if (!gl) throw new Error('no WebGL2')
     this.gl = gl
     this.faces = compile(gl, VERTEX, FACES)
-    this.lines = compile(gl, VERTEX, LINES)
+    this.lines = compile(gl, VERTEX, EDGES)
     this.far = compile(gl, FAR_VERTEX, FAR)
+    this.cap = compile(gl, VERTEX, CAP)
+    const vao = gl.createVertexArray()!
+    gl.bindVertexArray(vao)
+    const buffer = gl.createBuffer()!
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+    gl.enableVertexAttribArray(0)
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0)
+    gl.vertexAttrib3f(1, 0, 0, 1)
+    gl.bindVertexArray(null)
+    this.capQuad = { vao, buffer }
     this.wide = compile(gl, WIDE_VERTEX, LINES)
     this.marks = compile(gl, MARK_VERTEX, MARK)
     this.ribbon = compile(gl, RIBBON_VERTEX, LINES)
@@ -529,13 +581,13 @@ export class Renderer {
     for (const b of u.buffers) gl.deleteBuffer(b)
   }
 
-  set(subject: Mesh, alt: Mesh, ghosts: (Mesh & { tone: 0 | 1 })[]) {
+  set(subject: Mesh, alt: Mesh, ghosts: (Mesh & { tone: 0 | 1; over?: boolean })[]) {
     this.free(this.subject)
     this.free(this.alt)
     for (const g of this.ghosts) this.free(g.mesh)
     this.subject = this.upload(subject)
     this.alt = this.upload(alt)
-    this.ghosts = ghosts.map(g => ({ mesh: this.upload(g), tone: g.tone }))
+    this.ghosts = ghosts.map(g => ({ mesh: this.upload(g), tone: g.tone, over: !!g.over }))
   }
 
   draw(v: View, look: Look) {
@@ -551,6 +603,7 @@ export class Renderer {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 
     const light = [0, 1, 2].map(i => v.toward[i]! + 0.35 * v.up[i]! - 0.25 * v.right[i]!)
+    const clip = look.section?.plane ?? [0, 0, 0, -1]
     const len = Math.hypot(...light)
     const uniforms = (p: WebGLProgram) => {
       gl.useProgram(p)
@@ -561,6 +614,7 @@ export class Renderer {
       gl.uniform3fv(u('u_toward'), v.toward)
       gl.uniform3f(u('u_scale'), (2 * v.scale) / v.w, (2 * v.scale) / v.h, 1 / (2 * v.reach))
       gl.uniform2f(u('u_px'), v.w / 2, v.h / 2)
+      if (p === this.faces || p === this.lines) gl.uniform4fv(u('u_clip'), clip)
       if (p === this.faces || p === this.marks) {
         gl.uniform3f(u('u_light'), light[0]! / len, light[1]! / len, light[2]! / len)
         gl.uniform1f(u('u_ambient'), AMBIENT)
@@ -579,35 +633,102 @@ export class Renderer {
       gl.drawArrays(gl.LINES, 0, m.segments * 2)
     }
 
-    // The subject's faces turned toward the viewer, marking the stencil where they cover. A
-    // solid's triangles are counter-clockwise seen from outside (display's contract), so the back
-    // faces are culled and never meet the front ones near an edge.
-    let color = uniforms(this.faces)
-    gl.enable(gl.STENCIL_TEST)
-    gl.enable(gl.CULL_FACE)
-    gl.cullFace(gl.BACK)
-    // Along an edge the line and its faces have one depth, a tie that rounding would settle a
-    // sample at a time; the least offset settles it for the line.
-    gl.enable(gl.POLYGON_OFFSET_FILL)
-    gl.polygonOffset(1, 1)
-    gl.depthMask(true)
-    gl.stencilFunc(gl.ALWAYS, 1, 0xff)
-    gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE)
-    gl.uniform4f(color, ...rgba(look.face, 1))
-    if (this.subject) fill(this.subject)
-    gl.uniform4f(color, ...rgba(look.faceAlt, 1))
-    if (this.alt) fill(this.alt)
+    // The stencil's top bit marks where the subject covers; the rest count a section's cut.
+    const COVERED = 0x80
+    const COUNT = 0x7f
+    // The subject's depth and colour: a section's cap, then its faces. Drawn again, depth only,
+    // after a ghost drawn over it, which leaves its own depth behind.
+    const subjectDepth = (paint: boolean) => {
+      gl.colorMask(paint, paint, paint, paint)
+      gl.depthMask(true)
+      gl.depthFunc(gl.LEQUAL)
+      // A section's cap first. The subject's faces left by the cut count into the stencil, its
+      // back faces up and its front faces down, so the stencil is non-zero exactly where the plane
+      // lies inside the solid. The cap is drawn on the plane there, writing its depth, so the
+      // faces after it hide it or are hidden by it. The count is made once and kept.
+      if (look.section && (this.subject || this.alt)) {
+        gl.enable(gl.STENCIL_TEST)
+        if (paint) {
+          uniforms(this.faces)
+          gl.disable(gl.CULL_FACE)
+          gl.colorMask(false, false, false, false)
+          gl.depthMask(false)
+          gl.disable(gl.DEPTH_TEST)
+          gl.stencilMask(COUNT)
+          gl.stencilFunc(gl.ALWAYS, 0, 0xff)
+          gl.stencilOpSeparate(gl.FRONT, gl.KEEP, gl.KEEP, gl.DECR_WRAP)
+          gl.stencilOpSeparate(gl.BACK, gl.KEEP, gl.KEEP, gl.INCR_WRAP)
+          if (this.subject) fill(this.subject)
+          if (this.alt) fill(this.alt)
+          gl.stencilMask(0xff)
+          gl.colorMask(true, true, true, true)
+          gl.depthMask(true)
+          gl.enable(gl.DEPTH_TEST)
+        }
+        const c = uniforms(this.cap)
+        gl.uniform4f(c, ...rgba(look.cut, 1))
+        gl.uniform1f(gl.getUniformLocation(this.cap, 'u_dpr'), v.dpr)
+        gl.stencilFunc(gl.NOTEQUAL, 0, COUNT)
+        gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP)
+        gl.bindVertexArray(this.capQuad.vao)
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.capQuad.buffer)
+        if (paint) gl.bufferData(gl.ARRAY_BUFFER, look.section.quad, gl.DYNAMIC_DRAW)
+        // Pushed back further than the faces are, so where a face meets the plane at the cut's
+        // edge the face wins: seen from behind, the cap would otherwise show round the outline.
+        gl.enable(gl.POLYGON_OFFSET_FILL)
+        gl.polygonOffset(4, 8)
+        gl.drawArrays(gl.TRIANGLES, 0, look.section.quad.length / 3)
+        gl.disable(gl.STENCIL_TEST)
+      }
+      // The faces turned toward the viewer. A solid's triangles are counter-clockwise seen from
+      // outside (display's contract), so the back faces are culled and never meet the front ones
+      // near an edge. Along an edge the line and its faces have one depth, a tie that rounding
+      // would settle a sample at a time; the least offset settles it for the line. Painting, they
+      // mark where they cover.
+      const color = uniforms(this.faces)
+      if (paint) {
+        gl.enable(gl.STENCIL_TEST)
+        gl.stencilMask(COVERED)
+        gl.stencilFunc(gl.ALWAYS, COVERED, 0xff)
+        gl.stencilOp(gl.KEEP, gl.KEEP, gl.REPLACE)
+      }
+      gl.enable(gl.CULL_FACE)
+      gl.cullFace(gl.BACK)
+      gl.enable(gl.POLYGON_OFFSET_FILL)
+      gl.polygonOffset(1, 1)
+      gl.uniform4f(color, ...rgba(look.face, 1))
+      if (this.subject) fill(this.subject)
+      gl.uniform4f(color, ...rgba(look.faceAlt, 1))
+      if (this.alt) fill(this.alt)
+      gl.colorMask(true, true, true, true)
+      gl.stencilMask(0xff)
+      gl.disable(gl.STENCIL_TEST)
+    }
+    subjectDepth(true)
 
-    // Each ghost's fill where the subject is not, its nearest surface only: blending every layer
-    // of it, front and back, in triangle order would band it by the order they came in. So its
-    // depth first, then its colour where that depth is, then that depth cleared away again, so the
-    // next ghost and the edges meet only the subject's.
+    // Each ghost faint, its nearest surface only: blending every layer of it, front and back, in
+    // triangle order would band it by the order they came in. So its depth first, then its colour
+    // where that depth is, then that depth cleared away again, so the next ghost and the edges
+    // meet only the subject's. An operand is drawn only where the subject and its cut are not, and
+    // is cut by the section as the subject is. A starting solid (`over`) is drawn wherever it is
+    // nearer than the subject, uncut: over a shell's opening, and round a section's cut. Pushed
+    // back further than the subject, so where the two share a face the subject's shows; its depth
+    // cleared, the subject's is drawn back.
+    let color: WebGLUniformLocation | null
     gl.disable(gl.CULL_FACE)
-    gl.disable(gl.POLYGON_OFFSET_FILL)
-    gl.stencilFunc(gl.EQUAL, 0, 0xff)
-    gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP)
     for (const g of this.ghosts) {
       color = uniforms(this.faces)
+      if (g.over) {
+        gl.uniform4f(gl.getUniformLocation(this.faces, 'u_clip'), 0, 0, 0, -1)
+        gl.enable(gl.POLYGON_OFFSET_FILL)
+        gl.polygonOffset(2, 4)
+      } else {
+        gl.disable(gl.POLYGON_OFFSET_FILL)
+        gl.enable(gl.STENCIL_TEST)
+        gl.stencilMask(0)
+        gl.stencilFunc(gl.EQUAL, 0, 0xff)
+      }
+      gl.disable(gl.CULL_FACE)
       gl.colorMask(false, false, false, false)
       gl.depthMask(true)
       gl.depthFunc(gl.LESS)
@@ -626,17 +747,24 @@ export class Renderer {
       gl.bindVertexArray(null)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
       gl.colorMask(true, true, true, true)
+      gl.stencilMask(0xff)
+      gl.disable(gl.STENCIL_TEST)
+      if (g.over) subjectDepth(false)
     }
+    gl.disable(gl.POLYGON_OFFSET_FILL)
     gl.depthFunc(gl.LEQUAL)
     gl.depthMask(false)
-    gl.disable(gl.STENCIL_TEST)
 
     // The ghosts' edges where the subject does not hide them, then the subject's over them.
     color = uniforms(this.lines)
+    const clipAt = gl.getUniformLocation(this.lines, 'u_clip')
+    gl.uniform4f(clipAt, 0, 0, 0, -1)
     for (const g of this.ghosts) {
+      gl.uniform4fv(clipAt, g.over ? [0, 0, 0, -1] : clip)
       gl.uniform4f(color, ...rgba(look.ghost[g.tone], GHOST_EDGE_ALPHA))
       stroke(g.mesh)
     }
+    gl.uniform4fv(clipAt, clip)
     gl.uniform4f(color, ...rgba(look.edge, look.zebra ? ZEBRA_EDGE_ALPHA : EDGE_ALPHA))
     if (this.subject) stroke(this.subject)
     if (this.alt) stroke(this.alt)
@@ -645,6 +773,7 @@ export class Renderer {
     // is in front of it, then its outline and the box. A drawing's hidden stretches are behind the
     // solid by definition, so their dashes skip the test.
     const P = this.overlay
+    gl.uniform4f(gl.getUniformLocation(this.lines, 'u_clip'), 0, 0, 0, -1)
     const draw = (part: Part | undefined, mode: number) => {
       if (!part?.count) return
       gl.bindVertexArray(part.vao)
@@ -722,8 +851,18 @@ export class Renderer {
     this.free(this.subject)
     this.free(this.alt)
     for (const g of this.ghosts) this.free(g.mesh)
-    for (const p of [this.faces, this.lines, this.far, this.wide, this.marks, this.ribbon])
+    for (const p of [
+      this.faces,
+      this.lines,
+      this.far,
+      this.cap,
+      this.wide,
+      this.marks,
+      this.ribbon,
+    ])
       this.gl.deleteProgram(p)
+    this.gl.deleteVertexArray(this.capQuad.vao)
+    this.gl.deleteBuffer(this.capQuad.buffer)
     this.freeOverlay()
   }
 }

@@ -18,6 +18,7 @@ import { LevelPage } from './LevelPage'
 import type { Mark } from './scan'
 import { CaseKernels } from './CaseKernels'
 import { ScanView } from './ScanView'
+import { sectionOf } from './section'
 import './page.css'
 
 export const hydrate = true
@@ -272,6 +273,7 @@ function TestPage(props: TestProps) {
               focus={focus}
               onPick={setFocus}
               missing={partialGrade}
+              section={sectionOf(test)}
               // A warning, only where the drawing is not the whole result of the kernel selected:
               // another kernel's drawing stands in, or the drawing is partial.
               by={

@@ -74,7 +74,9 @@ export function ghostsOf(views: GlbView[], v: GlbView): Ghost[] {
   // Each operand keeps its own tone in every view: `b` is the second, alone or not.
   return sourcesOf(v.name).flatMap(name => {
     const from = views.find(x => x.name === name)
-    return from ? [{ ...subjectOf(from), tone: (name === 'b' ? 1 : 0) as 0 | 1 }] : []
+    return from
+      ? [{ ...subjectOf(from), tone: (name === 'b' ? 1 : 0) as 0 | 1, over: v.name === 'after' }]
+      : []
   })
 }
 

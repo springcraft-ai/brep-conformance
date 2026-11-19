@@ -4,6 +4,7 @@ import { Checkbox, Menu, Segmented } from '@/ds'
 import { Annot } from '@/components'
 import { zoomKeyOf } from './format'
 import type { Mark, ScanHandle } from './scan'
+import type { Axis } from './section'
 import type { Loaded } from './viewer'
 import {
   firstView,
@@ -35,7 +36,10 @@ export function ScanView({
   unpublished = false,
   by,
   missing = null,
+  section = null,
 }: {
+  // The axis this test's drawings can be cut across to show what their outside hides, or null.
+  section?: Axis | null
   // Why the drawing kernel has no result to show, as its grade, where it made none.
   missing?: string | null
   glb: string | null
@@ -67,6 +71,7 @@ export function ScanView({
   const [viewName, setViewName] = useState<string | null>(null)
   const [operands, setOperands] = useState(true)
   const [zebra, setZebra] = useState<Density | null>(null)
+  const [cut, setCut] = useState(false)
   const [points, setPoints] = useState(true)
   const [box, setBox] = useState(true)
   const o = loaded?.overlay
@@ -170,6 +175,7 @@ export function ScanView({
         overlay: overlay ?? undefined,
         frame,
         zebra: zebra ? DENSITIES[zebra] : 0,
+        section: cut ? section : null,
       }
       if (handle.current) return handle.current.set(scene)
       try {
@@ -181,7 +187,7 @@ export function ScanView({
     return () => {
       live = false
     }
-  }, [loaded, tones, ghosts, marks, overlay, noGpu, zebra])
+  }, [loaded, tones, ghosts, marks, overlay, noGpu, zebra, cut, section])
 
   useEffect(() => handle.current?.focus(focus), [focus, loaded, marks])
 
@@ -276,6 +282,9 @@ export function ScanView({
           )}
           {shownRow.hasBox && (
             <Checkbox tone="void" checked={box} onChange={setBox} label="show box" />
+          )}
+          {section !== null && (
+            <Checkbox tone="void" checked={cut} onChange={setCut} label="section" />
           )}
           <span className="bc-views__zebra">
             <Menu
