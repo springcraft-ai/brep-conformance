@@ -1,6 +1,6 @@
 import { DENSITIES, type Density } from './zebra'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Checkbox, Menu, Segmented } from '@/ds'
+import { Checkbox, Segmented, Select } from '@/ds'
 import { Annot } from '@/components'
 import { zoomKeyOf } from './format'
 import type { Mark, ScanHandle } from './scan'
@@ -277,21 +277,13 @@ export function ScanView({
           {shownRow.hasBox && (
             <Checkbox tone="void" checked={box} onChange={setBox} label="show box" />
           )}
-          <Menu
-            label="display options"
-            trigger={<span className="bc-views__more">⋯</span>}
-            align="right"
+          <Select
+            label="zebra"
             tone="void"
-            items={[
-              { heading: 'zebra stripes' },
-              { id: 'off', label: 'off', intent: zebra === null ? 'armed' : undefined },
-              ...(Object.keys(DENSITIES) as Density[]).map(d => ({
-                id: d,
-                label: d === 'normal' ? 'on' : `on · ${d} lines`,
-                intent: zebra === d ? ('armed' as const) : undefined,
-              })),
-            ]}
-            onSelect={id => setZebra(id === 'off' ? null : (id as Density))}
+            width={120}
+            options={['off', ...Object.keys(DENSITIES)]}
+            value={zebra ?? 'off'}
+            onChange={id => setZebra(id === 'off' ? null : (id as Density))}
           />
         </div>
       )}

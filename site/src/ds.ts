@@ -6,7 +6,6 @@ export const {
   DataTable,
   EmptyState,
   Logo,
-  Menu,
   OutlineButton,
   OutlineField,
   Segmented,
