@@ -290,6 +290,7 @@ export function ScanView({
                 </span>
               }
               align="right"
+              width={96}
               tone="void"
               items={['off', ...Object.keys(DENSITIES)].map(id => ({
                 id,
