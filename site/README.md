@@ -29,6 +29,11 @@ interaction opts into hydration, and only that page ships JavaScript.
   file on GitHub.
 - **A page with a little behaviour and no React** exports `enhance()` instead of `hydrate`: its
   script runs on the rendered page and its props are not shipped.
+- **The leaderboard is also data.** [`leaderboard.json.ts`](src/pages/leaderboard.json.ts) writes
+  the current suite's board to `/leaderboard.json`: each kernel's case counts by grade, case times,
+  license and run, in rank order. A page elsewhere, such as a kernel's own site, fetches it to show
+  the standing as of the latest deploy. Its fields are a public contract: add to them, and do not
+  rename or remove one.
 - **A kernel's license** is not in its report, so [`kernels.ts`](src/data/kernels.ts) states it; a
   kernel joining the leaderboard adds a line there.
 - The design system comes from its published build at a pinned path, fetched and checked against

@@ -18,6 +18,7 @@ describe('the site', () => {
         '/reports/[report]/compare/[...path]/',
         '/operations/[op]/',
         '/badges/[kernel].svg',
+        '/leaderboard.json',
       ]),
     )
   })
@@ -38,6 +39,8 @@ describe('the site', () => {
     for (const o of operations().operations)
       expect(byFile.has(`operations/${o.id}/index.html`)).toBe(true)
     for (const k of s.kernels) expect(byFile.get(`badges/${k}.svg`)?.type).toBe('image/svg+xml')
+    expect(byFile.get('leaderboard.json')?.type).toBe('application/json')
+    expect(JSON.parse(byFile.get('leaderboard.json')!.body).suite).toBe(s.suite)
   })
 
   it('wraps every page in the shell and names its module for the client', () => {
