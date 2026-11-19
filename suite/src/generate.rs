@@ -954,56 +954,158 @@ pub const FEATURE_FAMILIES: &[FeatureFamily] = &[
     FeatureFamily {
         name: "deleted-rim-rounds",
         version: 1,
-        count: 2,
+        count: 3,
         draw: |r| edits::turned_delete(r, edits::Turned::RimRound),
     },
     FeatureFamily {
         name: "deleted-rim-bevels",
         version: 1,
-        count: 2,
+        count: 3,
         draw: |r| edits::turned_delete(r, edits::Turned::RimBevel),
     },
     FeatureFamily {
         name: "deleted-foot-rounds",
         version: 1,
-        count: 2,
+        count: 3,
         draw: |r| edits::turned_delete(r, edits::Turned::FootRound),
+    },
+    FeatureFamily {
+        name: "deleted-dome-rounds",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::DomeRound),
+    },
+    FeatureFamily {
+        name: "deleted-hemisphere-rounds",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::HemisphereRound),
+    },
+    FeatureFamily {
+        name: "deleted-bore-rounds",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::BoreRound),
+    },
+    FeatureFamily {
+        name: "deleted-bore-grooves",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::BoreGroove),
+    },
+    FeatureFamily {
+        name: "deleted-countersinks",
+        version: 1,
+        count: 3,
+        draw: |r| edits::turned_delete(r, edits::Turned::Countersink),
     },
     FeatureFamily {
         name: "deleted-bosses",
         version: 1,
-        count: 2,
-        draw: |r| edits::turned_delete(r, edits::Turned::Boss),
+        count: 4,
+        draw: |r| edits::removal_delete(r, edits::Removal::Boss),
+    },
+    FeatureFamily {
+        name: "deleted-root-rounds",
+        version: 1,
+        count: 4,
+        draw: |r| edits::removal_delete(r, edits::Removal::RootRound),
+    },
+    FeatureFamily {
+        name: "deleted-inside-rounds",
+        version: 1,
+        count: 4,
+        draw: |r| edits::removal_delete(r, edits::Removal::InsideRound),
     },
     FeatureFamily {
         name: "frustum-shells-open-bottom",
         version: 1,
-        count: 2,
+        count: 6,
         draw: |r| edits::frustum_shell(r, edits::Opened::WideBottom),
     },
     FeatureFamily {
         name: "frustum-shells-closed",
         version: 1,
-        count: 2,
+        count: 6,
         draw: |r| edits::frustum_shell(r, edits::Opened::Closed),
+    },
+    FeatureFamily {
+        name: "ball-shells",
+        version: 1,
+        count: 4,
+        draw: |r| edits::curved_shell(r, edits::Curved::Ball),
+    },
+    FeatureFamily {
+        name: "cone-shells-open-base",
+        version: 1,
+        count: 4,
+        draw: |r| edits::curved_shell(r, edits::Curved::ConeOpen),
+    },
+    FeatureFamily {
+        name: "cone-shells-closed",
+        version: 1,
+        count: 4,
+        draw: |r| edits::curved_shell(r, edits::Curved::ConeClosed),
+    },
+    FeatureFamily {
+        name: "puck-shells-within-rounds",
+        version: 1,
+        count: 5,
+        draw: |r| edits::puck_shell(r, false),
+    },
+    FeatureFamily {
+        name: "puck-shells-past-rounds",
+        version: 1,
+        count: 5,
+        draw: |r| edits::puck_shell(r, true),
     },
     FeatureFamily {
         name: "stepped-shells",
         version: 1,
-        count: 3,
+        count: 8,
         draw: edits::l_shell,
     },
     FeatureFamily {
         name: "offset-tori",
         version: 1,
-        count: 1,
+        count: 4,
         draw: |r| edits::torus_offset(r, false),
     },
     FeatureFamily {
         name: "offset-tori-past-the-hole",
         version: 1,
-        count: 3,
+        count: 6,
         draw: |r| edits::torus_offset(r, true),
+    },
+    FeatureFamily {
+        name: "offset-root-rounds",
+        version: 1,
+        count: 4,
+        draw: |r| edits::root_round_offset(r, false, false),
+    },
+    FeatureFamily {
+        name: "offset-root-rounds-past",
+        version: 1,
+        count: 4,
+        draw: |r| edits::root_round_offset(r, false, true),
+    },
+    FeatureFamily {
+        name: "offset-cone-roots",
+        version: 1,
+        count: 3,
+        draw: |r| edits::root_round_offset(r, true, false),
+    },
+    FeatureFamily {
+        name: "offset-cone-roots-past",
+        version: 1,
+        count: 3,
+        draw: |r| edits::root_round_offset(r, true, true),
+    },
+    FeatureFamily {
+        name: "offset-cones-to-apex",
+        version: 1,
+        count: 6,
+        draw: edits::apex_offset,
     },
     FeatureFamily {
         name: "move-faces",
@@ -7812,13 +7914,13 @@ mod tests {
     fn the_default_seed_draws_the_same_ids_on_every_platform() {
         let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
         let got = format!("{:016x}", fnv(&ids.join("\n")));
-        if got != "88bc4a85c9a85619" {
+        if got != "f8971b8ba0b33c7d" {
             // Every id, so a run elsewhere can be compared with this one case by case.
             for id in &ids {
                 eprintln!("id {id}");
             }
         }
-        assert_eq!(got, "88bc4a85c9a85619");
+        assert_eq!(got, "f8971b8ba0b33c7d");
     }
 
     #[test]
