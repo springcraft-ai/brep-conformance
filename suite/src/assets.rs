@@ -157,7 +157,7 @@ mod tests {
     fn a_view_of_one_or_two_solids_has_a_step_file_for_each_and_an_assembly_none() {
         let all = cases(1);
         let steps = |c: &Case| of_case(c).step.len();
-        // A boolean's first view is its intersection; a mirror join's is the part and its image.
+        // A boolean's first view is its intersection; a mirror join's is the joined part.
         assert!(
             all.iter()
                 .filter(|c| c.test.starts_with("booleans/overlap/boxes"))
@@ -165,7 +165,7 @@ mod tests {
         );
         let mirrored: Vec<_> = all.iter().filter(|c| c.exact.mirror.is_some()).collect();
         assert!(!mirrored.is_empty());
-        assert!(mirrored.iter().all(|c| steps(c) == 2));
+        assert!(mirrored.iter().all(|c| steps(c) == 1));
         assert!(all.iter().filter(|c| c.refuse).all(|c| steps(c) == 0));
         let sound: Vec<_> = all.iter().filter(|c| c.exact.sound.is_some()).collect();
         assert!(!sound.is_empty());

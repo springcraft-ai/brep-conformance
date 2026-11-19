@@ -254,11 +254,12 @@ pub(super) fn export_case<K: Kernel<Solid: Clone + 'static>>(
             if outside(r).is_some() {
                 continue;
             }
-            let own = kept.get(&(name.to_string(), role.to_string()));
-            let (key, made) = match own {
+            let kept_here = kept.get(&(name.to_string(), role.to_string()));
+            let own = view["own"] == true;
+            let (key, made) = match kept_here {
                 Some(x) => (format!("kept {name} {role}"), Ok(x.clone())),
-                // A NIST case's shape stands in for nothing: what the kernel did not read is not drawn.
-                None if c.nist.is_some() => continue,
+                // A view of the kernel's own result: what the kernel did not make is not drawn.
+                None if own => continue,
                 None => {
                     let base = solid(k, shapes, &mut built, r);
                     let m: Option<[[f64; 4]; 3]> = serde_json::from_value(s["matrix"].clone()).ok();
@@ -286,9 +287,9 @@ pub(super) fn export_case<K: Kernel<Solid: Clone + 'static>>(
             };
             if ex.glb.is_some() {
                 // A mesher can fail at one tolerance and not another: try once more at half,
-                // and keep the first failure on record. A NIST file's solid is measured by the
-                // kernel's own box, as the suite has no shape for it.
-                let tol = if c.nist.is_some() {
+                // and keep the first failure on record. A kernel's own result is measured by its
+                // own box, as the suite's shape for the view only stands in for its size.
+                let tol = if own {
                     attempt(|| k.bounding_box(&made)).map_or(EXPORT_TOLERANCE, |[lo, hi]| {
                         let d = (0..3).map(|i| (hi[i] - lo[i]).powi(2)).sum::<f64>().sqrt();
                         (DRAWN * d).max(1e-9)

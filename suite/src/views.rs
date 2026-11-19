@@ -82,6 +82,12 @@ fn noted(name: &str, note: &str, solids: Vec<Value>) -> Value {
     json!({"name": name, "note": note, "solids": solids})
 }
 
+/// A view of the kernel's own result alone, as its runner keeps it: where the kernel made none,
+/// the view is left empty, for no shape of the suite's is the answer. `s` only sizes the drawing.
+fn own(name: &str, note: &str, s: &Shape) -> Value {
+    json!({"name": name, "note": note, "own": true, "solids": [solid("main", s, None)]})
+}
+
 /// A view that may draw solids in the second tone, and what that tone marks, for the key.
 fn toned(name: &str, note: &str, alt: &str, solids: Vec<Value>) -> Value {
     let two = solids.iter().any(|s| s["role"] == "alt");
@@ -377,10 +383,10 @@ pub fn views(c: &Case) -> Value {
     // A NIST file has no shape of the suite's to show: only what the kernel read, which its runner
     // keeps as `read`.
     if c.nist.is_some() {
-        let v = vec![noted(
+        let v = vec![own(
             "read",
             "The solid the kernel read from NIST's file, as it draws it.",
-            vec![solid("main", a, None)],
+            a,
         )];
         return finish_views(c, extra, v);
     }
@@ -417,24 +423,32 @@ pub fn views(c: &Case) -> Value {
                     c,
                     extra,
                     vec![
-                        noted(
-                            "limits",
+                        own(
+                            "result",
                             &format!(
-                                "No one corner is expected. Outside the box the result must be these ordinary fillets exactly; inside it the corner is open, its volume between bounds. Dots mark the edges named, where the fillets must touch their faces{clear}."
+                                "The corner the kernel made. No one corner is expected: inside the box the corner is open, its volume between bounds; outside it the result must be the fillets of each edge alone exactly. Dots mark the edges named, where the fillets must touch their faces{clear}."
                             ),
+                            a,
+                        ),
+                        noted(
+                            "edges alone",
+                            "Each edge filleted on its own, the ordinary way: what the result must be outside the box. Inside it these run into each other and make no corner.",
                             vec![solid("main", &fillets, None), ghost_outside(a, &fillets)],
                         ),
                         view("input", vec![solid("main", a, None)]),
                     ],
                 );
             }
-            vec![noted(
-                "limits",
-                &format!(
-                    "No one shape is expected: inside the box the corner is open, outside it the result must be the ordinary fillet exactly, and its volume lies between bounds. Dots mark the edges named, where the fillets must touch their faces{clear}."
+            vec![
+                own(
+                    "result",
+                    &format!(
+                        "The shape the kernel made. No one shape is expected: inside the box the corner is open, outside it the result must be the ordinary fillet exactly, and its volume lies between bounds. Dots mark the edges named, where the fillets must touch their faces{clear}."
+                    ),
+                    a,
                 ),
-                vec![solid("main", a, None)],
-            )]
+                view("input", vec![solid("main", a, None)]),
+            ]
         } else {
             vec![
                 noted(
@@ -520,6 +534,11 @@ pub fn views(c: &Case) -> Value {
         ]
     } else if let Some(m) = &c.exact.mirror {
         vec![
+            own(
+                "result",
+                "The part joined to its mirror image, as the kernel made it.",
+                a,
+            ),
             toned(
                 "joined",
                 "The part and its mirror image, which the kernel must join.",
@@ -610,11 +629,24 @@ pub fn views(c: &Case) -> Value {
                 )
             })
             .collect();
-        vec![noted(
+        let sections = noted(
             "sections",
-            "The sections the loft must pass through, in order; the smooth loft has no closed form to draw.",
+            "The sections the loft must pass through, in order.",
             plates,
-        )]
+        );
+        // A loft the kernel must refuse has no result to show.
+        if c.refuse {
+            vec![sections]
+        } else {
+            vec![
+                own(
+                    "result",
+                    "The loft the kernel made; it has no closed form, and must pass through the sections.",
+                    &c.a,
+                ),
+                sections,
+            ]
+        }
     } else if let Some(cv) = &c.exact.curvature {
         extra["points"] = json!(cv.points);
         // Where the boundary lies nearest each point, its normal, its first principal direction and
@@ -686,16 +718,12 @@ pub fn views(c: &Case) -> Value {
             })
             .collect();
         vec![
+            own("sewn", "The solid the kernel sewed the faces into.", a),
             toned(
                 "loose faces",
                 "Each face is written on its own, apart from its neighbours by up to 0.0001 mm; faces in the second tone are written inside out. Drawn pulled apart.",
                 "written inside out",
                 plates,
-            ),
-            noted(
-                "sewn",
-                "The solid the kernel must sew the faces into.",
-                vec![solid("main", a, None)],
             ),
         ]
     } else if !c.exact.sides.is_empty() {
@@ -704,7 +732,11 @@ pub fn views(c: &Case) -> Value {
             "Each probe is a point on the surface and, where the surface has a normal, points 0.01 mm inside and outside it, drawn spread apart; the kernel must say which side each is on.",
             vec![solid("main", a, None)],
         )]
-    } else if c.step || c.exact.sew.is_some() || a == b {
+    } else if c.step {
+        vec![own("read", "The solid the kernel read from the file.", a)]
+    } else if c.exact.sew.is_some() {
+        vec![own("sewn", "The solid the kernel sewed the faces into.", a)]
+    } else if a == b {
         vec![view("solid", vec![solid("main", a, None)])]
     } else {
         booleans(a, b, c.test.starts_with("constructions/"))
@@ -810,6 +842,45 @@ mod tests {
         }
         // Loose faces, an assembly's clashing parts, a split, a mirror, and a pattern's tools.
         assert_eq!(seen.len(), 5, "{seen:?}");
+    }
+
+    #[test]
+    fn a_case_whose_runner_makes_a_solid_opens_on_the_kernel_s_own_result() {
+        // Where no one shape is right, or the suite's shape is only what the result should match,
+        // the drawing is what the kernel made: never a shape of the suite's standing in for it.
+        let mut seen: std::collections::BTreeMap<&str, usize> = Default::default();
+        for c in crate::generate::cases(1) {
+            let spec = views(&c);
+            let v = spec["views"].as_array().unwrap();
+            let e = &c.exact;
+            let kind = if c.refuse {
+                None
+            } else if e.sound.is_some() && c.feature.is_some() {
+                Some(("open", "result"))
+            } else if e.loft.is_some() {
+                Some(("loft", "result"))
+            } else if e.mirror.is_some() {
+                Some(("mirror", "result"))
+            } else if e.sew.is_some() {
+                Some(("sew", "sewn"))
+            } else if c.step {
+                Some(("step", "read"))
+            } else {
+                None
+            };
+            let Some((kind, name)) = kind else {
+                // Elsewhere a view's shape is the suite's, built by the kernel where its runner
+                // kept nothing of its own.
+                assert!(v.iter().all(|x| x.get("own").is_none()), "{}", c.id);
+                continue;
+            };
+            *seen.entry(kind).or_default() += 1;
+            assert_eq!(v[0]["name"], name, "{}", c.id);
+            assert_eq!(v[0]["own"], true, "{}", c.id);
+            assert!(v[1..].iter().all(|x| x.get("own").is_none()), "{}", c.id);
+        }
+        assert_eq!(seen.len(), 5, "{seen:?}");
+        assert!(seen.values().all(|&n| n >= 10), "{seen:?}");
     }
 
     #[test]

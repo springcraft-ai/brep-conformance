@@ -757,7 +757,12 @@ fn b0_primitive(
 /// Runs one feature case: the blend of `c.a`'s edges, judged against the solid `c.b` it must give.
 /// Runs a sound case: the act's result is open within limits, so it is checked against those
 /// (Q1–Q5) and not against one answer.
-fn run_sound<K: Kernel>(k: &K, c: &Case, f: &Feature, sound: &Sound) -> Value {
+fn run_sound<K: Kernel<Solid: Clone + 'static>>(
+    k: &K,
+    c: &Case,
+    f: &Feature,
+    sound: &Sound,
+) -> Value {
     let mut ops: Vec<Value> = Vec::new();
     let header = |outcome: Outcome, ops: Vec<Value>, checks: Vec<Value>| {
         json!({"id": c.id, "family": c.family, "outcome": outcome.word(), "sound": true,
@@ -792,6 +797,7 @@ fn run_sound<K: Kernel>(k: &K, c: &Case, f: &Feature, sound: &Sound) -> Value {
             return header(e.outcome(), ops, checks);
         }
     };
+    export::keep("result", "main", &s);
     let m = k.measure(&s);
     ops.push(
         json!({"op": f.act.word(), "ms": ms, "outcome": "done", "volume": m.volume,
@@ -1309,7 +1315,7 @@ fn kinds(s: &Shape) -> Vec<String> {
 }
 
 /// Runs one STEP-corpus case: the suite's file for `c.a`, read by the kernel, must be `c.a`.
-fn run_step<K: Kernel>(k: &K, c: &Case) -> Value {
+fn run_step<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case) -> Value {
     let Shape::Prim(p) = &c.a else {
         return json!({"id": c.id, "family": c.family, "outcome": "crash", "checks": [], "ops": []});
     };
@@ -1345,6 +1351,7 @@ fn run_step<K: Kernel>(k: &K, c: &Case) -> Value {
             return header(e.outcome(), vec![op], vec![]);
         }
     };
+    export::keep("read", "main", &s);
     let g = got(k, &s);
     let ops = vec![
         json!({"op": "read_step", "outcome": "done", "ms": ms, "volume": g.volume,
@@ -2365,7 +2372,11 @@ fn run_display<K: Kernel>(k: &K, c: &Case, want: &crate::generate::DisplayExact)
 
 /// B36: a prism's loose faces, shifted apart by up to `SEW_GAP` and some inside out, sew into a
 /// valid solid holding the prism's volume and area to what the shifts allow, and its points.
-fn run_sew<K: Kernel>(k: &K, c: &Case, sew: &crate::generate::Sew) -> Value {
+fn run_sew<K: Kernel<Solid: Clone + 'static>>(
+    k: &K,
+    c: &Case,
+    sew: &crate::generate::Sew,
+) -> Value {
     use crate::generate::{SEW_GAP, SEW_TOLERANCE};
     let Shape::Prim(p) = &c.a else {
         return finish(c, Outcome::Crash, vec![], vec![]);
@@ -2380,6 +2391,7 @@ fn run_sew<K: Kernel>(k: &K, c: &Case, sew: &crate::generate::Sew) -> Value {
         Ok(x) => x,
         Err(v) => return v,
     };
+    export::keep("sewn", "main", &s);
     let g = got(k, &s);
     let (area, volume) = (p.area(), p.volume());
     // Each face shifted by at most the gap moves the volume by at most gap·area; an edge's two
@@ -2692,7 +2704,7 @@ fn run_many<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: &Many) -> Val
 }
 
 /// Runs a mirror case: B29, the part joined to its image in a mirror.
-fn run_mirror<K: Kernel>(k: &K, c: &Case, m: &Mirror) -> Value {
+fn run_mirror<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: &Mirror) -> Value {
     let Shape::Prim(p) = &c.a else {
         return finish(c, Outcome::Crash, vec![], vec![]);
     };
@@ -2703,7 +2715,9 @@ fn run_mirror<K: Kernel>(k: &K, c: &Case, m: &Mirror) -> Value {
     let r = attempt(|| {
         let a = construct(k, p)?;
         let image = mirror_image(k, p, &a, m.matrix)?;
-        Ok(k.measure(&k.union(&a, &image)?))
+        let joined = k.union(&a, &image)?;
+        export::keep("result", "main", &joined);
+        Ok(k.measure(&joined))
     });
     let ms = t.elapsed().as_secs_f64() * 1e3;
     let g = match r {
@@ -2799,7 +2813,7 @@ fn run_normals<K: Kernel>(k: &K, c: &Case, n: &Normals) -> Value {
 }
 
 /// Runs a smooth loft: sound, Q1–Q3, and Q7, that it passes through its inner sections.
-fn run_loft<K: Kernel>(k: &K, c: &Case, l: &LoftThrough) -> Value {
+fn run_loft<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, l: &LoftThrough) -> Value {
     if !offers(k, &["loft_through"], &[]) {
         let mut v = finish(c, Outcome::Unsupported, vec![], vec![]);
         v["sound"] = json!(true);
@@ -2827,6 +2841,7 @@ fn run_loft<K: Kernel>(k: &K, c: &Case, l: &LoftThrough) -> Value {
             return v;
         }
     };
+    export::keep("result", "main", &s);
     let m = k.measure(&s);
     let ops = vec![json!({"op": "loft_through", "ms": ms, "outcome": "done",
                           "volume": m.volume, "area": m.area})];

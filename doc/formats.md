@@ -146,11 +146,11 @@ test draws them. Failed cases' files are included ([`export.rs`](../suite/src/ru
 | `<test>/<id>.<asset>.<role>.step` | Each of the two solids of its first view, named by role |
 
 STEP files are written for the subjects of a case's first view, not counting ghosts: a boolean's
-intersection, a feature's result, a queried solid, or a mirror join's part and its image. Each is
-the kernel's own result, for exact and sound cases alike, so on a failed case it may be wrong. A
-case that must be refused has none, and nor has a view of more than two solids, such as an assembly
-of a hundred parts, which its GLB shows. A kernel whose adapter does not offer
-[`display`](api.md#display) draws nothing, so its cases have no GLB, and one without
+intersection, a feature's result, a queried solid, a mirror join's joined part, or the solid a
+sewing or a STEP read made. Each is the kernel's own result, for exact and sound cases alike, so on
+a failed case it may be wrong. A case that must be refused has none, and nor has a view of more than
+two solids, such as an assembly of a hundred parts, which its GLB shows. A kernel whose adapter does
+not offer [`display`](api.md#display) draws nothing, so its cases have no GLB, and one without
 [`write_step`](api.md#write_step) has no STEP files. `asset` is a 64-bit FNV-1a of the case id and
 `ASSET_GENERATOR` in [`run.rs`](../suite/src/run.rs). `ASSET_GENERATOR` changes when what draws the
 files changes. A test in springrep's adapter pins it to a fingerprint of what springrep's `display`
@@ -158,14 +158,17 @@ draws, and fails when that drifts.
 
 A view's subject is the kernel's own result where the case's runner kept one. The runner keeps a
 boolean's four results and operands, a feature's or chain's result, a moved solid, a split's pieces,
-and a boolean of many. Any other solid the view names is built by the kernel from the case's shapes
-and moved by the kernel's [`transform`](api.md#transform), or by its [`affine`](api.md#affine) where
-`transform` refuses. A ghost is the part of an operand that lies outside the view's subject. It is
-the kernel's difference of the two, less each face and each edge whose middle the kernel
-[classifies](api.md#classify) as on the subject's boundary. Subjects are drawn first and ghosts
-last. An operand's ghost behind a union of that operand is empty, so it is not cut. Each solid is
-drawn with [`display`](api.md#display) within `DRAWN` (5e-4) of its diagonal, and each STEP file is
-written with [`write_step`](api.md#write_step).
+a boolean of many, a mirror join, a sewn solid, the solid a STEP file was read as, a smooth loft,
+and a blend that no one shape is right for. A case of those last kinds opens on a view of the
+kernel's result alone, marked `own`: where the kernel made nothing, that view stays empty, for no
+shape of the suite's is the answer. Any other solid the view names is built by the kernel from the
+case's shapes and moved by the kernel's [`transform`](api.md#transform), or by its
+[`affine`](api.md#affine) where `transform` refuses. A ghost is the part of an operand that lies
+outside the view's subject. It is the kernel's difference of the two, less each face and each edge
+whose middle the kernel [classifies](api.md#classify) as on the subject's boundary. Subjects are
+drawn first and ghosts last. An operand's ghost behind a union of that operand is empty, so it is
+not cut. Each solid is drawn with [`display`](api.md#display) within `DRAWN` (5e-4) of its diagonal,
+and each STEP file is written with [`write_step`](api.md#write_step).
 
 The GLB holds one scene per view, named as the view. A scene's `extras` carry the view's `note`, the
 line saying what it shows, and, where the view draws solids in the second tone, `alt`, what that

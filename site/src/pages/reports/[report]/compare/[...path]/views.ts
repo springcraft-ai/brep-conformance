@@ -16,7 +16,7 @@ export function sourcesOf(name: string): string[] {
   if (name.includes('∩')) return ['a', 'b']
   const cut = /^\s*(\S+)\s*∖\s*(\S+)\s*$/.exec(name)
   if (cut) return [cut[2]!]
-  return { after: ['before'], moved: ['solid'], limits: ['input'], cut: ['solid'] }[name] ?? []
+  return { after: ['before'], moved: ['solid'], result: ['input'], cut: ['solid'] }[name] ?? []
 }
 
 export function merge(shapes: Shape[]): Shape {
