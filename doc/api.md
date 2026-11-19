@@ -1041,9 +1041,13 @@ face does not fold.
 
 Hollows the solid to walls of one thickness, open through the named faces.
 
-The result is the set of points of `s` within `thickness` of the boundary of `s`, with the named
-faces left out of that boundary. With no faces named, the walls close round a void. `thickness` must
-be positive, and the walls must not meet.
+The result is `s` less a cavity. Every face of `s` but the named ones moves inward along its normal
+by `thickness`, and the moved faces are extended or trimmed to meet each other and the surfaces of
+the named faces, which stay where they are. The cavity is the solid they bound. A face that shrinks
+to nothing as it moves drops out, and the faces round it meet, so a convex round no larger than
+`thickness` leaves a sharp corner. A wall ends flush with an opening, in the surface of the open
+face, and the cavity has a sharp corner inside each concave edge of `s`. With no faces named, the
+walls close round a void. `thickness` must be positive, and the walls must not meet.
 
 **Example.** Solid 1 is a 10 × 20 × 30 mm box with one corner at the origin.
 
