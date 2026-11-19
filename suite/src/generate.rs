@@ -11,6 +11,7 @@ use crate::profile::{Profile, Seg, chamfered, circle, rounded};
 mod blends;
 mod chains;
 mod drawing;
+mod edits;
 mod hard;
 mod parts;
 mod paths;
@@ -949,6 +950,60 @@ pub const FEATURE_FAMILIES: &[FeatureFamily] = &[
         version: 1,
         count: 24,
         draw: delete_face,
+    },
+    FeatureFamily {
+        name: "deleted-rim-rounds",
+        version: 1,
+        count: 2,
+        draw: |r| edits::turned_delete(r, edits::Turned::RimRound),
+    },
+    FeatureFamily {
+        name: "deleted-rim-bevels",
+        version: 1,
+        count: 2,
+        draw: |r| edits::turned_delete(r, edits::Turned::RimBevel),
+    },
+    FeatureFamily {
+        name: "deleted-foot-rounds",
+        version: 1,
+        count: 2,
+        draw: |r| edits::turned_delete(r, edits::Turned::FootRound),
+    },
+    FeatureFamily {
+        name: "deleted-bosses",
+        version: 1,
+        count: 2,
+        draw: |r| edits::turned_delete(r, edits::Turned::Boss),
+    },
+    FeatureFamily {
+        name: "frustum-shells-open-bottom",
+        version: 1,
+        count: 2,
+        draw: |r| edits::frustum_shell(r, edits::Opened::WideBottom),
+    },
+    FeatureFamily {
+        name: "frustum-shells-closed",
+        version: 1,
+        count: 2,
+        draw: |r| edits::frustum_shell(r, edits::Opened::Closed),
+    },
+    FeatureFamily {
+        name: "stepped-shells",
+        version: 1,
+        count: 3,
+        draw: edits::l_shell,
+    },
+    FeatureFamily {
+        name: "offset-tori",
+        version: 1,
+        count: 1,
+        draw: |r| edits::torus_offset(r, false),
+    },
+    FeatureFamily {
+        name: "offset-tori-past-the-hole",
+        version: 1,
+        count: 3,
+        draw: |r| edits::torus_offset(r, true),
     },
     FeatureFamily {
         name: "move-faces",
@@ -7757,13 +7812,13 @@ mod tests {
     fn the_default_seed_draws_the_same_ids_on_every_platform() {
         let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
         let got = format!("{:016x}", fnv(&ids.join("\n")));
-        if got != "ed2d45f7e28c6ad7" {
+        if got != "88bc4a85c9a85619" {
             // Every id, so a run elsewhere can be compared with this one case by case.
             for id in &ids {
                 eprintln!("id {id}");
             }
         }
-        assert_eq!(got, "ed2d45f7e28c6ad7");
+        assert_eq!(got, "88bc4a85c9a85619");
     }
 
     #[test]

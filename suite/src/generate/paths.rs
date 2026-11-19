@@ -276,6 +276,12 @@ pub fn test_path(c: &Case) -> &'static str {
         "offset-faces" => "modify/push-pull-faces",
         "closing-offsets" => "modify/push-faces-until-they-merge",
         "delete-faces" => "modify/delete-faces",
+        "deleted-rim-rounds" | "deleted-rim-bevels" | "deleted-foot-rounds" | "deleted-bosses" => {
+            "modify/delete-faces-of-turned-parts"
+        }
+        "frustum-shells-open-bottom" | "frustum-shells-closed" => "modify/shell-frustum",
+        "stepped-shells" => "modify/shell-l-prism-open-at-its-step",
+        "offset-tori" | "offset-tori-past-the-hole" => "modify/offset-torus",
         "move-faces" => "modify/move-faces",
         "thicken" => "modify/thicken-faces",
         "sewing" => "modify/sew-faces-into-a-solid",
