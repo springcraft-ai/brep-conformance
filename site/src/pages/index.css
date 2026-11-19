@@ -566,3 +566,32 @@ a.hm-cell:focus-visible .hm-bar {
 .hm-version {
   color: var(--void-ink-2);
 }
+
+/* ---- a display folded like a book: the leaderboard as its cards, two each side of the fold,
+   and the tests compared as on a phone, the kernels in even columns either side of it ---- */
+@media (horizontal-viewport-segments: 2) {
+  .hm-board {
+    display: none;
+  }
+  .hm-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--spine);
+  }
+  .hm-card {
+    align-items: start;
+  }
+  .hm-grid__head,
+  .hm-row {
+    grid-template-columns: repeat(var(--hm-k), minmax(0, 1fr));
+    gap: var(--sp-2) var(--spine);
+  }
+  .hm-grid__scroll > *,
+  .hm-cell {
+    min-width: 0;
+  }
+  .hm-grid__head > :first-child,
+  .hm-row > .hm-row__name {
+    grid-column: 1 / -1;
+  }
+}

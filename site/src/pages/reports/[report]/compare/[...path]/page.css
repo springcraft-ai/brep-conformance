@@ -646,3 +646,55 @@
 .bc-points__none {
   margin: var(--sp-4) 0 0;
 }
+
+/* ---- the view in any window: never taller than what shows below the header, with room for the
+   line under it, so a short window, such as a phone's outer display on its side, sees all of it.
+   On a display folded like a laptop it fits the one half, so the crease never crosses it. ---- */
+.bc-scan {
+  max-height: calc(100svh - var(--chrome-h) - 48px);
+}
+@media (vertical-viewport-segments: 2) {
+  .bc-scan {
+    max-height: calc(env(viewport-segment-height 0 1, 50svh) - 48px);
+  }
+}
+
+/* A display folded like a book: the shape and its kernels on the left page, a square view
+   filling it, and the list of cases on the right. */
+@media (horizontal-viewport-segments: 2) {
+  .bc-cases {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--spine);
+  }
+  .bc-cases .bc-scan {
+    aspect-ratio: 1 / 1;
+    min-height: 0;
+  }
+  .bc-caselist__scroll {
+    max-height: calc(100svh - var(--chrome-h) - 160px);
+  }
+  /* The kernels' results fit their half instead of scrolling in it: the download links take only
+     their width, and a reason goes under its grade. The table sets its widths inline. */
+  .bc-casekernels table {
+    min-width: 0;
+  }
+  .bc-casekernels th:nth-child(1) {
+    width: 42% !important;
+  }
+  .bc-casekernels th:nth-child(2) {
+    width: 96px !important;
+  }
+  .bc-casekernels__status {
+    flex-wrap: wrap;
+    gap: 0 var(--sp-4);
+  }
+  .bc-casekernels__kernel {
+    flex-wrap: wrap;
+    gap: 0 var(--sp-3);
+  }
+  .bc-casekernels__status > .bc-casekernels__result {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 0 var(--sp-3);
+  }
+}

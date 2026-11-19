@@ -374,3 +374,42 @@
     font-size: 17px;
   }
 }
+
+/* ---- a display folded like a book. An operation's definition takes the left page and what its
+   group has in common the right. On the operations page the functions take the left page and the
+   kernels' columns the right. ---- */
+@media (horizontal-viewport-segments: 2) {
+  .bc-op-page {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--spine);
+    align-items: start;
+  }
+  .bc-op-page > :not(.bc-section) {
+    grid-column: 1 / -1;
+  }
+  /* The kernels' columns share the right page; the functions' column takes the rest. */
+  .fn-table {
+    --fn-k: 4;
+  }
+  .fn-table:has(thead th:nth-child(3):last-child) {
+    --fn-k: 2;
+  }
+  .fn-table:has(thead th:nth-child(4):last-child) {
+    --fn-k: 3;
+  }
+  .fn-table:has(thead th:nth-child(6):last-child) {
+    --fn-k: 5;
+  }
+  .fn-table:has(thead th:nth-child(7):last-child) {
+    --fn-k: 6;
+  }
+  .fn-table td,
+  .fn-kernel {
+    /* In viewport units: a cell's width is ignored when it mixes a percentage into calc(). */
+    width: calc((50vw - var(--spine) / 2 - var(--grid-margin-wide)) / var(--fn-k));
+  }
+  .fn-table th:first-child {
+    padding-right: var(--spine);
+  }
+}

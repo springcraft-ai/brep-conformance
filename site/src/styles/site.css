@@ -595,3 +595,30 @@ body {
     padding: 0;
   }
 }
+
+/* ---- a short landscape window, such as a phone's outer display on its side: a slimmer header
+   leaves the page more of the little height there is ---- */
+@media (max-height: 480px) and (orientation: landscape) {
+  :root {
+    --chrome-h: 44px;
+  }
+  .bc-chrome {
+    height: var(--chrome-h);
+  }
+}
+
+/* ---- a display folded like a book: two segments side by side. A page that sets things in
+   columns sets them in two even halves, one each side, with the fold and a margin either side of
+   it between them, so no text, control or bar runs into the crease. The page is centred, so its
+   halves meet at the fold. Without the viewport segments API none of this applies. ---- */
+@media (horizontal-viewport-segments: 2) {
+  :root {
+    --spine: calc(
+      env(viewport-segment-left 1 0, 50vw) - env(viewport-segment-right 0 0, 50vw) + 56px
+    );
+  }
+  /* A long title wraps on its own side rather than run over the fold. */
+  .bc-main .bc-head .bc-display {
+    max-width: calc(50vw - var(--spine) / 2 - var(--grid-margin-wide));
+  }
+}

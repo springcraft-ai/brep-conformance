@@ -354,3 +354,11 @@
     padding-top: 0;
   }
 }
+
+/* A display folded like a book: the contents on the left page, the doc on the right. */
+@media (horizontal-viewport-segments: 2) {
+  .dx {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--spine);
+  }
+}

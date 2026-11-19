@@ -428,3 +428,27 @@ a.rp-grade:hover .rp-grade__n {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---- a display folded like a book. A test's name, cases and result take the left page and why
+   and its time the right: the columns are set so the third ends at the page's centre. ---- */
+@media (horizontal-viewport-segments: 2) {
+  .rp-group__head,
+  .rp-group__row {
+    grid-template-columns: minmax(0, 1fr) 84px minmax(0, 1fr) minmax(0, 2fr) 84px;
+  }
+  .rp-group__head > :nth-child(3),
+  .rp-group__row > :nth-child(3) {
+    padding-right: calc(var(--spine) / 2);
+  }
+  .rp-group__head > :nth-child(4),
+  .rp-group__row > :nth-child(4) {
+    padding-left: max(0px, var(--spine) / 2 - var(--sp-5));
+  }
+  .rp-area__bar {
+    grid-column: 3;
+  }
+  .rp-details__groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--spine);
+  }
+}
