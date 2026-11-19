@@ -294,7 +294,9 @@ pub fn test_path(c: &Case) -> &'static str {
             "modify/shell-ball-or-cone"
         }
         "puck-shells-within-rounds" | "puck-shells-past-rounds" => "modify/shell-rounded-puck",
-        "stepped-shells" => "modify/shell-l-prism-open-at-its-step",
+        "stepped-shells" | "stepped-shells-leaning-back" | "stepped-shells-leaning-over" => {
+            "modify/shell-l-prism-open-at-its-step"
+        }
         "offset-tori" | "offset-tori-past-the-hole" => "modify/offset-torus",
         "offset-root-rounds"
         | "offset-root-rounds-past"

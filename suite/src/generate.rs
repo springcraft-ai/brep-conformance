@@ -2,7 +2,7 @@
 //! their booleans. A family's version is part of every case id it makes, so changing what a family
 //! draws for a seed means bumping it.
 
-use std::f64::consts::{PI, TAU};
+use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI, TAU};
 
 use crate::model::{Frame, Op, PathSeg, Primitive, Rigid, Shape, Side, Spline, Vec3};
 use crate::portable::Portable;
@@ -1070,6 +1070,18 @@ pub const FEATURE_FAMILIES: &[FeatureFamily] = &[
         version: 1,
         count: 8,
         draw: edits::l_shell,
+    },
+    FeatureFamily {
+        name: "stepped-shells-leaning-back",
+        version: 1,
+        count: 4,
+        draw: |r| edits::leaning_l_shell(r, 3.0 * FRAC_PI_4),
+    },
+    FeatureFamily {
+        name: "stepped-shells-leaning-over",
+        version: 1,
+        count: 4,
+        draw: |r| edits::leaning_l_shell(r, FRAC_PI_4),
     },
     FeatureFamily {
         name: "offset-tori",
@@ -7920,13 +7932,13 @@ mod tests {
     fn the_default_seed_draws_the_same_ids_on_every_platform() {
         let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
         let got = format!("{:016x}", fnv(&ids.join("\n")));
-        if got != "774a036555981c84" {
+        if got != "855c148b0b9e2297" {
             // Every id, so a run elsewhere can be compared with this one case by case.
             for id in &ids {
                 eprintln!("id {id}");
             }
         }
-        assert_eq!(got, "774a036555981c84");
+        assert_eq!(got, "855c148b0b9e2297");
     }
 
     #[test]

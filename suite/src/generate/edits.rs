@@ -301,10 +301,7 @@ fn shell(points: Vec<Vec3>, t: f64) -> Feature {
 
 /// A frustum narrowing upward hollowed to walls `t` thick: open through its wide bottom or its
 /// narrow top, or closed round a void. Each result is one turned profile, the cone's wall moved in
-/// by `t` along its normal. At the wide bottom the nearest point of that wall to a point within it
-/// never lies past the rim, so the wall ends flat in the opening. At the narrow top the points
-/// between the opening and the rim's normal are nearest the rim, so the wall ends in an arc of
-/// radius `t` about it, short of the flat end by `t²(tan β − β)/2` in the meridian.
+/// by `t` along its normal and ending flush in the opening's plane.
 #[derive(Clone, Copy)]
 pub(super) enum Opened {
     WideBottom,
@@ -333,24 +330,17 @@ pub(super) fn frustum_shell(r: &mut Rng, opened: Opened) -> FeatureDraw {
             ]),
             vec![[0.0, 0.0, 0.0]],
         ),
-        Opened::NarrowTop => {
-            // The angle the cone's side leans in from upright, and where the rim's inward normal
-            // meets the wall's inner face.
-            let lean = (bottom - top).patan2(h);
-            let foot = [top - t * lean.pcos(), h - t * lean.psin()];
-            (
-                revolve(vec![
-                    line([0.0, 0.0], [bottom, 0.0]),
-                    line([bottom, 0.0], [top, h]),
-                    line([top, h], [top - t, h]),
-                    arc([top, h], t, PI, lean),
-                    line(foot, [inner(t), t]),
-                    line([inner(t), t], [0.0, t]),
-                    line([0.0, t], [0.0, 0.0]),
-                ]),
-                vec![[0.0, 0.0, h]],
-            )
-        }
+        Opened::NarrowTop => (
+            revolve(vec![
+                line([0.0, 0.0], [bottom, 0.0]),
+                line([bottom, 0.0], [top, h]),
+                line([top, h], [inner(h), h]),
+                line([inner(h), h], [inner(t), t]),
+                line([inner(t), t], [0.0, t]),
+                line([0.0, t], [0.0, 0.0]),
+            ]),
+            vec![[0.0, 0.0, h]],
+        ),
         Opened::Closed => (
             revolve(vec![
                 line([0.0, 0.0], [bottom, 0.0]),
@@ -467,36 +457,69 @@ pub(super) fn puck_shell(r: &mut Rng, past: bool) -> FeatureDraw {
     (base, shell(vec![], t), want, exact)
 }
 
-/// The cavity of an L prism shelled open at its step, in the L's plane: the L shrunk by `t` from
-/// every face but the step, less the disc of radius `t` about the concave edge where the step meets
-/// the wall above it. Running that wall on past the edge would carry it into the L, so a point below
-/// the edge is measured to the edge. With `past`, the cavity runs on out through the opening by that
-/// much.
-fn step_cavity(a: f64, c: f64, h1: f64, h2: f64, t: f64, past: f64) -> Profile {
-    let mut lp = vec![
-        line([t, t], [a - t, t]),
-        line([a - t, t], [a - t, h1 + past]),
-    ];
-    if past > 0.0 {
-        lp.push(line([a - t, h1 + past], [c + t, h1 + past]));
-        lp.push(line([c + t, h1 + past], [c + t, h1]));
+/// The sine and cosine of the angle `lean` the wall above an L's step makes with the step, exact
+/// for an upright wall.
+fn wall_dir(lean: f64) -> (f64, f64) {
+    if lean == FRAC_PI_2 {
+        (1.0, 0.0)
     } else {
-        lp.push(line([a - t, h1], [c + t, h1]));
+        (lean.psin(), lean.pcos())
+    }
+}
+
+/// The cavity of an L prism shelled open at its step, in the L's plane: every side but the step
+/// moved in by `t`, the moved sides extended or trimmed to meet each other and the step's line, so
+/// the wall above the step ends flush with it. The wall meets the step at `lean`, a right angle for
+/// an upright wall. With `past`, the cavity also runs out through the opening by that much, from
+/// the step's edge into the open air, so that it meets the L's faces only along that edge.
+fn step_cavity(a: f64, c: f64, h1: f64, h2: f64, t: f64, past: f64, lean: f64) -> Profile {
+    let (sn, cs) = wall_dir(lean);
+    // Where the wall's inner face crosses the step's line, and where it meets the top's.
+    let low = c - t / sn;
+    let top = low + (h2 - t - h1) * cs / sn;
+    let mut lp = vec![line([t, t], [a - t, t])];
+    if past > 0.0 {
+        // Half way between the step and the wall, the open air's middle.
+        let half = lean / 2.0;
+        let edge = [c + past * half.pcos() / half.psin(), h1 + past];
+        lp.extend([
+            line([a - t, t], [a - t, h1 + past]),
+            line([a - t, h1 + past], edge),
+            line(edge, [c, h1]),
+            line([c, h1], [low, h1]),
+        ]);
+    } else {
+        lp.extend([line([a - t, t], [a - t, h1]), line([a - t, h1], [low, h1])]);
     }
     lp.extend([
-        arc([c, h1], t, 0.0, -PI),
-        line([c - t, h1], [c - t, h2 - t]),
-        line([c - t, h2 - t], [t, h2 - t]),
+        line([low, h1], [top, h2 - t]),
+        line([top, h2 - t], [t, h2 - t]),
         line([t, h2 - t], [t, t]),
     ]);
     Profile { loops: vec![lp] }
 }
 
 /// The L prism `a` wide, `h1` high at its step and `h2` at its wall, `w` deep, shelled `t` thick
-/// open at the step: the shape, its volume and its area.
-fn step_shell(a: f64, c: f64, h1: f64, h2: f64, w: f64, t: f64) -> (Primitive, Shape, f64, f64) {
+/// open at the step, its wall meeting the step at `lean`: the shape, its volume and its area.
+fn step_shell(
+    a: f64,
+    c: f64,
+    h1: f64,
+    h2: f64,
+    w: f64,
+    t: f64,
+    lean: f64,
+) -> (Primitive, Shape, f64, f64) {
+    let (sn, cs) = wall_dir(lean);
     let ell = prism_xy(
-        polygon(&[[0.0, 0.0], [a, 0.0], [a, h1], [c, h1], [c, h2], [0.0, h2]]),
+        polygon(&[
+            [0.0, 0.0],
+            [a, 0.0],
+            [a, h1],
+            [c, h1],
+            [c + (h2 - h1) * cs / sn, h2],
+            [0.0, h2],
+        ]),
         w,
     );
     let in_frame = |profile: Profile| Primitive::Extrude {
@@ -504,12 +527,14 @@ fn step_shell(a: f64, c: f64, h1: f64, h2: f64, w: f64, t: f64) -> (Primitive, S
         profile,
         height: w - 2.0 * t,
     };
-    let cavity = in_frame(step_cavity(a, c, h1, h2, t, 0.0));
-    // The opening is in both the L's area and the cavity's, and in neither boundary.
-    let opening = (a - c - 2.0 * t) * (w - 2.0 * t);
+    let cavity = in_frame(step_cavity(a, c, h1, h2, t, 0.0, lean));
+    // The opening, from the step's edge to the far wall, is in both the L's area and the cavity's
+    // and in neither boundary. Under the wall, the cavity's side on the step's line is the end of
+    // the wall, which stays.
+    let opening = (a - c - t) * (w - 2.0 * t);
     let volume = ell.volume() - cavity.volume();
     let area = ell.area() + cavity.area() - 2.0 * opening;
-    let through = in_frame(step_cavity(a, c, h1, h2, t, 1.0));
+    let through = in_frame(step_cavity(a, c, h1, h2, t, 0.5 * t, lean));
     let want = Shape::bool(Op::Difference, ell.clone(), through);
     (ell, want, volume, area)
 }
@@ -525,7 +550,36 @@ pub(super) fn l_shell(r: &mut Rng) -> FeatureDraw {
         .into_iter()
         .fold(f64::INFINITY, f64::min)
         * r.range(0.1, 0.25);
-    let (base, want, volume, area) = step_shell(a, c, h1, h2, w, t);
+    let (base, want, volume, area) = step_shell(a, c, h1, h2, w, t, FRAC_PI_2);
+    let exact = Exact {
+        result_volume: Some(volume),
+        result_area: Some(area),
+        ..Default::default()
+    };
+    let feature = shell(vec![[(a + c) / 2.0, h1, w / 2.0]], t);
+    (base, feature, want, exact)
+}
+
+/// An L prism whose wall meets its step at `lean`, leaning back from the step past a right angle
+/// or over it short of one, shelled to walls `t` thick open through the face of its step.
+pub(super) fn leaning_l_shell(r: &mut Rng, lean: f64) -> FeatureDraw {
+    let (sn, cs) = wall_dir(lean);
+    let a = r.range(8.0, 14.0);
+    let c = a * r.range(0.35, 0.6);
+    let h1 = r.range(2.0, 5.0);
+    let rise = r.range(2.0, 5.0);
+    // The wall's top stays within the L: at most 0.6 of the way across what it leans over.
+    let room = if lean < FRAC_PI_2 { a - c } else { c };
+    let rise = rise.min(0.6 * room * sn / cs.abs());
+    let h2 = h1 + rise;
+    let w = r.range(3.0, 8.0);
+    let shift = rise * cs.abs() / sn;
+    let top = if lean > FRAC_PI_2 { c - shift } else { c };
+    let t = [top, a - c, h1, rise, w]
+        .into_iter()
+        .fold(f64::INFINITY, f64::min)
+        * r.range(0.1, 0.25);
+    let (base, want, volume, area) = step_shell(a, c, h1, h2, w, t, lean);
     let exact = Exact {
         result_volume: Some(volume),
         result_area: Some(area),
@@ -685,14 +739,43 @@ mod tests {
 
     #[test]
     fn an_l_prism_shelled_open_at_its_step_has_its_worked_volume_and_area() {
-        // 10 wide, the wall 4 wide and 8 high, the step 3 high, 6 deep, walls 1 thick. The cavity
-        // is 8 by 2 below the step and 2 by 6 up the wall, 24 less half the disc about the concave
-        // edge, and 4 deep; the opening is 4 by 4.
-        let (_, _, volume, area) = step_shell(10.0, 4.0, 3.0, 8.0, 6.0, 1.0);
-        assert!((volume - (204.0 + 2.0 * PI)).abs() < 1e-9, "{volume}");
-        // Outside, 316 less the opening; inside, floor 32, ceiling 8, walls 24, 8 and 16, the
-        // lip's half cylinder 4π, and the cavity's two ends 48 − π.
-        assert!((area - (436.0 + 3.0 * PI)).abs() < 1e-9, "{area}");
+        // 10 wide, the wall 4 wide and 8 high, the step 3 high, 6 deep, walls 1 thick: the section
+        // is 50. The cavity is 8 by 2 below the step and 2 by 4 above it, the wall ending flush
+        // with the step, so 24, 4 deep.
+        let (_, _, volume, area) = step_shell(10.0, 4.0, 3.0, 8.0, 6.0, 1.0, FRAC_PI_2);
+        assert!((volume - 204.0).abs() < 1e-9, "{volume}");
+        // The L: two ends 100, sides 6 × 36. The cavity: ends 48, sides 4 × 28. Less the opening,
+        // 5 by 4, from each.
+        assert!((area - 436.0).abs() < 1e-9, "{area}");
+    }
+
+    #[test]
+    fn an_l_prism_whose_wall_leans_back_has_its_worked_volume_and_area() {
+        // 10 wide, the step 3 high from x = 5, the wall leaning back at 135° to 6 high at x = 2, 6
+        // deep, walls 1 thick: the section is 40.5. The wall's inner face is x + y = 8 − √2 and
+        // ends on the step's line at x = 5 − √2. The cavity is 8 by 2 below the step and, above
+        // it, up to that face and the top's at y = 5, 6 − 2√2: 22 − 2√2, 4 deep.
+        let lean = 3.0 * FRAC_PI_4;
+        let (_, _, volume, area) = step_shell(10.0, 5.0, 3.0, 6.0, 6.0, 1.0, lean);
+        let r2 = 2f64.sqrt();
+        assert!((volume - (155.0 + 8.0 * r2)).abs() < 1e-9, "{volume}");
+        // The L: two ends 81, sides 6 × (26 + 3√2). The cavity: ends 44 − 4√2, sides
+        // 4 × (20 + 2√2). Less the opening, 4 by 4, from each.
+        assert!((area - (329.0 + 22.0 * r2)).abs() < 1e-9, "{area}");
+    }
+
+    #[test]
+    fn an_l_prism_whose_wall_leans_over_its_step_has_its_worked_volume_and_area() {
+        // 10 wide, the step 3 high from x = 4, the wall leaning over it at 45° to 6 high at x = 7,
+        // 6 deep, walls 1 thick: the section is 46.5. The wall's inner face is y − x = √2 − 1 and
+        // ends on the step's line at x = 4 − √2. The cavity is 8 by 2 below the step and, above
+        // it, up to that face and the top's at y = 5, 8 − 2√2: 24 − 2√2, 4 deep.
+        let (_, _, volume, area) = step_shell(10.0, 4.0, 3.0, 6.0, 6.0, 1.0, FRAC_PI_4);
+        let r2 = 2f64.sqrt();
+        assert!((volume - (183.0 + 8.0 * r2)).abs() < 1e-9, "{volume}");
+        // The L: two ends 93, sides 6 × (32 + 3√2). The cavity: ends 48 − 4√2, sides
+        // 4 × (24 + 2√2). Less the opening, 5 by 4, from each.
+        assert!((area - (389.0 + 22.0 * r2)).abs() < 1e-9, "{area}");
     }
 
     #[test]
