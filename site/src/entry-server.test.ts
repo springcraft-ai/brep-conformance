@@ -77,6 +77,30 @@ describe('the site', () => {
     )
   })
 
+  it('names each page’s canonical address, and the home page as the current report’s', () => {
+    const canonical = (file: string) =>
+      byFile.get(file)!.body.match(/<link rel="canonical" href="([^"]*)">/)?.[1]
+    expect(canonical('index.html')).toBe('https://site.test/suite/')
+    expect(canonical('docs/index.html')).toBe('https://site.test/suite/docs/')
+    expect(canonical(`reports/${site().suite}/index.html`)).toBe('https://site.test/suite/')
+    expect(byFile.get(`reports/${site().suite}/index.html`)!.body).toContain(
+      '<meta property="og:url" content="https://site.test/suite/">',
+    )
+    expect(canonical('404.html')).toBeUndefined()
+  })
+
+  it('lists in the sitemap every page that is its own canonical address, and nothing else', () => {
+    const map = byFile.get('sitemap.xml')!
+    expect(map.type).toBe('application/xml')
+    const listed = [...map.body.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1])
+    const own = files
+      .filter(f => f.file.endsWith('.html') && f.status === 200)
+      .map(f => f.body.match(/<link rel="canonical" href="([^"]*)">/)![1]!)
+    expect(listed).toEqual([...new Set(own)].sort())
+    expect(listed).not.toContain(`https://site.test/suite/reports/${site().suite}/`)
+    expect(render('/sitemap.xml')?.body).toBe(map.body)
+  })
+
   it('renders one URL for the dev server, and 404 for an unknown page', () => {
     expect(render(`/badges/${site().kernels[0]}.svg`)?.status).toBe(200)
     expect(render('/reports/0.0.0/nobody/0/')?.status).toBe(404)

@@ -48,6 +48,10 @@ export default defineConfig(({ isSsrBuild }) => ({
   },
   test: {
     environment: 'node',
-    env: { BREP_REPORTS_DIR: resolve(__dirname, 'src/fixtures/reports'), BREP_ANY_KERNEL: '1' },
+    env: {
+      BREP_REPORTS_DIR: resolve(__dirname, 'src/fixtures/reports'),
+      BREP_ANY_KERNEL: '1',
+      SITE_URL: 'https://site.test/suite/',
+    },
   },
 }))

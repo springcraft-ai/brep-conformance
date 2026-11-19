@@ -61,6 +61,12 @@ look, not its results, so it never names a kernel. To change it, edit
 `CHROME` where it is not in the usual place), upload it under a new name, and point `SHARE_IMAGE` at
 that name: the CDN caches each name for good.
 
+Every page names its canonical address, and `sitemap.xml` lists each page that is its own. A sitemap
+needs absolute addresses, so the build writes it only where `SITE_URL` is set, as the Pages workflow
+sets it. A report's page for the current suite repeats the home page and names it as canonical. No
+crawler finds the sitemap by itself, since a `robots.txt` under a project path is not read: submit
+it in the search engine's console.
+
 The site reads `<suite>/<kernel>/<version>/report.json` under `BREP_REPORTS_DIR`, and has no results
 when it is unset. The tests read two reports for invented kernels in
 [`src/fixtures/reports/`](src/fixtures/reports/). `SITE_BASE` sets the path the site is served

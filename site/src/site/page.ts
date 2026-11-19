@@ -30,6 +30,8 @@ export interface PageEntry<P = Record<string, unknown>> {
   fullTitle?: string
   // What a link to the page shows when shared, where that differs from its title and description.
   social?: { title: string; description: string }
+  // The site path of the page this one repeats, where another address is the one to index.
+  canonical?: string
 }
 
 // A page's data: <name>.data.ts beside <name>.page.tsx. Server only. Returns one entry per URL the

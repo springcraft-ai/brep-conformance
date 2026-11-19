@@ -52,6 +52,7 @@ interface Entry {
   description?: string
   fullTitle?: string
   social?: { title: string; description: string }
+  canonical?: string
 }
 
 function entriesOf(route: Route): Entry[] {
@@ -74,22 +75,22 @@ function navItems(): NavItem[] {
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 
-// Where the site is served, for the absolute links a link preview needs; the Pages build sets it.
-// Unset, as in dev, the links stay relative to the site.
+// Where the site is served, for the absolute links a link preview, a canonical link and the
+// sitemap need; the Pages build sets it. Unset, as in dev, the links stay relative to the site.
 const SITE_URL = process.env.SITE_URL
+const absolute = (p: string) => (SITE_URL ? new URL(p.replace(/^\//, ''), SITE_URL).href : href(p))
 // The share image, on the CDN under a name that changes with it, so it is cached for good.
 const SHARE_IMAGE = 'https://cdn.springcraft.ai/springrep/brep-kernel-leaderboard-mwljdymv.png'
 
 // What a link to a page previews with: its title and description, and the site's share image.
 function share(title: string, description: string | undefined, path: string): string[] {
-  const at = (p: string) => (SITE_URL ? new URL(p.replace(/^\//, ''), SITE_URL).href : href(p))
   const meta = (key: string, value: string) => `<meta property="${key}" content="${esc(value)}">`
   return [
     meta('og:type', 'website'),
     meta('og:site_name', 'brep-conformance'),
     meta('og:title', title),
     description ? meta('og:description', description) : '',
-    meta('og:url', at(path)),
+    meta('og:url', absolute(path)),
     meta('og:image', SHARE_IMAGE),
     meta('og:image:width', '1200'),
     meta('og:image:height', '630'),
@@ -149,6 +150,7 @@ function renderPage(module: string, entry: Entry, path: string, manifest: Manife
     title: entry.social?.title ?? title,
     description: entry.social?.description ?? entry.description ?? SOCIAL_DESCRIPTION,
   }
+  const canonical = entry.canonical ?? path
   return [
     '<!doctype html>',
     '<html lang="en">',
@@ -160,7 +162,8 @@ function renderPage(module: string, entry: Entry, path: string, manifest: Manife
     '<style>html{background:#000}</style>',
     `<title>${esc(title)}</title>`,
     entry.description ? `<meta name="description" content="${esc(entry.description)}">` : '',
-    ...share(social.title, social.description, path),
+    module === NOT_FOUND ? '' : `<link rel="canonical" href="${esc(absolute(canonical))}">`,
+    ...share(social.title, social.description, canonical),
     `<link rel="icon" href="${href('/favicon.svg')}" type="image/svg+xml">`,
     ...head,
     '</head>',
@@ -186,12 +189,35 @@ function notFound(path: string, manifest: Manifest | null): Rendered | null {
   return { path, file: '404.html', status: 404, type: TYPES.html!, body }
 }
 
+const SITEMAP = '/sitemap.xml'
+
+// Every page that is its own canonical address. A sitemap's addresses must be absolute, so there
+// is none where SITE_URL is unset.
+function sitemap(): Rendered | null {
+  if (!SITE_URL) return null
+  const paths = routes
+    .filter(r => r.kind === 'page')
+    .flatMap(r => entriesOf(r).map(e => ({ path: pathOf(r, e.params), canonical: e.canonical })))
+    .filter(p => (p.canonical ?? p.path) === p.path)
+    .map(p => p.path)
+    .sort()
+  const body = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...paths.map(p => `<url><loc>${esc(absolute(p))}</loc></url>`),
+    '</urlset>',
+    '',
+  ].join('\n')
+  return { path: SITEMAP, file: fileOf(SITEMAP), status: 200, type: TYPES.xml!, body }
+}
+
 // Renders one URL, for the dev server. `url` includes the base path.
 export function render(url: string, manifest: Manifest | null = null): Rendered | null {
   const base = import.meta.env.BASE_URL
   const pathname = new URL(url, 'http://x').pathname
   if (!pathname.startsWith(base)) return null
   const path = '/' + pathname.slice(base.length)
+  if (path === SITEMAP) return sitemap()
   for (const route of routes) {
     const params = matchRoute(route, path)
     if (!params) continue
@@ -218,5 +244,7 @@ export function prerender(manifest: Manifest | null): Rendered[] {
   }
   const missing = notFound('/404.html', manifest)
   if (missing) out.push(missing)
+  const map = sitemap()
+  if (map) out.push(map)
   return out
 }
