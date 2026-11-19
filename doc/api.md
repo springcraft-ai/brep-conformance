@@ -1595,8 +1595,11 @@ Draws the solid as a viewer shows it: each face meshed on its own, and its edges
 
 Each face has its own vertices, so shading is smooth within a face and sharp where two faces meet.
 Every vertex lies on the face's surface, and `normals` gives the surface's outward unit normal at
-each vertex. The triangles are counter-clockwise seen from outside, and no triangle lies farther
-than `tolerance` from the face. Together the faces close the solid, as [`mesh`](#mesh) does.
+each vertex. Where the surface has no one normal, as at a cone's apex, each triangle meeting there
+has its own vertex there, whose normal is one the surface has along that triangle, such as the
+normal of the cone's ruling halfway across it. The triangles are counter-clockwise seen from
+outside, and no triangle lies farther than `tolerance` from the face. Together the faces close the
+solid, as [`mesh`](#mesh) does.
 
 `edges` holds each edge between two faces, whether they meet at an angle or smoothly, as where a
 fillet meets the face it rounds into. Each edge is given as a polyline whose every vertex lies on

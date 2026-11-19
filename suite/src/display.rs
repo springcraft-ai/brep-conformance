@@ -3,9 +3,9 @@
 //! that surface's outward normal, and its edges are the solid's creases: every vertex on one, every
 //! chord within the tolerance of one, every crease covered, and no more length than they have.
 
-use brep_protocol::{Display, Mesh};
+use brep_protocol::{Display, DisplayFace, Mesh};
 
-use crate::generate::{Curve3, DisplayExact};
+use crate::generate::{Curve3, DisplayExact, Surface};
 use crate::model::Vec3;
 
 fn sub(a: Vec3, b: Vec3) -> Vec3 {
@@ -64,6 +64,33 @@ fn length(c: &Curve3) -> f64 {
     }
 }
 
+/// Whether vertex `i` of face `f`, at a point where `s` has no normal, has in each triangle using
+/// it a normal `s` has along that triangle: the nearest of the normals across the triangle, halfway
+/// out from the vertex, within 1e-3. On a cone those are the normals of the rulings the triangle
+/// spans. A triangle of no area runs along nothing, and is passed over.
+fn along_each_triangle(f: &DisplayFace, i: usize, s: &Surface, on: f64) -> bool {
+    const STEPS: usize = 1024;
+    let (q, n) = (f.positions[i], f.normals[i]);
+    let fits = |[b, c]: [Vec3; 2]| {
+        (0..=STEPS).any(|j| {
+            let t = j as f64 / STEPS as f64;
+            let p = [0, 1, 2].map(|k| q[k] + ((1.0 - t) * (b[k] - q[k]) + t * (c[k] - q[k])) / 2.0);
+            gap(s.near(p).1, n) <= 1e-3
+        })
+    };
+    f.triangles
+        .iter()
+        .filter_map(|t| {
+            let at = t.iter().position(|&j| j as usize == i)?;
+            Some([t[(at + 1) % 3], t[(at + 2) % 3]].map(|j| f.positions[j as usize]))
+        })
+        .filter(|&[b, c]| {
+            let n = cross(sub(b, q), sub(c, q));
+            dot(n, n).sqrt() > on * on
+        })
+        .all(fits)
+}
+
 /// The faces as one mesh, each face's vertices its own.
 fn joined(d: &Display) -> Mesh {
     let mut m = Mesh::default();
@@ -117,17 +144,19 @@ pub(crate) fn checks(
         let (mut off, mut wrong, mut inward) = (0usize, 0usize, 0usize);
         let near = 1e-5 * scale.max(1.0);
         for f in &d.faces {
-            for (q, n) in f.positions.iter().zip(&f.normals) {
-                let hits: Vec<Vec3> = want
+            for (i, (q, n)) in f.positions.iter().zip(&f.normals).enumerate() {
+                let hits: Vec<_> = want
                     .surfaces
                     .iter()
-                    .map(|s| s.near(*q))
-                    .filter(|(g, _)| *g <= near)
-                    .map(|(_, m)| m)
+                    .filter(|s| s.near(*q).0 <= near)
                     .collect();
+                let fits = |s: &Surface| match s.apex() {
+                    Some(apex) if gap(apex, *q) <= near => along_each_triangle(f, i, s, on),
+                    _ => gap(s.near(*q).1, *n) <= 1e-3,
+                };
                 if hits.is_empty() {
                     off += 1;
-                } else if !hits.iter().any(|m| gap(*m, *n) <= 1e-3) {
+                } else if !hits.into_iter().any(fits) {
                     wrong += 1;
                 }
             }
@@ -262,6 +291,93 @@ mod tests {
             area: 6.0,
         };
         (Display { faces, edges }, want)
+    }
+
+    /// A cone 2 high on the unit disc about the origin, its apex up, in 64 slices, each slice's
+    /// triangle with its own vertex at the apex whose normal is the normal along the slice's middle.
+    fn cone() -> (Display, DisplayExact) {
+        let (n, h) = (64, 2.0);
+        let (cos, sin) = (h / (1.0f64 + h * h).sqrt(), 1.0 / (1.0f64 + h * h).sqrt());
+        let at = |i: usize| {
+            let a = std::f64::consts::TAU * i as f64 / n as f64;
+            [a.cos(), a.sin()]
+        };
+        let ruling = |a: f64| [cos * a.cos(), cos * a.sin(), sin];
+        let mut base = DisplayFace {
+            positions: vec![[0.0; 3]],
+            normals: vec![[0.0, 0.0, -1.0]],
+            triangles: vec![],
+        };
+        let mut side = DisplayFace {
+            positions: vec![],
+            normals: vec![],
+            triangles: vec![],
+        };
+        for i in 0..n {
+            let ([x0, y0], [x1, y1]) = (at(i), at(i + 1));
+            base.positions.push([x0, y0, 0.0]);
+            base.normals.push([0.0, 0.0, -1.0]);
+            base.triangles
+                .push([0, (i + 1) as u32 % n as u32 + 1, i as u32 + 1]);
+            let a = std::f64::consts::TAU * i as f64 / n as f64;
+            let step = std::f64::consts::TAU / n as f64;
+            let k = side.positions.len() as u32;
+            side.positions
+                .extend([[0.0, 0.0, h], [x0, y0, 0.0], [x1, y1, 0.0]]);
+            side.normals
+                .extend([ruling(a + step / 2.0), ruling(a), ruling(a + step)]);
+            side.triangles.push([k + 1, k + 2, k]);
+        }
+        let rim: Vec<Vec3> = (0..=n).map(at).map(|[x, y]| [x, y, 0.0]).collect();
+        let want = DisplayExact {
+            surfaces: vec![
+                Surface::Plane {
+                    p: [0.0; 3],
+                    n: [0.0, 0.0, -1.0],
+                },
+                Surface::Cone {
+                    apex: [0.0, 0.0, h],
+                    axis: [0.0, 0.0, -1.0],
+                    slope: 1.0 / h,
+                },
+            ],
+            creases: vec![Curve3::Circle {
+                c: [0.0; 3],
+                x: [1.0, 0.0, 0.0],
+                y: [0.0, 1.0, 0.0],
+                r: 1.0,
+            }],
+            volume: std::f64::consts::PI * h / 3.0,
+            area: std::f64::consts::PI * (1.0 + (1.0f64 + h * h).sqrt()),
+        };
+        (
+            Display {
+                faces: vec![base, side],
+                edges: vec![rim],
+            },
+            want,
+        )
+    }
+
+    #[test]
+    fn a_cone_whose_apex_triangles_each_have_their_own_normal_passes() {
+        let (d, want) = cone();
+        assert_eq!(held(&d, &want), [true, true, true]);
+    }
+
+    #[test]
+    fn a_cone_whose_apex_is_one_vertex_or_takes_a_normal_off_its_triangle_fails_the_vertices() {
+        let (mut d, want) = cone();
+        let side = &mut d.faces[1];
+        for t in side.triangles.iter_mut() {
+            t[2] = 0;
+        }
+        side.normals[0] = [0.0, 0.0, 1.0];
+        assert_eq!(held(&d, &want), [true, false, true]);
+        let (mut d, want) = cone();
+        let side = &mut d.faces[1];
+        side.normals[0] = side.normals[3 * 32];
+        assert_eq!(held(&d, &want), [true, false, true]);
     }
 
     fn held(d: &Display, want: &DisplayExact) -> Vec<bool> {

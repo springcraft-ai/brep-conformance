@@ -528,7 +528,7 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
     };
     let up = [0.0, 0.0, 1.0];
     let (shape, surfaces, creases, volume, area): (Shape, Vec<Surface>, Vec<Curve3>, f64, f64) =
-        match r.next_u64() % 4 {
+        match r.next_u64() % 5 {
             0 => {
                 let s = [r.range(1.5, 7.0), r.range(1.5, 7.0), r.range(1.5, 7.0)];
                 let hi = add(origin, s);
@@ -574,6 +574,25 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
                 let surfaces = vec![Surface::Ball { c: origin, r: rad }];
                 let area = 4.0 * PI * rad * rad;
                 (sphere(origin, rad).into(), surfaces, vec![], volume, area)
+            }
+            3 => {
+                let (rad, h) = (r.range(0.5, 3.0), r.range(1.0, 8.0));
+                let apex = [origin[0], origin[1], origin[2] + h];
+                let surfaces = vec![
+                    Surface::Plane {
+                        p: origin,
+                        n: [0.0, 0.0, -1.0],
+                    },
+                    Surface::Cone {
+                        apex,
+                        axis: [0.0, 0.0, -1.0],
+                        slope: rad / h,
+                    },
+                ];
+                let volume = PI * rad * rad * h / 3.0;
+                let area = PI * rad * (rad + (rad * rad + h * h).sqrt());
+                let shape = cone(Frame::at(origin), rad, 0.0, h);
+                (shape.into(), surfaces, vec![rim(origin, rad)], volume, area)
             }
             _ => {
                 let s = [r.range(3.0, 7.0), r.range(3.0, 7.0), r.range(1.5, 6.0)];

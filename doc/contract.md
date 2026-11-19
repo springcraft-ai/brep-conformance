@@ -359,14 +359,16 @@ as its row in the table above says:
   millimetre to either side of a face. The points of the first kind are `"on"`. The points to either
   side are `"in"` and `"out"`.
 - **B42, displays** (`displays`). The cases call [`display`](api.md#display) on a box, a cylinder, a
-  ball or a drilled box, within 0.01 mm. The faces, once joined, must close, with every edge used
-  once each way round, and must bound the volume within twice the tolerance times the area. Every
-  vertex must lie within 1e-5 of the solid's size of one of its surfaces, with that surface's
-  outward normal there to within 1e-3, and every triangle must face the way its normals do. The
+  ball, a cone or a drilled box, within 0.01 mm. The faces, once joined, must close, with every edge
+  used once each way round, and must bound the volume within twice the tolerance times the area.
+  Every vertex must lie within 1e-5 of the solid's size of one of its surfaces, with that surface's
+  outward normal there to within 1e-3, and every triangle must face the way its normals do. A vertex
+  at the cone's apex must, in each triangle that uses it, have to within 1e-3 one of the normals the
+  cone has across that triangle halfway out from the apex; a triangle of no area is passed over. The
   edges are judged in space by the rules B38 applies to a drawing: every vertex lies on a crease,
   every chord lies within the tolerance of a crease, every crease is covered, and the edges have no
-  more length than the creases have. A ball has no crease, and a cylinder's seam does not count as
-  one. None of these solids has two faces meeting smoothly, so their creases are every edge
+  more length than the creases have. A ball has no crease, a cone's one crease is its rim, and a
+  cylinder's seam does not count as one. None of these solids has two faces meeting smoothly, so their creases are every edge
   `display` draws.
 
 The face edits `delete_faces`, `move_faces` and `thicken` are treated as features, so B14 to B16

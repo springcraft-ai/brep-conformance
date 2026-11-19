@@ -309,6 +309,7 @@ pub fn test_path(c: &Case) -> &'static str {
             "box" => "queries/display-of-a-box",
             "cylinder" => "queries/display-of-a-cylinder",
             "sphere" => "queries/display-of-a-sphere",
+            "cone" => "queries/display-of-a-cone",
             _ => "queries/display-of-a-drilled-box",
         },
         // STEP.

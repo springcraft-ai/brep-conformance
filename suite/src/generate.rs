@@ -161,6 +161,9 @@ pub enum Surface {
     },
     /// The ball's surface about `c`, `r` from it.
     Ball { c: Vec3, r: f64 },
+    /// The pointed cone's side from `apex` along the unit `axis`, widening by `slope` of radius for
+    /// each unit of height, with the solid inside it.
+    Cone { apex: Vec3, axis: Vec3, slope: f64 },
 }
 
 impl Surface {
@@ -190,6 +193,30 @@ impl Surface {
                 let rho = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
                 ((rho - r).abs(), unit(v))
             }
+            Surface::Cone { apex, axis, slope } => {
+                let v = d(q, apex);
+                let t = v[0] * axis[0] + v[1] * axis[1] + v[2] * axis[2];
+                let radial = [0, 1, 2].map(|k| v[k] - t * axis[k]);
+                let rho =
+                    (radial[0] * radial[0] + radial[1] * radial[1] + radial[2] * radial[2]).sqrt();
+                let cos = 1.0 / (slope * slope + 1.0).sqrt();
+                let sin = slope * cos;
+                if t * cos + rho * sin < 0.0 {
+                    let far = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+                    return (far, [f64::NAN; 3]);
+                }
+                let out = unit(radial);
+                let n = [0, 1, 2].map(|k| cos * out[k] - sin * axis[k]);
+                ((rho * cos - t * sin).abs(), n)
+            }
+        }
+    }
+
+    /// The point where the surface has no normal, if it has one: a cone's apex.
+    pub fn apex(&self) -> Option<Vec3> {
+        match *self {
+            Surface::Cone { apex, .. } => Some(apex),
+            _ => None,
         }
     }
 }
@@ -7632,13 +7659,13 @@ mod tests {
     fn the_default_seed_draws_the_same_ids_on_every_platform() {
         let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
         let got = format!("{:016x}", fnv(&ids.join("\n")));
-        if got != "4095bb09151ed05f" {
+        if got != "ed2d45f7e28c6ad7" {
             // Every id, so a run elsewhere can be compared with this one case by case.
             for id in &ids {
                 eprintln!("id {id}");
             }
         }
-        assert_eq!(got, "4095bb09151ed05f");
+        assert_eq!(got, "ed2d45f7e28c6ad7");
     }
 
     #[test]
