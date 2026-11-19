@@ -1248,16 +1248,19 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
         check("B17", ok, "through STEP: ".to_string());
     }
     // B31: where a fillet meets a face the boundary is smooth, its normal the face's; where a
-    // chamfer or an unblended corner meets one it is a crease, with none.
-    let blend = matches!(
-        f.act,
-        Act::Fillet
-            | Act::Chamfer
-            | Act::ChamferTwo
-            | Act::FilletConic
-            | Act::FilletFaces
-            | Act::FullRound
-    );
+    // chamfer or an unblended corner meets one it is a crease, with none. A blend the kernel
+    // refused has no boundary to read: its refusal is scored once, as the act's.
+    let built = res.is_some();
+    let blend = built
+        && matches!(
+            f.act,
+            Act::Fillet
+                | Act::Chamfer
+                | Act::ChamferTwo
+                | Act::FilletConic
+                | Act::FilletFaces
+                | Act::FullRound
+        );
     let joints = want_prim.map(oracle::joints).unwrap_or_default();
     if blend && !joints.is_empty() && !k.unsupported().iter().any(|u| u == "normal") {
         let pts: Vec<Vec3> = joints.iter().map(|j| j.0).collect();
@@ -1281,7 +1284,7 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
         }
     }
     // B39: by its seams the blend bends as what it meets does.
-    if !c.exact.probes.is_empty() {
+    if built && !c.exact.probes.is_empty() {
         match attempt(|| apply(&a, f)) {
             Ok(s) => {
                 if let Some((ok, detail)) = probes_check(k, &s, &c.exact.probes) {
@@ -4306,6 +4309,74 @@ mod tests {
             assert_eq!(found[0]["clause"], "B25");
         }
         assert!(placing(Kind::Unsupported).is_empty());
+    }
+
+    /// A kernel that makes anything, answers normals, and refuses every fillet.
+    struct RefusesBlends;
+
+    impl Kernel for RefusesBlends {
+        type Solid = ();
+        fn name(&self) -> String {
+            "refuses-blends".into()
+        }
+        fn version(&self) -> String {
+            "0".into()
+        }
+        fn tolerance(&self) -> f64 {
+            TOLERANCE
+        }
+        fn make(&self, _p: &Primitive) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn union(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn intersection(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn difference(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn volume(&self, _s: &()) -> Result<f64, Refusal> {
+            Ok(0.0)
+        }
+        fn area(&self, _s: &()) -> Result<f64, Refusal> {
+            Ok(0.0)
+        }
+        fn check(&self, _s: &()) -> Result<Vec<String>, Refusal> {
+            Ok(Vec::new())
+        }
+        fn transform(&self, _s: &(), _m: [[f64; 4]; 3]) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn normal(&self, _s: &(), points: &[Vec3]) -> Result<Vec<Option<Vec3>>, Refusal> {
+            Ok(vec![None; points.len()])
+        }
+        fn fillet(&self, _s: &(), _edges: &[Vec3], _radius: f64) -> Result<(), Refusal> {
+            Err(Refusal::failed("the ball is larger than its face can hold"))
+        }
+    }
+
+    #[test]
+    fn a_refused_fillet_leaves_its_smoothness_unchecked() {
+        let all = cases(1);
+        let c = all
+            .iter()
+            .find(|c| {
+                matches!(&c.feature, Some(f) if f.act == Act::Fillet)
+                    && c.exact.chain.is_none()
+                    && matches!(&c.b, Shape::Prim(p) if !oracle::joints(p).is_empty())
+            })
+            .unwrap();
+        let v = run_feature(&RefusesBlends, c, c.feature.as_ref().unwrap());
+        assert_eq!(v["ops"][0]["outcome"], "refused", "{v}");
+        let checks = v["checks"].as_array().unwrap();
+        assert!(
+            !checks
+                .iter()
+                .any(|ch| ch["clause"] == "B31" || ch["clause"] == "B39"),
+            "{v}"
+        );
     }
 
     #[test]
