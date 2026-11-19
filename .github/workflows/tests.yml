@@ -20,3 +20,37 @@ jobs:
       # Also checks that the default seed draws the same case ids here as where they were made.
       - name: The workspace's tests pass
         run: cargo test --workspace
+
+  cpp-binding:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: The C++ binding builds without a warning and its tests pass
+        run: |
+          cmake -S protocol/cpp -B protocol/cpp/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build protocol/cpp/build
+          ctest --test-dir protocol/cpp/build --output-on-failure
+      # The two box kernels are one adapter written twice, so every case has one outcome for both.
+      - name: The C++ box kernel scores as the Rust one does
+        run: |
+          cargo build --release --locked -p brep-conformance
+          cargo build --release --locked -p brep-protocol --example box_kernel
+          for which in rust cpp; do
+              case $which in
+                  rust) adapter=target/release/examples/box_kernel ;;
+                  cpp) adapter=protocol/cpp/build/box_kernel ;;
+              esac
+              target/release/brep-conformance --adapter "$adapter" --threads 4 \
+                  --out "$which.json" > /dev/null
+          done
+          python3 -I - rust.json cpp.json <<'EOF'
+          import json, sys
+          a, b = (
+              {c["id"]: c["outcome"] for c in json.load(open(p))["cases"]} for p in sys.argv[1:]
+          )
+          differ = sorted(i for i in a.keys() | b.keys() if a.get(i) != b.get(i))
+          print(len(a), "cases,", len(differ), "with another outcome:", differ[:20])
+          sys.exit(1 if differ else 0)
+          EOF

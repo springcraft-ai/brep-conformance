@@ -62,8 +62,11 @@ output. [Calling a kernel](api.md#calling-a-kernel) is the whole of what it must
 
 2. **Put your kernel's calls in.** Each method of the `Kernel` trait in
    [`brep-protocol`](https://github.com/springcraft-ai/brep-conformance/tree/main/protocol) is one
-   function of [the API](api.md#constructors), and its body is your kernel's own call for it. An
-   adapter in another language answers the same lines of JSON without the crate.
+   function of [the API](api.md#constructors), and its body is your kernel's own call for it. A
+   kernel with a C++ API can use the
+   [C++ binding](https://github.com/springcraft-ai/brep-conformance/tree/main/protocol/cpp), whose
+   `Kernel` class has the same methods and whose example is the same box kernel. An adapter in
+   another language answers the same lines of JSON without either.
 
 3. **Declare the rest unsupported.** `unsupported` lists the functions your kernel has no one call
    for; `hello` reports the others, and the suite runs no case that needs a missing one. Never build

@@ -123,8 +123,9 @@ An adapter ignores fields it does not know. A command it does not know is refuse
 The crate [`brep-protocol`](../protocol/) is the Rust binding. It holds four things: the values as
 types; a `Kernel` trait with a method per function; `serve`, which answers the protocol with any
 implementation of the trait; and `Remote`, an implementation of the trait that forwards to workers.
-An adapter need not use the crate, because the protocol is lines of JSON, which a program in any
-language can answer.
+[`protocol/cpp`](../protocol/cpp/README.md) is the C++ binding, with the same values, a `Kernel`
+class and `serve`. An adapter need not use either, because the protocol is lines of JSON, which a
+program in any language can answer.
 
 ## Types
 

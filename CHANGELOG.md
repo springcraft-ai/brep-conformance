@@ -10,6 +10,8 @@ The first public release, and the version every later entry is measured against.
 ### Protocol
 
 - Protocol 1.0.0, as [doc/api.md](doc/api.md) defines it.
+- Its bindings: the Rust crate [`brep-protocol`](protocol/README.md), and a C++ binding in
+  [`protocol/cpp`](protocol/cpp/README.md).
 
 ### Scoring
 

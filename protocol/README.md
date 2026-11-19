@@ -21,7 +21,8 @@ This crate is the Rust binding of that protocol:
 - `Remote` is an implementation of `Kernel` that sends each call to worker processes that speak the
   protocol. The suite's runner uses it to drive an adapter.
 
-An adapter in another language does not need this crate. The protocol is lines of JSON.
+An adapter in another language does not need this crate. The protocol is lines of JSON. An adapter
+in C++ can use the C++ binding in [`cpp/`](cpp/README.md), which mirrors this crate.
 
 The crate depends on no kernel. Its dependencies are `serde_json`, and `libc` on Unix.
 

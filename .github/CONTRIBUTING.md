@@ -56,7 +56,9 @@ needs to say what it ran, and the tools the project is built and hosted with are
 
 Dependencies are under permissive licences only: [`deny.toml`](../deny.toml) lists them, and
 `cargo deny check licenses sources` checks every pull request. The GPL and the LGPL are refused. A
-dependency comes from crates.io, not from a git repository.
+dependency comes from crates.io, not from a git repository. The C++ binding in
+[`protocol/cpp`](../protocol/cpp/README.md) has one dependency, nlohmann/json under the MIT licence,
+which its build fetches by the hash of a release.
 
 ## Licence of contributions
 
