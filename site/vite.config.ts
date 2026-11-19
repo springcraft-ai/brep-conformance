@@ -1,4 +1,5 @@
-import { resolve } from 'node:path'
+import { readdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 
@@ -30,6 +31,13 @@ function devPages(): Plugin {
   }
 }
 
+function pageModules(): string[] {
+  return readdirSync(resolve(__dirname, 'src/pages'), { recursive: true, encoding: 'utf8' })
+    .filter(f => f.endsWith('.page.tsx'))
+    .map(f => join('src/pages', f))
+    .sort()
+}
+
 export default defineConfig(({ isSsrBuild }) => ({
   base: process.env.SITE_BASE ?? '/',
   appType: 'mpa',
@@ -44,7 +52,9 @@ export default defineConfig(({ isSsrBuild }) => ({
   build: {
     manifest: !isSsrBuild,
     emptyOutDir: true,
-    rollupOptions: isSsrBuild ? {} : { input: 'src/entry-client.tsx' },
+    // Each page is an input as well as a lazy import of the client entry, so its chunk keeps its
+    // own name in the manifest when another chunk shares code with it.
+    rollupOptions: isSsrBuild ? {} : { input: ['src/entry-client.tsx', ...pageModules()] },
   },
   test: {
     environment: 'node',
