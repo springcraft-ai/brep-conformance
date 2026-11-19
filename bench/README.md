@@ -63,8 +63,9 @@ session records the machine it ran on, and a difference from the table above sho
 
 [`setup.sh`](setup.sh) installs the toolchains, checks each kernel's adapter out under `adapters/`
 at the commit [`kernels.json`](../kernels.json) pins, and builds the suite and each adapter as the
-registry says. It also fetches NIST's STEP files with [`nist/fetch.py`](../nist/fetch.py), which
-takes them from the CDN first and accepts only the archive whose hash it pins. `results/build.txt`
+registry says. When the workflow's `nist` input is on, it also fetches NIST's STEP files with
+[`nist/fetch.py`](../nist/fetch.py), which takes them from the CDN first and accepts only the archive
+whose hash it pins. `results/build.txt`
 records every commit and tool version.
 
 [`run-session.sh`](run-session.sh) then runs one pass per kernel with these settings:
@@ -77,7 +78,7 @@ records every commit and tool version.
 | Adapters | Started by the registry's command, through [`adapters.py`](adapters.py)                                                    |
 | Release  | A pass whose adapter reports another release than `kernels.json` pins is invalid                                           |
 | Files    | Every pass runs with `--glb` and `--step` to a RAM disk; the suite draws a case after judging it, outside every timed call |
-| NIST     | Every pass runs with `--nist`, after its cases: each NIST file read and measured, an interop record apart from the score   |
+| NIST     | Off by default; with the workflow's `nist` input on, every pass runs with `--nist`                                         |
 
 When the last pass ends, each kernel's files are moved to `assets/<kernel>/`. A pass that did not
 finish cleanly fails the job, after its results are kept, so nothing is staged or published.
