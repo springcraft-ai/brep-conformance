@@ -17,9 +17,9 @@ on:
         options: [dev, prod, none]
         default: dev
       nist:
-        description: Also run NIST's STEP files, as step/read-nist cases
+        description: Run NIST's STEP files, as step/read-nist cases; untick to run without them
         type: boolean
-        default: false
+        default: true
       fail_bench:
         description: Fail the bench job on purpose, to test that the machine still ends
         type: boolean

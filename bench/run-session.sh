@@ -27,9 +27,9 @@ if [ "$threads" -gt "$count" ]; then
 fi
 export BENCH_CORES=$isolated
 
-# NIST's STEP files run, as step/read-nist cases, only when the session asks for them.
+# NIST's STEP files run, as step/read-nist cases, unless the session runs with BENCH_NIST=false.
 nist=()
-if [ "${BENCH_NIST:-false}" = true ]; then
+if [ "${BENCH_NIST:-true}" != false ]; then
     nist=(--nist "$root/nist")
 fi
 
@@ -39,7 +39,7 @@ cp /etc/benchmark-runner/environment results/environment.txt
 {
     echo "threads=$threads"
     echo "suite_args=$*"
-    echo "nist=${BENCH_NIST:-false}"
+    echo "nist=${BENCH_NIST:-true}"
     echo "exports=$shapes"
     echo "adapter_cores=$isolated"
     echo "runner_cores=$(taskset -cp $$ | sed 's/.*: //')"

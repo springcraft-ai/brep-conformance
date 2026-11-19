@@ -63,7 +63,7 @@ session records the machine it ran on, and a difference from the table above sho
 
 [`setup.sh`](setup.sh) installs the toolchains, checks each kernel's adapter out under `adapters/`
 at the commit [`kernels.json`](../kernels.json) pins, and builds the suite and each adapter as the
-registry says. When the workflow's `nist` input is on, it also fetches NIST's STEP files with
+registry says. Unless the workflow's `nist` input is off, it also fetches NIST's STEP files with
 [`nist/fetch.py`](../nist/fetch.py), which takes them from the CDN first and accepts only the archive
 whose hash it pins. `results/build.txt`
 records every commit and tool version.
@@ -78,7 +78,7 @@ records every commit and tool version.
 | Adapters | Started by the registry's command, through [`adapters.py`](adapters.py)                                                    |
 | Release  | A pass whose adapter reports another release than `kernels.json` pins is invalid                                           |
 | Files    | Every pass runs with `--glb` and `--step` to a RAM disk; the suite draws a case after judging it, outside every timed call |
-| NIST     | Off by default; with the workflow's `nist` input on, every pass runs with `--nist`, a `step/read-nist` case per NIST file  |
+| NIST     | On by default: every pass runs with `--nist`, a `step/read-nist` case per NIST file; off with the workflow's `nist` input  |
 
 When the last pass ends, each kernel's files are moved to `assets/<kernel>/`. A pass that did not
 finish cleanly fails the job, after its results are kept, so nothing is staged or published.

@@ -41,9 +41,9 @@ while read -r kernel repo commit; do
     done < <(python3 -I bench/adapters.py build "$root" "$kernel")
 done < results/adapters.txt
 
-# NIST's STEP files, for a session run with BENCH_NIST=true. fetch.py accepts only the archive whose
-# hash it pins.
-if [ "${BENCH_NIST:-false}" = true ]; then
+# NIST's STEP files, unless the session runs with BENCH_NIST=false. fetch.py accepts only the
+# archive whose hash it pins.
+if [ "${BENCH_NIST:-true}" != false ]; then
     python3 -I nist/fetch.py
 fi
 
