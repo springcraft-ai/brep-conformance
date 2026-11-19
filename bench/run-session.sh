@@ -27,12 +27,19 @@ if [ "$threads" -gt "$count" ]; then
 fi
 export BENCH_CORES=$isolated
 
+# NIST's STEP files run, as step/read-nist cases, only when the session asks for them.
+nist=()
+if [ "${BENCH_NIST:-false}" = true ]; then
+    nist=(--nist "$root/nist")
+fi
+
 rm -rf "$shapes" assets
 mkdir -p results "$shapes" assets
 cp /etc/benchmark-runner/environment results/environment.txt
 {
     echo "threads=$threads"
     echo "suite_args=$*"
+    echo "nist=${BENCH_NIST:-false}"
     echo "exports=$shapes"
     echo "adapter_cores=$isolated"
     echo "runner_cores=$(taskset -cp $$ | sed 's/.*: //')"
@@ -53,7 +60,7 @@ one() {
     echo "=== $name: started $(date -u '+%H:%M:%S')"
     local t0=$SECONDS rc=0
     "$suite" --adapter "$root/bench/pin.sh $adapter" --threads "$threads" \
-        --glb "$shapes/$name" --step "$shapes/$name" --nist "$root/nist" \
+        --glb "$shapes/$name" --step "$shapes/$name" "${nist[@]}" \
         --out "results/$name.json" "$@" > "results/$name.log" 2>&1 || rc=$?
     echo "=== $name: exit $rc after $((SECONDS - t0)) s"
     # A wrapper that could not place an adapter makes the suite record crashes for cases that

@@ -16,6 +16,10 @@ on:
         type: choice
         options: [dev, prod, none]
         default: dev
+      nist:
+        description: Also run NIST's STEP files, as step/read-nist cases
+        type: boolean
+        default: false
       fail_bench:
         description: Fail the bench job on purpose, to test that the machine still ends
         type: boolean
@@ -183,12 +187,15 @@ jobs:
 
       # The toolchains, and each adapter at the commit kernels.json pins. Nothing here is timed.
       - name: Build the suite and the adapters
+        env:
+          BENCH_NIST: ${{ inputs.nist }}
         run: bench/setup.sh
 
       # The session's settings are fixed in bench/README.md: 24 workers, one isolated core each.
       - name: Run the session
         env:
           SUITE_ARGS: ${{ inputs.suite_args }}
+          BENCH_NIST: ${{ inputs.nist }}
         run: |
           # shellcheck disable=SC2086
           bench/run-session.sh 24 $SUITE_ARGS

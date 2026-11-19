@@ -41,9 +41,11 @@ while read -r kernel repo commit; do
     done < <(python3 -I bench/adapters.py build "$root" "$kernel")
 done < results/adapters.txt
 
-# NIST's STEP files, which every pass reads as an interop record apart from the score. fetch.py
-# accepts only the archive whose hash it pins.
-python3 -I nist/fetch.py
+# NIST's STEP files, for a session run with BENCH_NIST=true. fetch.py accepts only the archive whose
+# hash it pins.
+if [ "${BENCH_NIST:-false}" = true ]; then
+    python3 -I nist/fetch.py
+fi
 
 {
     echo "brep_conformance=$(git rev-parse HEAD)"
