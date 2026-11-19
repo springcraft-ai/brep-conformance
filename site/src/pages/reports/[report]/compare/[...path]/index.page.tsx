@@ -1,4 +1,3 @@
-import { stripesFor } from './zebra'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useUrlSearch } from '@/components/search'
 import { Segmented } from '@/ds'
@@ -273,7 +272,6 @@ function TestPage(props: TestProps) {
               focus={focus}
               onPick={setFocus}
               missing={partialGrade}
-              stripes={stripesFor(test)}
               // A warning, only where the drawing is not the whole result of the kernel selected:
               // another kernel's drawing stands in, or the drawing is partial.
               by={

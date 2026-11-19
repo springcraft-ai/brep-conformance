@@ -31,8 +31,9 @@ export interface View {
 }
 
 export interface Look {
-  // Zebra stripes on the subject's faces in place of their shading; the ghosts keep theirs.
-  zebra: boolean
+  // Zebra lines over the subject's faces, this many over the half turn of the sky, or 0 for none;
+  // the ghosts are never lined.
+  zebra: number
   face: Rgb
   // The second subject's faces: a part's neighbour in an assembly, a mirror image, a piece.
   faceAlt: Rgb
@@ -54,6 +55,8 @@ const GHOST_EDGE_ALPHA = 0.55
 // The subject's edges darken the face they cross rather than paint over it, so a one-pixel line
 // split across two pixels still shows against a face in light or in shade.
 const EDGE_ALPHA = 0.6
+// Faint while zebra lines are on, so the edges do not hide the lines where faces meet.
+const ZEBRA_EDGE_ALPHA = 0.2
 
 // Invariant, so a ghost's colour pass lands on exactly the depth its depth pass wrote.
 const VERTEX = `#version 300 es
@@ -81,8 +84,8 @@ out vec4 o;
 void main() { o = vec4(0.0); }`
 
 // Both sides of a face are lit alike, so a mesh wound either way, or an open one, reads as a
-// surface. The colour is written premultiplied, as the canvas composites it. With `u_zebra` on,
-// the face is striped by its normal instead, in a dark and a light shade of its own tone.
+// surface. The colour is written premultiplied, as the canvas composites it. With `u_zebra` lines,
+// the shading dims a little and bright lines in the face's own tone are laid over it.
 const FACES = `#version 300 es
 precision highp float;
 in vec3 v_nrm;
@@ -93,14 +96,13 @@ out vec4 o;
 ${ZEBRA_GLSL}
 void main() {
   vec3 n = normalize(v_nrm);
-  if (u_zebra > 0.5) {
-    float b = zebra(n, u_toward, u_up, u_right);
-    vec3 c = mix(u_color.rgb * 0.15, mix(u_color.rgb, vec3(1.0), 0.7), b);
-    o = vec4(c * u_color.a, u_color.a);
-    return;
-  }
   float l = u_ambient + (1.0 - u_ambient) * abs(dot(n, u_light));
-  o = vec4(u_color.rgb * l * u_color.a, u_color.a);
+  vec3 c = u_color.rgb * l;
+  if (u_zebra > 0.5) {
+    float b = zebra(n, u_toward, u_up, u_right, u_zebra);
+    c = mix(c * 0.7, mix(u_color.rgb, vec3(1.0), 0.8), b * 0.9);
+  }
+  o = vec4(c * u_color.a, u_color.a);
 }`
 
 // Edges are WebGL lines one device pixel wide, drawn after the faces with the ordinary depth
@@ -562,7 +564,7 @@ export class Renderer {
       if (p === this.faces || p === this.marks) {
         gl.uniform3f(u('u_light'), light[0]! / len, light[1]! / len, light[2]! / len)
         gl.uniform1f(u('u_ambient'), AMBIENT)
-        gl.uniform1f(u('u_zebra'), p === this.faces && look.zebra ? 1 : 0)
+        gl.uniform1f(u('u_zebra'), p === this.faces ? look.zebra : 0)
       }
       return u('u_color')
     }
@@ -635,7 +637,7 @@ export class Renderer {
       gl.uniform4f(color, ...rgba(look.ghost[g.tone], GHOST_EDGE_ALPHA))
       stroke(g.mesh)
     }
-    gl.uniform4f(color, ...rgba(look.edge, EDGE_ALPHA))
+    gl.uniform4f(color, ...rgba(look.edge, look.zebra ? ZEBRA_EDGE_ALPHA : EDGE_ALPHA))
     if (this.subject) stroke(this.subject)
     if (this.alt) stroke(this.alt)
 

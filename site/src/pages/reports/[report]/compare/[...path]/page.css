@@ -704,3 +704,18 @@
     gap: 0 var(--sp-3);
   }
 }
+
+/* The display options' trigger, in the row of view controls, pushed to its end. */
+.bc-views > :last-child {
+  margin-left: auto;
+}
+.bc-views__more {
+  display: inline-block;
+  padding: 0 var(--sp-2);
+  color: var(--void-ink-2);
+  font: var(--fw-voice) var(--fs-voice-2) / 1 var(--font-voice);
+  letter-spacing: 0.1em;
+}
+.bc-views__more:hover {
+  color: var(--void-ink-1);
+}

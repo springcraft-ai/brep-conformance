@@ -27,8 +27,9 @@ export interface Scene extends Mesh {
   overlay?: Overlay
   // The box every view is fitted to, when it should stay put as the scene changes.
   frame?: { lo: Vec3; hi: Vec3 }
-  // The subject striped by its normals, to show where its faces meet unevenly.
-  zebra?: boolean
+  // Zebra lines over the subject, this many over the half turn of the sky, to show where its faces
+  // meet unevenly.
+  zebra?: number
 }
 
 export interface View {
@@ -627,7 +628,7 @@ export function mountScan(
         dpr,
       },
       {
-        zebra: !!scene.zebra,
+        zebra: scene.zebra ?? 0,
         face: colors.face,
         faceAlt: colors.faceAlt,
         edge: colors.edge,
