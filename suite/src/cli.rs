@@ -93,7 +93,18 @@ pub fn main() -> ExitCode {
     // `--family` runs only the named families, comma-separated, for a quick look at one area.
     let only: Option<Vec<String>> =
         value("--family").map(|f| f.split(',').map(String::from).collect());
-    let cases: Vec<_> = generate::cases(seed)
+    // `--nist DIR` adds a case for each of NIST's STEP files there, as `nist/fetch.py` leaves them.
+    let mut all = generate::cases(seed);
+    if let Some(dir) = value("--nist") {
+        match generate::nist_cases(std::path::Path::new(&dir)) {
+            Ok(more) => all.extend(more),
+            Err(e) => {
+                eprintln!("--nist: {e}");
+                return ExitCode::from(2);
+            }
+        }
+    }
+    let cases: Vec<_> = all
         .into_iter()
         .filter(|c| {
             only.as_ref().is_none_or(|o| {
@@ -123,16 +134,6 @@ pub fn main() -> ExitCode {
     let mut results = run::run(&kernel, &cases, threads, peer.as_ref(), &exports);
     if let Some(e) = &official {
         results["adapter"] = e.stamp();
-    }
-    // `--nist DIR` reads NIST's STEP files there as an interop record, apart from the score.
-    if let Some(dir) = value("--nist") {
-        match run::nist(&kernel, std::path::Path::new(&dir)) {
-            Ok(v) => results["nist"] = v,
-            Err(e) => {
-                eprintln!("--nist: {e}");
-                return ExitCode::from(2);
-            }
-        }
     }
     std::fs::write(&out, serde_json::to_string_pretty(&results).unwrap()).expect("writing results");
     print!("{}", report::summary(&results));

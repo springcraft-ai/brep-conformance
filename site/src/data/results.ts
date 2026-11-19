@@ -116,22 +116,6 @@ export interface Methodology {
   assetBase: string | null
 }
 
-// One NIST file as a run read it: what the file states, and what the kernel measured, or the
-// outcome and error of a read that gave no solid. Interop only; no part of the score.
-export interface NistRow {
-  file: string
-  statedVolume: number | null
-  statedArea: number | null
-  volume: number | null
-  area: number | null
-  valid: boolean | null
-  // Whether the measures agree with those the file states; null where it states none.
-  agrees: boolean | null
-  ms: number | null
-  outcome: string | null
-  error: string | null
-}
-
 export interface Report {
   identity: Identity
   environment: Environment
@@ -141,8 +125,6 @@ export interface Report {
   unsupported: string[]
   standIns: Record<string, string>
   cases: CaseRow[]
-  // Null where the run read no NIST files.
-  nist: NistRow[] | null
 }
 
 type Obj = Record<string, unknown>
@@ -281,58 +263,7 @@ export function parseReport(raw: unknown, at = 'report'): Report {
     unsupported: arr(o, 'unsupported', at).map(String),
     standIns: Object.fromEntries(Object.entries(standIns).map(([a, b]) => [a, String(b)])),
     cases: arr(o, 'cases', at).map((c, i) => parseCase(c, `${at}.cases[${i}]`, assetBase)),
-    nist:
-      o.nist === null || o.nist === undefined
-        ? null
-        : arr(o, 'nist', at).map((n, i) => parseNist(n, `${at}.nist[${i}]`)),
   }
-}
-
-function parseNist(raw: unknown, at: string): NistRow {
-  const o = obj(raw, at)
-  const boolOrNull = (k: string) => (typeof o[k] === 'boolean' ? (o[k] as boolean) : null)
-  const strOrNull = (k: string) => (typeof o[k] === 'string' ? (o[k] as string) : null)
-  return {
-    file: str(o, 'file', at),
-    statedVolume: numOrNull(o, 'stated_volume', at),
-    statedArea: numOrNull(o, 'stated_area', at),
-    volume: numOrNull(o, 'volume', at),
-    area: numOrNull(o, 'area', at),
-    valid: boolOrNull('valid'),
-    agrees: boolOrNull('agrees'),
-    ms: numOrNull(o, 'ms', at),
-    outcome: strOrNull('outcome'),
-    error: strOrNull('error'),
-  }
-}
-
-// The NIST files of a report's runs: one row per file any run read, with what the file states
-// and each kernel's row; `kernels` are those whose runs read any, in the order given.
-export interface NistFile {
-  file: string
-  statedVolume: number | null
-  statedArea: number | null
-  kernels: Record<string, NistRow>
-}
-
-export function nistIndex(latest: Report[]): { kernels: string[]; files: NistFile[] } {
-  const kernels: string[] = []
-  const files = new Map<string, NistFile>()
-  for (const r of latest) {
-    if (!r.nist) continue
-    kernels.push(r.identity.kernel)
-    for (const n of r.nist) {
-      const f = files.get(n.file) ?? {
-        file: n.file,
-        statedVolume: n.statedVolume,
-        statedArea: n.statedArea,
-        kernels: {},
-      }
-      f.kernels[r.identity.kernel] = n
-      files.set(n.file, f)
-    }
-  }
-  return { kernels, files: [...files.values()] }
 }
 
 const count = <K extends string>(keys: readonly K[]) =>

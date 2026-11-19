@@ -146,17 +146,6 @@ pub fn summary(results: &Value) -> String {
         out += &format!("{c:<8} {n:>7} {bad:>7}\n");
     }
     // Interop with a peer kernel scores neither kernel, so it is listed apart from the clauses.
-    if let Some(files) = results["nist"].as_array() {
-        let read = files.iter().filter(|f| f["volume"].is_number()).count();
-        let judged: Vec<bool> = files.iter().filter_map(|f| f["agrees"].as_bool()).collect();
-        let agree = judged.iter().filter(|&&a| a).count();
-        out += &format!(
-            "\nNIST files (interop, not scored): read {read} of {}; {agree} of the {} that \
-             state a volume or area agree with it\n",
-            files.len(),
-            judged.len()
-        );
-    }
     let interop: Vec<bool> = results["cases"]
         .as_array()
         .into_iter()
@@ -305,8 +294,6 @@ pub fn flat(results: &Value, verified: bool) -> Value {
         "unsupported": results["unsupported"],
         "stand_ins": results["stand_ins"],
         "cases": rows,
-        // Interop with NIST's files, as the run read them; no part of the summary above.
-        "nist": results["nist"],
     })
 }
 
@@ -333,23 +320,6 @@ mod tests {
         assert_eq!(flat["cases"][1]["group_low_confidence"], true);
         assert_eq!(flat["run"]["verified"], true);
         assert!(flat["cases"][0].get("exports").is_none());
-    }
-
-    #[test]
-    fn a_flat_report_keeps_the_nist_record_apart_from_the_score() {
-        let test = generate::cases(1).into_iter().next().unwrap().test;
-        let cases = json!([{"id": "x", "test": test, "result": "1e-7", "kind": "exact"}]);
-        let nist = json!([
-            {"file": "ap203/a.stp", "stated_volume": 2.0, "stated_area": null, "ms": 9.0,
-             "volume": 2.0, "area": 7.0, "valid": true, "agrees": true},
-            {"file": "ap203/b.stp", "stated_volume": null, "stated_area": null, "ms": 1.0,
-             "outcome": "refused", "error": "no reader"},
-        ]);
-        let with = flat(&json!({"cases": cases, "nist": nist}), false);
-        let without = flat(&json!({"cases": cases}), false);
-        assert_eq!(with["nist"], nist);
-        assert!(without["nist"].is_null());
-        assert_eq!(with["summary"], without["summary"]);
     }
 
     #[test]

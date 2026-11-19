@@ -364,6 +364,16 @@ pub fn views(c: &Case) -> Value {
     TABLE.with(|t| t.borrow_mut().clear());
     let (a, b) = (&c.a, &c.b);
     let mut extra = json!({});
+    // A NIST file has no shape of the suite's to show: only what the kernel read, which its runner
+    // keeps as `read`.
+    if c.nist.is_some() {
+        let v = vec![noted(
+            "read",
+            "The solid the kernel read from NIST's file, as it draws it.",
+            vec![solid("main", a, None)],
+        )];
+        return finish_views(c, extra, v);
+    }
     let v: Vec<Value> = if let Some(f) = &c.feature {
         // The points naming the edges or faces the act is asked of.
         extra["points"] = json!(f.points);

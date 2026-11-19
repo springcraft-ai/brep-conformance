@@ -85,8 +85,8 @@ opens without the network, with the viewer when `--viewer` names its WebAssembly
 `--timeout S` sets the limit on one call, 120 s by default. The summary ends with each operation's
 time in units of the run's calibration workload. `--peer "<command>"` starts a second kernel's
 adapter to read the STEP files this one writes, reported as interop apart from the score.
-`--nist DIR` reads NIST's STEP files there, which [`nist/fetch.py`](nist/fetch.py) downloads into
-[`nist/`](nist/NOTICE), against the measures their exporters state, also apart from the score.
+`--nist DIR` adds a case of `step/read-nist` for each of NIST's STEP files there, which
+[`nist/fetch.py`](nist/fetch.py) downloads into [`nist/`](nist/NOTICE).
 `--family A,B` runs only those tests: each a test path, a directory such as `fillets/`, or a
 family's name.
 

@@ -316,6 +316,7 @@ pub fn test_path(c: &Case) -> &'static str {
         "step-corpus" => "step/read-ap214",
         "step-revolved" => "step/read-ap214-revolved-solids",
         "step-tessellated" => "step/read-tessellated-ap242",
+        "step-nist" => "step/read-nist",
         "step-schemas" => match c.exact.step_as {
             Some(StepAs::Schema(crate::step::Schema::Ap203)) => "step/read-ap203",
             _ => "step/read-ap242",

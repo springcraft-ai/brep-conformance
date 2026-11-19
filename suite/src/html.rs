@@ -341,16 +341,6 @@ fn category(c: &Value, test: &str) -> String {
     }
 }
 
-/// The NIST category of an interop file, by the folder NIST ships it in.
-fn nist_category(file: &str) -> String {
-    match file.split('/').next().unwrap_or("") {
-        "ap203" => "NIST AP203".into(),
-        "ap203-pmi" => "NIST AP203 with PMI".into(),
-        "ap242" => "NIST AP242".into(),
-        other => format!("NIST {other}"),
-    }
-}
-
 /// One test's result for one kernel: mark, time, reason, and the lines that explain a failure.
 struct Cell {
     mark: Mark,
@@ -383,47 +373,6 @@ fn cell_of(c: &Value) -> Cell {
     Cell {
         mark,
         ms: case_ms(c),
-        why,
-        detail,
-    }
-}
-
-fn nist_cell(row: &Value) -> Cell {
-    let ms = row["ms"].as_f64().unwrap_or(0.0);
-    if let Some(e) = row["error"].as_str() {
-        let o = row["outcome"].as_str().unwrap_or("refused");
-        return Cell {
-            mark: Mark::NoAnswer,
-            ms,
-            why: format!("{o}: {}", e.lines().next().unwrap_or("")),
-            detail: vec![e.to_string()],
-        };
-    }
-    let off = |got: &str, want: &str| {
-        let (g, w) = (row[got].as_f64()?, row[want].as_f64()?);
-        Some(format!(
-            "{got} {g:.3} against the stated {w:.3} ({:+.2e} relative)",
-            (g - w) / w
-        ))
-    };
-    let detail: Vec<String> = [off("volume", "stated_volume"), off("area", "stated_area")]
-        .into_iter()
-        .flatten()
-        .collect();
-    let (mark, why) = match row["agrees"].as_bool() {
-        Some(true) => (Mark::Pass, String::new()),
-        Some(false) => (
-            Mark::Wrong,
-            "measures differ from what the exporter states".into(),
-        ),
-        None => (
-            Mark::Read,
-            "read; the file states nothing to compare".into(),
-        ),
-    };
-    Cell {
-        mark,
-        ms,
         why,
         detail,
     }
@@ -553,14 +502,11 @@ fn base64(bytes: &[u8]) -> String {
     out
 }
 
-/// One kernel's counts over every case and NIST file of its run.
+/// One kernel's counts over every case of its run.
 fn stats_of(run: &Value) -> Stats {
     let mut s = Stats::default();
     for c in cases(run) {
         s.add(&cell_of(c));
-    }
-    for row in run["nist"].as_array().into_iter().flatten() {
-        s.add(&nist_cell(row));
     }
     s
 }
@@ -639,27 +585,7 @@ pub fn page(runs: &[Value], viewer: Option<&[u8]>) -> String {
             }
             t.cells[ki] = cell;
         }
-        // Interop files under exchange, by the protocol folder NIST ships them in.
-        let exchange = order("step");
-        for row in r["nist"].as_array().into_iter().flatten() {
-            let file = row["file"].as_str().unwrap_or("?").to_string();
-            // Files from elsewhere come after the suite's own.
-            let key = (exchange, 1, nist_category(&file));
-            let t = tree
-                .entry(key)
-                .or_default()
-                .entry(file.clone())
-                .or_insert_with(|| Test {
-                    label: file.split('/').next_back().unwrap_or(&file).to_string(),
-                    id: file.clone(),
-                    inputs: String::new(),
-                    shapes: Value::Null,
-                    cells: (0..runs.len()).map(|_| blank()).collect(),
-                });
-            t.cells[ki] = nist_cell(row);
-        }
     }
-    // A kernel with no NIST record does not read STEP: its NIST cells are unsupported, as made.
 
     let mut h = String::new();
     h += "<title>B-rep Conformance</title>\n";
@@ -683,8 +609,7 @@ pub fn page(runs: &[Value], viewer: Option<&[u8]>) -> String {
             "<p class=\"fine\">Suite {} · contract {}. The suite and its adapters are written by the \
              authors of springrep. The other kernels' maintainers did not write these adapters \
              or choose these tests; each adapter's README lists how it drives its kernel. A \
-             failure can be the adapter's: corrections are welcome. NIST's STEP files are \
-             measured against what their exporters state, so an exporter can share the blame.</p>",
+             failure can be the adapter's: corrections are welcome.</p>",
             esc(r["suite"].as_str().unwrap_or("?")),
             esc(r["contract"].as_str().unwrap_or("?"))
         );

@@ -77,7 +77,7 @@ records every commit and tool version.
 | Adapters | Started by the registry's command, through [`adapters.py`](adapters.py)                                                    |
 | Release  | A pass whose adapter reports another release than `kernels.json` pins is invalid                                           |
 | Files    | Every pass runs with `--glb` and `--step` to a RAM disk; the suite draws a case after judging it, outside every timed call |
-| NIST     | Every pass runs with `--nist`, after its cases: each NIST file read and measured, an interop record apart from the score   |
+| NIST     | Every pass runs with `--nist`, which adds a `step/read-nist` case for each of NIST's STEP files                            |
 
 When the last pass ends, each kernel's files are moved to `assets/<kernel>/`. A pass that did not
 finish cleanly fails the job, after its results are kept, so nothing is staged or published.

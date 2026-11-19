@@ -2966,6 +2966,9 @@ fn run_case<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, peer: Option<&Re
     if let Some(l) = &c.exact.loft {
         return run_loft(k, c, l);
     }
+    if let Some(f) = &c.nist {
+        return run_nist(k, c, f);
+    }
     if c.step {
         return run_step(k, c);
     }
@@ -3615,59 +3618,66 @@ fn run_case<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, peer: Option<&Re
 /// How far a file's measure may be from what its exporter states: exporters round them.
 const STATED_REL: f64 = 1e-3;
 
-/// Interop with real exporters: each STEP file in `dir` that `validation.json` lists, read by the
-/// kernel and measured against the volume and area its exporter states, where it states them. It
-/// scores nothing; it is a record of which files the kernel reads as their exporters measured them.
-pub fn nist<K: Kernel>(k: &K, dir: &std::path::Path) -> Result<Value, String> {
+/// Runs one of NIST's STEP files (Q1, Q2): the kernel must read it and find what it read valid. The
+/// volume and area its exporter states are set beside the kernel's own, for the reader, and no check
+/// weighs them: they are another program's numbers, not the suite's.
+fn run_nist<K: Kernel<Solid: Clone + 'static>>(
+    k: &K,
+    c: &Case,
+    f: &crate::generate::NistFile,
+) -> Value {
+    let header = |outcome: Outcome, ops: Vec<Value>, checks: Vec<Value>| {
+        json!({"id": c.id, "family": c.family, "outcome": outcome.word(), "file": f.name,
+               "checks": checks, "ops": ops})
+    };
     if k.unsupported().iter().any(|u| u == "read_step") {
-        return Ok(Value::Null);
+        return header(Outcome::Unsupported, vec![], vec![]);
     }
-    let list = std::fs::read_to_string(dir.join("validation.json"))
-        .map_err(|e| format!("{}: {e}", dir.join("validation.json").display()))?;
-    let stated: Value = serde_json::from_str(&list).map_err(|e| e.to_string())?;
-    let files = stated
-        .as_object()
-        .ok_or("validation.json is not an object")?;
-    let mut out = Vec::new();
-    for (name, want) in files {
-        let text = std::fs::read_to_string(dir.join(name)).map_err(|e| format!("{name}: {e}"))?;
-        // A worker lost on the file before ends every call as it ended until reset, as between
-        // cases: each file starts afresh.
-        k.reset();
-        let t = Instant::now();
-        let got = attempt(|| {
-            let s = k.read_step(&text)?;
-            Ok(k.measure(&s))
-        });
-        let mut row = json!({"file": name, "stated_volume": want["volume"],
-                             "stated_area": want["area"],
-                             "ms": t.elapsed().as_secs_f64() * 1e3});
-        match got {
-            Ok(m) => {
-                row["volume"] = json!(m.volume);
-                row["area"] = json!(m.area);
-                row["valid"] = json!(m.issues.is_empty());
-                let near = |key: &str, v: f64| {
-                    want[key]
-                        .as_f64()
-                        .map(|w| (v - w).abs() <= STATED_REL * w.abs())
-                };
-                let judged: Vec<bool> = [near("volume", m.volume), near("area", m.area)]
-                    .into_iter()
-                    .flatten()
-                    .collect();
-                if !judged.is_empty() {
-                    row["agrees"] = json!(judged.iter().all(|&a| a));
-                }
-            }
-            Err(e) => {
-                row["outcome"] = json!(e.outcome().word());
-                row["error"] = json!(e.message());
-            }
+    let text = match std::fs::read_to_string(&f.path) {
+        Ok(t) => t,
+        Err(e) => {
+            let mut v = header(Outcome::Crash, vec![], vec![]);
+            v["error"] = json!(format!("{}: {e}", f.path.display()));
+            return v;
         }
-        out.push(row);
+    };
+    let t = Instant::now();
+    let read = attempt(|| {
+        let s = k.read_step(&text)?;
+        export::keep("read", "main", &s);
+        Ok(k.measure(&s))
+    });
+    let ms = t.elapsed().as_secs_f64() * 1e3;
+    let m = match read {
+        Ok(m) => m,
+        Err(e) => {
+            let op = json!({"op": "read_step", "outcome": e.outcome().word(), "ms": ms,
+                            "error": e.message()});
+            return header(e.outcome(), vec![op], vec![]);
+        }
+    };
+    let near =
+        |stated: Option<f64>, got: f64| stated.map(|w| (got - w).abs() <= STATED_REL * w.abs());
+    let judged: Vec<bool> = [near(f.stated_volume, m.volume), near(f.stated_area, m.area)]
+        .into_iter()
+        .flatten()
+        .collect();
+    let mut op = json!({"op": "read_step", "outcome": "done", "ms": ms, "volume": m.volume,
+                        "area": m.area, "stated_volume": f.stated_volume,
+                        "stated_area": f.stated_area});
+    if !judged.is_empty() {
+        op["agrees"] = json!(judged.iter().all(|&a| a));
     }
-    Ok(Value::Array(out))
+    let checks = vec![
+        record("Q1", true, "read the file"),
+        record("Q2", valid(&m.issues), m.issues.join("; ")),
+    ];
+    let outcome = if valid(&m.issues) {
+        Outcome::Pass
+    } else {
+        Outcome::Fail
+    };
+    header(outcome, vec![op], checks)
 }
 
 pub fn run<K: Kernel<Solid: Clone + 'static>>(
@@ -3759,7 +3769,7 @@ pub const ASSET_GENERATOR: &str = "6";
 fn judge(v: &mut Value, c: &Case) {
     let kind = if c.refuse {
         "rejection"
-    } else if c.exact.sound.is_some() {
+    } else if c.exact.sound.is_some() || c.nist.is_some() {
         "sound"
     } else {
         "exact"
@@ -4100,24 +4110,119 @@ mod tests {
         fn reset(&self) {
             self.0.store(false, std::sync::atomic::Ordering::SeqCst);
         }
+        fn display(&self, _s: &(), _tolerance: f64) -> Result<brep_protocol::Display, Refusal> {
+            Ok(brep_protocol::Display {
+                faces: vec![brep_protocol::DisplayFace {
+                    positions: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                    normals: vec![[0.0, 0.0, 1.0]; 3],
+                    triangles: vec![[0, 1, 2]],
+                }],
+                edges: Vec::new(),
+            })
+        }
+    }
+
+    /// Two NIST files in a folder of their own, the first one the test kernel hangs on.
+    fn nist_folder(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("nist-{tag}-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("ap203")).unwrap();
+        std::fs::write(
+            dir.join("validation.json"),
+            r#"{"ap203/a.stp": {}, "ap203/b.stp": {"volume": 1.0, "area": 7.0}}"#,
+        )
+        .unwrap();
+        std::fs::write(dir.join("ap203/a.stp"), "slow").unwrap();
+        std::fs::write(dir.join("ap203/b.stp"), "quick").unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_nist_case_is_sound_and_passes_when_the_kernel_reads_a_valid_solid() {
+        let dir = nist_folder("read");
+        let cases = crate::generate::nist_cases(&dir).unwrap();
+        let r = run(
+            &Sticky(Default::default()),
+            &cases,
+            1,
+            None,
+            &Exports::default(),
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let read = &r["cases"][1];
+        assert_eq!(read["test"], "step/read-nist");
+        assert_eq!(read["kind"], "sound");
+        assert_eq!(read["result"], "1e-7", "{read}");
+        let clauses: Vec<&str> = read["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["clause"].as_str().unwrap())
+            .collect();
+        assert_eq!(clauses, ["Q1", "Q2"]);
+        // What the file states is shown beside what the kernel measured, and judged by no check.
+        let op = &read["ops"][0];
+        assert_eq!(op["op"], "read_step");
+        assert_eq!(
+            (op["volume"].as_f64(), op["stated_volume"].as_f64()),
+            (Some(1.0), Some(1.0))
+        );
+        assert_eq!(op["agrees"], false);
+        assert_eq!(read["file"], "ap203/b.stp");
+    }
+
+    #[test]
+    fn a_nist_case_draws_the_solid_the_kernel_read_and_nothing_when_it_read_none() {
+        let dir = nist_folder("drawn");
+        let out = dir.join("files");
+        let cases = crate::generate::nist_cases(&dir).unwrap();
+        let ex = Exports {
+            glb: Some(out.clone()),
+            step: None,
+        };
+        let r = run(&Sticky(Default::default()), &cases, 1, None, &ex);
+        let read = &r["cases"][1]["exports"];
+        let key = read["glb"].as_str().unwrap_or_default().to_string();
+        let bytes = std::fs::read(out.join(&key)).unwrap_or_default();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(key.starts_with("step/read-nist/"), "{read}");
+        let n = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+        let gltf: Value = serde_json::from_slice(&bytes[20..20 + n]).unwrap();
+        let scenes: Vec<&str> = gltf["scenes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(scenes, ["read"]);
+        let roles: Vec<&Value> = gltf["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|n| n["extras"].get("role"))
+            .collect();
+        assert_eq!(roles, [&json!("main")]);
+        // The file the kernel hung on has nothing of the kernel's to draw.
+        assert!(
+            r["cases"][0]["exports"]["glb"].is_null(),
+            "{}",
+            r["cases"][0]["exports"]
+        );
     }
 
     #[test]
     fn a_nist_file_that_times_out_is_not_charged_to_the_files_after_it() {
-        let dir = std::env::temp_dir().join(format!("nist-sticky-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(
-            dir.join("validation.json"),
-            r#"{"a.stp": {}, "b.stp": {"volume": 1.0}}"#,
-        )
-        .unwrap();
-        std::fs::write(dir.join("a.stp"), "slow").unwrap();
-        std::fs::write(dir.join("b.stp"), "quick").unwrap();
-        let rows = nist(&Sticky(Default::default()), &dir).unwrap();
+        let dir = nist_folder("slow");
+        let cases = crate::generate::nist_cases(&dir).unwrap();
+        let r = run(
+            &Sticky(Default::default()),
+            &cases,
+            1,
+            None,
+            &Exports::default(),
+        );
         let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(rows[0]["outcome"], "timeout");
-        assert!(rows[1].get("outcome").is_none(), "{}", rows[1]);
-        assert_eq!(rows[1]["agrees"], true);
+        assert_eq!(r["cases"][0]["result"], "timeout");
+        assert_eq!(r["cases"][1]["result"], "1e-7", "{}", r["cases"][1]);
     }
 
     /// A kernel that makes and moves anything, and declines to place points in the way given.

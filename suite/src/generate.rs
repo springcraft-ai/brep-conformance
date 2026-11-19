@@ -567,6 +567,19 @@ pub struct Case {
     pub step: bool,
     /// The case moves `a` by this similarity, rows `[M | t]`, instead of combining it with `b`.
     pub matrix: Option<[[f64; 4]; 3]>,
+    /// The case reads one of NIST's STEP files instead of a shape of the suite's; `a` and `b` are
+    /// then unused.
+    pub nist: Option<NistFile>,
+}
+
+/// One of NIST's STEP files: its name below the folder `nist/fetch.py` fills, where it is, and the
+/// volume and area its exporter states in it, which a page shows and no check weighs.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NistFile {
+    pub name: String,
+    pub path: std::path::PathBuf,
+    pub stated_volume: Option<f64>,
+    pub stated_area: Option<f64>,
 }
 
 /// What a feature case does to its base solid.
@@ -2084,6 +2097,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 refuse: false,
                 step: false,
                 matrix: None,
+                nist: None,
             });
         }
     }
@@ -2108,6 +2122,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 refuse: false,
                 step: true,
                 matrix: None,
+                nist: None,
             });
         }
     }
@@ -2136,6 +2151,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 refuse: false,
                 step: false,
                 matrix: Some(matrix),
+                nist: None,
             });
         }
     }
@@ -2164,6 +2180,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 refuse: false,
                 step: false,
                 matrix: Some(matrix),
+                nist: None,
             });
         }
     }
@@ -2192,6 +2209,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 refuse: true,
                 step: false,
                 matrix: None,
+                nist: None,
             });
         }
     }
@@ -2225,6 +2243,7 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 refuse,
                 step: false,
                 matrix: None,
+                nist: None,
             });
         }
     }
@@ -2232,6 +2251,60 @@ pub fn cases(seed: u64) -> Vec<Case> {
         c.test = test_path(c);
     }
     out
+}
+
+/// A case for each of NIST's STEP files that `dir/validation.json` lists, as `nist/fetch.py` leaves
+/// them; an error names the files listed that are not there. Each id is the file's name.
+pub fn nist_cases(dir: &std::path::Path) -> Result<Vec<Case>, String> {
+    let list = dir.join("validation.json");
+    let text = std::fs::read_to_string(&list).map_err(|e| format!("{}: {e}", list.display()))?;
+    let listed: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let files = listed
+        .as_object()
+        .ok_or("validation.json is not an object")?;
+    let absent: Vec<&str> = files
+        .keys()
+        .filter(|name| !dir.join(name).is_file())
+        .map(String::as_str)
+        .collect();
+    if !absent.is_empty() {
+        return Err(format!(
+            "{} not in {}; run nist/fetch.py",
+            absent.join(", "),
+            dir.display()
+        ));
+    }
+    let unused: Shape = axis_box([0.0; 3], [1.0; 3]).into();
+    let still = Rigid {
+        r: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        t: [0.0; 3],
+    };
+    Ok(files
+        .iter()
+        .map(|(name, stated)| {
+            let mut c = Case {
+                id: format!("step-nist-{:016x}", fnv(&format!("step-nist@1|{name}"))),
+                family: "step-nist",
+                test: "",
+                a: unused.clone(),
+                b: unused.clone(),
+                exact: Exact::default(),
+                motion: still,
+                feature: None,
+                refuse: false,
+                step: false,
+                matrix: None,
+                nist: Some(NistFile {
+                    name: name.clone(),
+                    path: dir.join(name),
+                    stated_volume: stated["volume"].as_f64(),
+                    stated_area: stated["area"].as_f64(),
+                }),
+            };
+            c.test = test_path(&c);
+            c
+        })
+        .collect())
 }
 
 fn axis_box(lo: Vec3, hi: Vec3) -> Primitive {
@@ -7651,6 +7724,31 @@ fn invalid_point(r: &mut Rng) -> FeatureDraw {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn each_nist_file_listed_is_a_read_nist_case_with_what_its_exporter_states() {
+        let dir = std::env::temp_dir().join(format!("nist-cases-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("ap203")).unwrap();
+        let listed = r#"{"ap203/a.stp": {"volume": 2.0, "area": 9.5}, "ap203/b.stp": {}}"#;
+        std::fs::write(dir.join("validation.json"), listed).unwrap();
+        std::fs::write(dir.join("ap203/a.stp"), "").unwrap();
+        let missing = nist_cases(&dir).err().unwrap_or_default();
+        std::fs::write(dir.join("ap203/b.stp"), "").unwrap();
+        let cases = nist_cases(&dir).unwrap();
+        let again = nist_cases(&dir).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(missing.contains("ap203/b.stp"), "{missing}");
+        assert_eq!(cases.len(), 2);
+        let a = &cases[0];
+        assert_eq!((a.family, a.test), ("step-nist", "step/read-nist"));
+        assert!(a.id.starts_with("step-nist-") && a.id != cases[1].id);
+        assert_eq!(a.id, again[0].id);
+        let f = a.nist.as_ref().unwrap();
+        assert_eq!(f.name, "ap203/a.stp");
+        assert_eq!(f.path, dir.join("ap203/a.stp"));
+        assert_eq!((f.stated_volume, f.stated_area), (Some(2.0), Some(9.5)));
+        assert_eq!(cases[1].nist.as_ref().unwrap().stated_volume, None);
+    }
 
     // Every id of the default seed, as one hash. Every platform must draw these ids; CI runs on
     // another platform than most development, so a value that hashes differently fails here. A
