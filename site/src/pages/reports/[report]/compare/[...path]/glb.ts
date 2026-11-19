@@ -49,7 +49,7 @@ interface Gltf {
   bufferViews?: BufferView[]
   meshes?: { primitives: Primitive[] }[]
   nodes?: Node[]
-  scenes?: { nodes: number[]; name?: string; extras?: { note?: string } }[]
+  scenes?: { nodes: number[]; name?: string; extras?: { note?: string; alt?: string } }[]
   scene?: number
   extensionsRequired?: string[]
 }
@@ -229,6 +229,8 @@ export function parseOverlay(buf: ArrayBuffer): Overlay {
 export interface GlbView {
   name: string
   note?: string
+  // What the second tone marks, where the view draws one.
+  alt?: string
   // Each role's solids as one shape: `main`, `alt`, and the suite's ghosts.
   solids: { role: string; shape: Shape }[]
 }
@@ -267,6 +269,7 @@ export function parseViews(buf: ArrayBuffer): GlbView[] {
     return {
       name: scene.name ?? `view ${n + 1}`,
       note: scene.extras?.note,
+      alt: typeof scene.extras?.alt === 'string' ? scene.extras.alt : undefined,
       solids: [...byRole].map(([role, starts]) => ({
         role,
         shape: gather(g, bin, starts, () => false),

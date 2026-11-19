@@ -41,6 +41,8 @@ pub struct Solid<'a> {
 pub struct View<'a> {
     pub name: &'a str,
     pub note: Option<&'a str>,
+    /// What the second tone marks, where the view has one.
+    pub alt: Option<&'a str>,
     pub solids: Vec<Solid<'a>>,
 }
 
@@ -255,8 +257,15 @@ pub fn glb(views: &[View], extras: Value, generator: &str) -> Vec<u8> {
         }
         nodes.push(root);
         let mut scene = json!({"name": v.name, "nodes": [nodes.len() - 1]});
+        let mut extras = serde_json::Map::new();
         if let Some(note) = v.note {
-            scene["extras"] = json!({"note": note});
+            extras.insert("note".into(), json!(note));
+        }
+        if let Some(alt) = v.alt {
+            extras.insert("alt".into(), json!(alt));
+        }
+        if !extras.is_empty() {
+            scene["extras"] = Value::Object(extras);
         }
         scenes.push(scene);
     }
@@ -367,6 +376,7 @@ mod tests {
             View {
                 name: "a",
                 note: Some("first"),
+                alt: Some("second"),
                 solids: vec![Solid {
                     key: "t".into(),
                     role: "main",
@@ -376,6 +386,7 @@ mod tests {
             View {
                 name: "b",
                 note: None,
+                alt: None,
                 solids: vec![Solid {
                     key: "t".into(),
                     role: "main",
@@ -388,6 +399,8 @@ mod tests {
         assert_eq!(gltf["extras"]["id"], "x");
         assert_eq!(gltf["scenes"].as_array().unwrap().len(), 2);
         assert_eq!(gltf["scenes"][0]["extras"]["note"], "first");
+        assert_eq!(gltf["scenes"][0]["extras"]["alt"], "second");
+        assert!(gltf["scenes"][1].get("extras").is_none());
         assert_eq!(gltf["meshes"].as_array().unwrap().len(), 1);
         let prims = &gltf["meshes"][0]["primitives"];
         assert_eq!(
@@ -432,6 +445,7 @@ mod tests {
         let views = [View {
             name: "empty",
             note: None,
+            alt: None,
             solids: vec![Solid {
                 key: "e".into(),
                 role: "main",

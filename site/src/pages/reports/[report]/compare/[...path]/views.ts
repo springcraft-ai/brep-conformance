@@ -63,6 +63,11 @@ export function tonesOf(v: GlbView): { main: Shape; alt: Shape } {
   }
 }
 
+// What the key says the second tone marks, or null where the view draws none.
+export function toneKeyOf(v: GlbView): string | null {
+  return v.alt && tonesOf(v).alt.triangles.length ? v.alt : null
+}
+
 // The ghosts behind view `v`: its operands whole, from the views they are the subjects of. The
 // scan view hides what of them lies behind the subject or on its faces.
 export function ghostsOf(views: GlbView[], v: GlbView): Ghost[] {

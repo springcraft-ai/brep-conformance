@@ -378,6 +378,7 @@ pub(super) fn export_case<K: Kernel<Solid: Clone + 'static>>(
             .map(|(view, row)| crate::glb::View {
                 name: view["name"].as_str().unwrap_or("view"),
                 note: view["note"].as_str(),
+                alt: view["alt"].as_str(),
                 solids: row
                     .iter()
                     .map(|(key, role, d)| crate::glb::Solid {

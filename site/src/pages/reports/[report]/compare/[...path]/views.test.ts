@@ -1,6 +1,33 @@
 import { describe, expect, it } from 'vitest'
-import { overlayOf } from './glb'
-import { keysOf } from './views'
+import { overlayOf, type GlbView, type Shape } from './glb'
+import { keysOf, toneKeyOf } from './views'
+
+const tri = (n: number): Shape => ({
+  positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+  normals: new Float32Array(9),
+  triangles: new Uint32Array(n ? [0, 1, 2] : []),
+  edges: new Float32Array(0),
+})
+
+describe('toneKeyOf', () => {
+  const view = (alt: string | undefined, altFaces: number): GlbView => ({
+    name: 'loose faces',
+    alt,
+    solids: [
+      { role: 'main', shape: tri(1) },
+      { role: 'alt', shape: tri(altFaces) },
+    ],
+  })
+
+  it('names what the second tone marks, where the view draws it', () => {
+    expect(toneKeyOf(view('written inside out', 1))).toBe('written inside out')
+  })
+
+  it('keys nothing for a view with no second tone, or a file that names none', () => {
+    expect(toneKeyOf(view('written inside out', 0))).toBeNull()
+    expect(toneKeyOf(view(undefined, 1))).toBeNull()
+  })
+})
 
 describe('keysOf', () => {
   it('names each mark a query’s answers are drawn with, once each', () => {

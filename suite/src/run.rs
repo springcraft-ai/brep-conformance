@@ -3760,7 +3760,7 @@ pub const TIER_WORDS: [&str; 5] = ["1e-7", "1e-6", "1e-5", "1e-3", "fail"];
 
 /// The version of what draws a test's shape files: part of each file's name, so a change here
 /// names new files. springrep-adapter's tests fail when springrep's `display` changes until it does.
-pub const ASSET_GENERATOR: &str = "6";
+pub const ASSET_GENERATOR: &str = "7";
 
 /// Adds a case's verdict to its result: its `kind`; its `result`, the loosest tier among its
 /// checks or how it ended without an answer; for one that is not a pass at the suite's tolerance,

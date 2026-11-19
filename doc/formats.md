@@ -167,13 +167,15 @@ last. An operand's ghost behind a union of that operand is empty, so it is not c
 drawn with [`display`](api.md#display) within `DRAWN` (5e-4) of its diagonal, and each STEP file is
 written with [`write_step`](api.md#write_step).
 
-The GLB holds one scene per view, named as the view. Each scene has one node per solid. A node is
-named by its role (`main`, `alt`, `ghost`, `ghost2`) and also carries the role as `extras.role`. Its
-mesh has the display's faces as triangles and the display's edges as lines. Positions are in the
-suite's millimetres with z up, under a root node that scales them to glTF's metres and turns z to
-glTF's y, which every glTF viewer takes as up. The file's `extras` carry the case's `id`, `test` and
-`hash`, the `kernel` that drew it, the case's `outcome` and `result`, and the views' `points`, `box`
-and `plane`. The file requires `KHR_mesh_quantization`, which three.js, Blender and `<model-viewer>`
+The GLB holds one scene per view, named as the view. A scene's `extras` carry the view's `note`, the
+line saying what it shows, and, where the view draws solids in the second tone, `alt`, what that
+tone marks, such as `written inside out`. Each scene has one node per solid. A node is named by its
+role (`main`, `alt`, `ghost`, `ghost2`) and also carries the role as `extras.role`. Its mesh has the
+display's faces as triangles and the display's edges as lines. Positions are in the suite's
+millimetres with z up, under a root node that scales them to glTF's metres and turns z to glTF's y,
+which every glTF viewer takes as up. The file's `extras` carry the case's `id`, `test` and `hash`,
+the `kernel` that drew it, the case's `outcome` and `result`, and the views' `points`, `box` and
+`plane`. The file requires `KHR_mesh_quantization`, which three.js, Blender and `<model-viewer>`
 read. Positions are `SHORT` over the solid's box, and the node's `translation` and uniform `scale`
 take them back to millimetres. Normals are normalized `BYTE`. Both primitives are indexed, with
 `UNSIGNED_SHORT` where the vertices fit.

@@ -36,7 +36,6 @@
 
 .bc-scan {
   --scan-edge: var(--ground-void);
-  --scan-face: color-mix(in srgb, var(--void-ink-2) 85%, var(--ground-void));
   --scan-fail: var(--error-void);
   --scan-focus: var(--accent);
   --scan-annot: var(--void-ink-3);
@@ -44,7 +43,6 @@
   --scan-guide: var(--series-1);
   --scan-quiet: var(--void-ink-2);
   --scan-concave: var(--series-5);
-  --scan-face-alt: color-mix(in srgb, var(--series-1) 30%, var(--scan-face));
   --scan-ghost: var(--series-1);
   --scan-ghost2: var(--series-3);
   position: relative;
@@ -171,6 +169,11 @@
   flex: none;
   width: 7px;
   height: 7px;
+}
+.bc-key--alt {
+  width: 10px;
+  height: 10px;
+  background: var(--scan-face-alt);
 }
 .bc-key--held {
   background: var(--error-void);
@@ -344,7 +347,10 @@
   gap: var(--sp-7);
   align-items: start;
 }
+/* The face tones live here, not on .bc-scan, so the legend under the drawing can key them. */
 .bc-cases__shape {
+  --scan-face: color-mix(in srgb, var(--void-ink-2) 85%, var(--ground-void));
+  --scan-face-alt: color-mix(in srgb, var(--series-1) 30%, var(--scan-face));
   min-width: 0;
 }
 .bc-caselist {

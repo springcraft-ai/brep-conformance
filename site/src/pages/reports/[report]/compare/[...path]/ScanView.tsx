@@ -4,7 +4,7 @@ import { Annot } from '@/components'
 import { zoomKeyOf } from './format'
 import type { Mark, ScanHandle } from './scan'
 import type { Loaded } from './viewer'
-import { firstView, ghostsOf, keysOf, operandsLabel, subjectOf, tonesOf } from './views'
+import { firstView, ghostsOf, keysOf, operandsLabel, subjectOf, toneKeyOf, tonesOf } from './views'
 
 type Status = 'loading' | 'ready' | 'missing' | 'unreadable' | 'undrawn'
 
@@ -85,6 +85,7 @@ export function ScanView({
   const view = shown < 0 ? null : views[shown]!
   const subject = useMemo(() => (view ? subjectOf(view) : null), [view])
   const tones = useMemo(() => (view ? tonesOf(view) : null), [view])
+  const toneKey = view ? toneKeyOf(view) : null
   // A view a kernel that made no result left empty, where a ghost alone would read as the result:
   // show neither. A kernel that passed made every view, so its empty view is an empty result.
   const noResult = !!missing && !!view && !subject?.triangles.length
@@ -270,6 +271,11 @@ export function ScanView({
       </p>
       <div className="bc-shape__foot">
         <div className="bc-shape__legend">
+          {toneKey && (
+            <span>
+              <i className="bc-key bc-key--alt" /> {toneKey}
+            </span>
+          )}
           {keys.map(k => (
             <span key={k.label}>
               <i className={`bc-key bc-key--${k.mark}`} /> {k.label}

@@ -82,6 +82,16 @@ fn noted(name: &str, note: &str, solids: Vec<Value>) -> Value {
     json!({"name": name, "note": note, "solids": solids})
 }
 
+/// A view that may draw solids in the second tone, and what that tone marks, for the key.
+fn toned(name: &str, note: &str, alt: &str, solids: Vec<Value>) -> Value {
+    let two = solids.iter().any(|s| s["role"] == "alt");
+    let mut v = noted(name, note, solids);
+    if two {
+        v["alt"] = json!(alt);
+    }
+    v
+}
+
 fn bool(op: Op, a: &Shape, b: &Shape) -> Shape {
     Shape::bool(op, a.clone(), b.clone())
 }
@@ -476,9 +486,10 @@ pub fn views(c: &Case) -> Value {
         let half = half_space(a, o, n);
         extra["plane"] = json!({"origin": o, "normal": n});
         vec![
-            noted(
+            toned(
                 "pieces",
                 "The two pieces the plane cuts the solid into, one in each tone.",
+                "the other piece",
                 vec![
                     solid("main", &bool(Op::Intersection, a, &half), None),
                     solid("alt", &bool(Op::Difference, a, &half), None),
@@ -509,9 +520,10 @@ pub fn views(c: &Case) -> Value {
         ]
     } else if let Some(m) = &c.exact.mirror {
         vec![
-            noted(
+            toned(
                 "joined",
                 "The part and its mirror image, which the kernel must join.",
+                "the mirror image",
                 vec![solid("main", a, None), solid("alt", a, Some(m.matrix))],
             ),
             view("part", vec![solid("main", a, None)]),
@@ -540,9 +552,10 @@ pub fn views(c: &Case) -> Value {
             .collect();
         vec![
             view("result", vec![json!({"role": "main", "s": result})]),
-            noted(
+            toned(
                 "pieces",
                 "Every solid of the pattern or the many-solid boolean, before they are combined.",
+                "a tool",
                 pieces,
             ),
         ]
@@ -559,9 +572,10 @@ pub fn views(c: &Case) -> Value {
             })
             .collect();
         extra["clashes"] = json!(pairs);
-        vec![noted(
+        vec![toned(
             "parts",
             "The parts at their placements; those in the second tone clash with another, which the kernel must find.",
+            "clashes with another part",
             parts,
         )]
     } else if let Some(l) = &c.exact.loft {
@@ -672,9 +686,10 @@ pub fn views(c: &Case) -> Value {
             })
             .collect();
         vec![
-            noted(
+            toned(
                 "loose faces",
                 "Each face is written on its own, apart from its neighbours by up to 0.0001 mm; faces in the second tone are written inside out. Drawn pulled apart.",
+                "written inside out",
                 plates,
             ),
             noted(
@@ -775,6 +790,26 @@ mod tests {
             }
         }
         assert!(seen.iter().all(|&n| n > 0), "{seen:?}");
+    }
+
+    #[test]
+    fn every_view_drawn_in_two_tones_names_its_second() {
+        let mut seen = std::collections::BTreeSet::new();
+        for c in crate::generate::cases(1) {
+            let spec = views(&c);
+            for v in spec["views"].as_array().unwrap() {
+                let solids = v["solids"].as_array().unwrap();
+                let two = solids.iter().any(|s| s["role"] == "alt");
+                let alt = v["alt"].as_str();
+                assert_eq!(two, alt.is_some(), "{} {}", c.id, v["name"]);
+                if let Some(a) = alt {
+                    assert!(!a.is_empty(), "{}", c.id);
+                    seen.insert(a.to_string());
+                }
+            }
+        }
+        // Loose faces, an assembly's clashing parts, a split, a mirror, and a pattern's tools.
+        assert_eq!(seen.len(), 5, "{seen:?}");
     }
 
     #[test]
