@@ -236,7 +236,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-3) var(--sp-6);
-  align-items: end;
+  align-items: center;
   margin-top: var(--sp-4);
 }
 
@@ -705,12 +705,39 @@
   }
 }
 
-/* The zebra dropdown with its label beside it, so the row keeps the checkboxes' height. */
+/* The zebra choice, quiet as the drawing's hints and held at the end of the row: what comes before
+   it changes from view to view, and must not move it. Gone where the page is too narrow to inspect
+   a drawing that closely. */
 .bc-views__zebra {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  align-self: center;
+  position: relative;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.bc-views__zebra select {
+  appearance: none;
+  padding: 0 1.2em 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--void-ink-3);
+  font: var(--fw-voice) var(--fs-voice-2) / 1.3 var(--font-voice);
+  cursor: pointer;
+}
+.bc-views__zebra select:hover,
+.bc-views__zebra select:focus-visible {
   color: var(--void-ink-1);
-  font: var(--fw-voice) var(--fs-voice-2) / 1 var(--font-voice);
+}
+.bc-views__zebra::after {
+  content: '▾';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--void-ink-3);
+  font-size: 0.8em;
+  pointer-events: none;
+}
+@media (max-width: 720px) {
+  .bc-views__zebra {
+    display: none;
+  }
 }
