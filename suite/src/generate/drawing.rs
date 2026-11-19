@@ -2,6 +2,7 @@
 //! hidden-line projection, whose seen and hidden stretches come from exact ray intervals.
 
 use super::*;
+use crate::portable::Portable;
 
 /// Points about a box, cylinder, cone, ball, ring or drilled box, each off the boundary along its
 /// normal by up to a fraction of the local radius, and the principal curvatures where the boundary
@@ -38,9 +39,9 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
             let height = r.range((2.0 * radius).max(2.0), 9.0);
             for _ in 0..6 {
                 let (a, z) = (r.range(0.0, TAU), height * r.range(0.3, 0.7));
-                let n = [a.cos(), a.sin(), 0.0];
+                let n = [a.pcos(), a.psin(), 0.0];
                 let q = [radius * n[0], radius * n[1], z];
-                let around = [-a.sin(), a.cos(), 0.0];
+                let around = [-a.psin(), a.pcos(), 0.0];
                 at.push((
                     q,
                     n,
@@ -52,7 +53,11 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
             for _ in 0..2 {
                 let (a, rho) = (r.range(0.0, TAU), radius * r.range(0.0, 0.5));
                 let top = r.next_u64().is_multiple_of(2);
-                let q = [rho * a.cos(), rho * a.sin(), if top { height } else { 0.0 }];
+                let q = [
+                    rho * a.pcos(),
+                    rho * a.psin(),
+                    if top { height } else { 0.0 },
+                ];
                 let n = [0.0, 0.0, if top { 1.0 } else { -1.0 }];
                 at.push((
                     q,
@@ -81,9 +86,9 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
             for _ in 0..8 {
                 let (a, z) = (r.range(0.0, TAU), height * r.range(0.3, 0.7));
                 let rho = bottom - slope * z;
-                let n = [a.cos() / lean, a.sin() / lean, slope / lean];
-                let q = [rho * a.cos(), rho * a.sin(), z];
-                let around = [-a.sin(), a.cos(), 0.0];
+                let n = [a.pcos() / lean, a.psin() / lean, slope / lean];
+                let q = [rho * a.pcos(), rho * a.psin(), z];
+                let around = [-a.psin(), a.pcos(), 0.0];
                 at.push((
                     q,
                     n,
@@ -117,12 +122,12 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
             let major = minor + r.range(0.5, 4.0);
             for _ in 0..8 {
                 let (a, b) = (r.range(0.0, TAU), r.range(0.0, TAU));
-                let n = [b.cos() * a.cos(), b.cos() * a.sin(), b.sin()];
-                let ring = major + minor * b.cos();
-                let q = [ring * a.cos(), ring * a.sin(), minor * b.sin()];
-                let want = [1.0 / minor, b.cos() / ring];
+                let n = [b.pcos() * a.pcos(), b.pcos() * a.psin(), b.psin()];
+                let ring = major + minor * b.pcos();
+                let q = [ring * a.pcos(), ring * a.psin(), minor * b.psin()];
+                let want = [1.0 / minor, b.pcos() / ring];
                 // 1/r is the tube's own curvature, along its meridian.
-                let meridian = [-b.sin() * a.cos(), -b.sin() * a.sin(), b.cos()];
+                let meridian = [-b.psin() * a.pcos(), -b.psin() * a.psin(), b.pcos()];
                 at.push((q, n, minor * r.range(-0.3, 0.3), want, meridian));
             }
             Primitive::Torus {
@@ -138,8 +143,8 @@ pub(super) fn curvature_case(r: &mut Rng) -> Drawn {
             let radius = size[0].min(size[1]) * r.range(0.15, 0.3);
             for _ in 0..5 {
                 let (a, z) = (r.range(0.0, TAU), size[2] * r.range(0.3, 0.7));
-                let n = [-a.cos(), -a.sin(), 0.0];
-                let q = [c[0] + radius * a.cos(), c[1] + radius * a.sin(), z];
+                let n = [-a.pcos(), -a.psin(), 0.0];
+                let q = [c[0] + radius * a.pcos(), c[1] + radius * a.psin(), z];
                 // The first curvature, zero, runs along the hole's axis.
                 at.push((
                     q,
@@ -325,9 +330,9 @@ fn cylinder_curves(c: Vec3, r: f64, h: f64, d: Vec3) -> Vec<Curve3> {
         r,
     };
     let mut out = vec![rim(0.0), rim(h)];
-    let a0 = d[1].atan2(d[0]);
+    let a0 = d[1].patan2(d[0]);
     for a in [a0 + PI / 2.0, a0 - PI / 2.0] {
-        let p = [c[0] + r * a.cos(), c[1] + r * a.sin(), c[2]];
+        let p = [c[0] + r * a.pcos(), c[1] + r * a.psin(), c[2]];
         out.push(Curve3::Line {
             a: p,
             b: [p[0], p[1], p[2] + h],
@@ -565,7 +570,7 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
             }
             2 => {
                 let rad = r.range(0.5, 5.0);
-                let volume = 4.0 / 3.0 * PI * rad.powi(3);
+                let volume = 4.0 / 3.0 * PI * rad.ppowi(3);
                 let surfaces = vec![Surface::Ball { c: origin, r: rad }];
                 let area = 4.0 * PI * rad * rad;
                 (sphere(origin, rad).into(), surfaces, vec![], volume, area)
@@ -662,7 +667,7 @@ mod tests {
                         let (a, b) = (flat(a), flat(b));
                         let ab = [b[0] - a[0], b[1] - a[1]];
                         let aq = [q[0] - a[0], q[1] - a[1]];
-                        (ab[0] * aq[1] - ab[1] * aq[0]).abs() / ab[0].hypot(ab[1])
+                        (ab[0] * aq[1] - ab[1] * aq[0]).abs() / ab[0].phypot(ab[1])
                     })
                     .fold(f64::INFINITY, f64::min);
                 worst = worst.max(gap);
@@ -689,7 +694,7 @@ mod tests {
                 .map(|p| match p.curve {
                     Curve3::Circle { r, .. } => TAU * r * (p.t1 - p.t0),
                     Curve3::Line { a, b } => {
-                        (p.t1 - p.t0) * (0..3).map(|k| (b[k] - a[k]).powi(2)).sum::<f64>().sqrt()
+                        (p.t1 - p.t0) * (0..3).map(|k| (b[k] - a[k]).ppowi(2)).sum::<f64>().sqrt()
                     }
                 })
                 .sum::<f64>()

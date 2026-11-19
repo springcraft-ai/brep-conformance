@@ -5,6 +5,7 @@
 
 pub mod model;
 pub mod path;
+pub mod portable;
 pub mod profile;
 mod remote;
 mod serve;

@@ -4,6 +4,7 @@
 
 use super::robust::gauss;
 use super::*;
+use crate::portable::Portable;
 
 /// The box from `lo` to `hi` in `frame`'s local coordinates.
 fn framed_box(frame: &Frame, lo: Vec3, hi: Vec3) -> Primitive {
@@ -46,7 +47,7 @@ fn exact_volume(v: f64) -> Exact {
 
 /// A power of ten from `10^lo` to `10^hi`, even in its exponent.
 fn decade(r: &mut Rng, lo: f64, hi: f64) -> f64 {
-    10f64.powf(r.range(lo, hi))
+    10f64.ppowf(r.range(lo, hi))
 }
 
 /// Intersections aimed at the places parametrizations degenerate, in a frame turned anyhow: a rod
@@ -65,7 +66,7 @@ pub(super) fn seams_poles(r: &mut Rng) -> (Primitive, Primitive, Exact) {
                 radius: rad,
             };
             let rod = framed_rod(&f, 0.0, 0.0, -rad - 1.0, rad + 1.0, rho);
-            let v = 4.0 / 3.0 * PI * (rad.powi(3) - (rad * rad - rho * rho).powf(1.5));
+            let v = 4.0 / 3.0 * PI * (rad.ppowi(3) - (rad * rad - rho * rho).ppowf(1.5));
             (
                 ball,
                 rod,
@@ -84,7 +85,7 @@ pub(super) fn seams_poles(r: &mut Rng) -> (Primitive, Primitive, Exact) {
                 ball,
                 half,
                 tagged(
-                    2.0 / 3.0 * PI * rad.powi(3),
+                    2.0 / 3.0 * PI * rad.ppowi(3),
                     "booleans/degenerate/sphere-cut-along-its-seam",
                 ),
             )
@@ -118,7 +119,8 @@ pub(super) fn seams_poles(r: &mut Rng) -> (Primitive, Primitive, Exact) {
             let e = rad + 1.0;
             let slice = framed_box(&f, [rad - depth, -e, -1.0], [e, e, h + 1.0]);
             let a = rad - depth;
-            let seg = rad * rad * (a / rad).acos() - a * (2.0 * rad * depth - depth * depth).sqrt();
+            let seg =
+                rad * rad * (a / rad).pacos() - a * (2.0 * rad * depth - depth * depth).sqrt();
             (
                 cyl,
                 slice,
@@ -232,9 +234,9 @@ pub(super) fn circle_contact(r: &mut Rng) -> (Primitive, Primitive, Exact) {
                 radius: s,
             };
             let v = if s <= rad {
-                4.0 / 3.0 * PI * s.powi(3)
+                4.0 / 3.0 * PI * s.ppowi(3)
             } else {
-                4.0 / 3.0 * PI * (s.powi(3) - (s * s - rad * rad).powf(1.5))
+                4.0 / 3.0 * PI * (s.ppowi(3) - (s * s - rad * rad).ppowf(1.5))
             };
             (cyl, ball, exact_volume(v))
         }
@@ -253,7 +255,7 @@ pub(super) fn circle_contact(r: &mut Rng) -> (Primitive, Primitive, Exact) {
                 },
                 radius: s,
             };
-            (point, ball, exact_volume(4.0 / 3.0 * PI * s.powi(3)))
+            (point, ball, exact_volume(4.0 / 3.0 * PI * s.ppowi(3)))
         }
         2 => {
             let minor = r.range(0.3, 1.5);
@@ -269,8 +271,8 @@ pub(super) fn circle_contact(r: &mut Rng) -> (Primitive, Primitive, Exact) {
             let v = if a >= minor {
                 0.0
             } else {
-                let seg = minor * minor * (a / minor).acos() - a * (minor * minor - a * a).sqrt();
-                TAU * (major * seg - 2.0 / 3.0 * (minor * minor - a * a).powf(1.5))
+                let seg = minor * minor * (a / minor).pacos() - a * (minor * minor - a * a).sqrt();
+                TAU * (major * seg - 2.0 / 3.0 * (minor * minor - a * a).ppowf(1.5))
             };
             (ring, cyl, exact_volume(v))
         }
@@ -283,7 +285,7 @@ pub(super) fn circle_contact(r: &mut Rng) -> (Primitive, Primitive, Exact) {
                 minor,
             };
             let s = (major - minor) * r.range(1.2, 2.0);
-            let z = ((s + minor).powi(2) - major * major).sqrt();
+            let z = ((s + minor).ppowi(2) - major * major).sqrt();
             let s = s * (1.0 - hair.abs());
             let ball = Primitive::Sphere {
                 frame: Frame {
@@ -317,10 +319,10 @@ pub(super) fn near_steinmetz(r: &mut Rng) -> (Primitive, Primitive, Exact) {
     };
     let (lo, hi) = (eps - rad, rad);
     let v = gauss(0.0, PI, 128, |theta, wt| {
-        let z = lo + (hi - lo) * (1.0 - theta.cos()) / 2.0;
+        let z = lo + (hi - lo) * (1.0 - theta.pcos()) / 2.0;
         let wa = (rad * rad - z * z).max(0.0).sqrt();
         let wb = (rad * rad - (z - eps) * (z - eps)).max(0.0).sqrt();
-        wt * 4.0 * wa * wb * (hi - lo) / 2.0 * theta.sin()
+        wt * 4.0 * wa * wb * (hi - lo) / 2.0 * theta.psin()
     });
     (a, b, exact_volume(v))
 }
@@ -338,7 +340,7 @@ fn rounded_prism_of(pts: &[[f64; 2]], radii: &[f64], h: f64) -> Primitive {
     let lp = rounded(pts, radii)
         .into_iter()
         .filter(|s| match s {
-            Seg::Line { a, b } => (b[0] - a[0]).hypot(b[1] - a[1]) > 0.0,
+            Seg::Line { a, b } => (b[0] - a[0]).phypot(b[1] - a[1]) > 0.0,
             _ => true,
         })
         .collect();
@@ -369,9 +371,9 @@ pub(super) fn extreme_angle(r: &mut Rng) -> FeatureDraw {
     if r.next_u64().is_multiple_of(2) {
         let (w, top) = (r.range(4.0, 10.0), r.range(3.0, 8.0));
         let bend = decade(r, -3.0, -1.0);
-        let peak = [w / 2.0, top + w / 2.0 * bend.tan()];
+        let peak = [w / 2.0, top + w / 2.0 * bend.ptan()];
         let pts = [[0.0, 0.0], [w, 0.0], [w, top], peak, [0.0, top]];
-        let rad = 0.45 * (w / 2.0) * r.range(0.2, 1.0) / bend.tan();
+        let rad = 0.45 * (w / 2.0) * r.range(0.2, 1.0) / bend.ptan();
         let want = rounded_prism_of(&pts, &[0.0, 0.0, 0.0, rad, 0.0], h);
         let f = fillet_of(vec![[peak[0], peak[1], z]], rad);
         let exact = Exact {
@@ -382,8 +384,8 @@ pub(super) fn extreme_angle(r: &mut Rng) -> FeatureDraw {
     } else {
         let len = r.range(4.0, 10.0);
         let alpha = r.range(2.0, 15.0).to_radians();
-        let pts = [[0.0, 0.0], [len, 0.0], [len, len * alpha.tan()]];
-        let rad = 0.45 * len * r.range(0.2, 1.0) * (alpha / 2.0).tan();
+        let pts = [[0.0, 0.0], [len, 0.0], [len, len * alpha.ptan()]];
+        let rad = 0.45 * len * r.range(0.2, 1.0) * (alpha / 2.0).ptan();
         let want = rounded_prism_of(&pts, &[rad, 0.0, 0.0], h);
         let f = fillet_of(vec![[0.0, 0.0, z]], rad);
         let exact = Exact {
@@ -446,7 +448,7 @@ pub(super) fn short_edges(r: &mut Rng) -> FeatureDraw {
     let pts: Vec<[f64; 2]> = chamfered(&base_pts, &cuts)
         .iter()
         .filter_map(|s| match s {
-            Seg::Line { a, b } if (b[0] - a[0]).hypot(b[1] - a[1]) > 0.0 => Some(*a),
+            Seg::Line { a, b } if (b[0] - a[0]).phypot(b[1] - a[1]) > 0.0 => Some(*a),
             _ => None,
         })
         .collect();
@@ -455,7 +457,7 @@ pub(super) fn short_edges(r: &mut Rng) -> FeatureDraw {
     let radii: Vec<f64> = (0..m)
         .map(|j| {
             let (turn, side) = c[j];
-            0.45 * side * r.range(0.2, 1.0) / (turn.abs() / 2.0).tan()
+            0.45 * side * r.range(0.2, 1.0) / (turn.abs() / 2.0).ptan()
         })
         .collect();
     let h = r.range(2.0, 8.0);
@@ -490,7 +492,11 @@ pub(super) fn swallowed_face(r: &mut Rng) -> FeatureDraw {
         .flat_map(|p| p.map(f64::abs))
         .fold(0.0, f64::max);
     let (turn, side) = (c[i].0.abs(), c[i].1);
-    let (sin, cos, tan) = ((turn / 2.0).sin(), (turn / 2.0).cos(), (turn / 2.0).tan());
+    let (sin, cos, tan) = (
+        (turn / 2.0).psin(),
+        (turn / 2.0).pcos(),
+        (turn / 2.0).ptan(),
+    );
     let most = 0.45 * side / tan;
     // The cut's chord lies cut·sin(θ/2) in from the corner and the round's arc r(1/cos(θ/2) − 1);
     // its contacts reach r·tan(θ/2) along each side. Both at least twice the cut's.
@@ -499,13 +505,13 @@ pub(super) fn swallowed_face(r: &mut Rng) -> FeatureDraw {
     while need(cut) > 0.5 * most {
         cut /= 10.0;
     }
-    let rad = need(cut) * (most / need(cut)).powf(r.range(0.3, 1.0));
+    let rad = need(cut) * (most / need(cut)).ppowf(r.range(0.3, 1.0));
     let mut cuts = vec![0.0; n];
     cuts[i] = cut;
     let pts: Vec<[f64; 2]> = chamfered(&base_pts, &cuts)
         .iter()
         .filter_map(|s| match s {
-            Seg::Line { a, b } if (b[0] - a[0]).hypot(b[1] - a[1]) > 0.0 => Some(*a),
+            Seg::Line { a, b } if (b[0] - a[0]).phypot(b[1] - a[1]) > 0.0 => Some(*a),
             _ => None,
         })
         .collect();
@@ -514,7 +520,7 @@ pub(super) fn swallowed_face(r: &mut Rng) -> FeatureDraw {
     // The cut face's two ends: the points of the cut profile within the cut of the old corner.
     let near: Vec<Vec3> = pts
         .iter()
-        .filter(|p| (p[0] - base_pts[i][0]).hypot(p[1] - base_pts[i][1]) <= 1.5 * cut)
+        .filter(|p| (p[0] - base_pts[i][0]).phypot(p[1] - base_pts[i][1]) <= 1.5 * cut)
         .map(|p| [p[0], p[1], z])
         .collect();
     assert_eq!(near.len(), 2, "the cut leaves two ends");
@@ -545,10 +551,10 @@ fn drilled_offset(a: f64, b: f64, c: f64, rho: f64, d: f64) -> (f64, f64) {
     let (_, vb, sb) = rounded_block([0.0; 3], [a, b, c], d);
     let q = (d * d - rho * rho).sqrt();
     let dimple = TAU
-        * (d * rho * rho / 2.0 - rho / 2.0 * (rho * q + d * d * (rho / d).asin())
-            + (d.powi(3) - q.powi(3)) / 3.0);
-    let phi = (rho / d).asin();
-    let dimple_area = TAU * d * (rho * phi - d * (1.0 - phi.cos()));
+        * (d * rho * rho / 2.0 - rho / 2.0 * (rho * q + d * d * (rho / d).pasin())
+            + (d.ppowi(3) - q.ppowi(3)) / 3.0);
+    let phi = (rho / d).pasin();
+    let dimple_area = TAU * d * (rho * phi - d * (1.0 - phi.pcos()));
     (
         vb - 2.0 * dimple,
         sb - 2.0 * PI * rho * rho + 2.0 * dimple_area,
@@ -728,13 +734,13 @@ mod tests {
         let v = |eps: f64| {
             let (lo, hi) = (eps - rad, rad);
             gauss(0.0, PI, 128, |theta, wt| {
-                let z = lo + (hi - lo) * (1.0 - theta.cos()) / 2.0;
+                let z = lo + (hi - lo) * (1.0 - theta.pcos()) / 2.0;
                 let wa = (rad * rad - z * z).max(0.0).sqrt();
                 let wb = (rad * rad - (z - eps) * (z - eps)).max(0.0).sqrt();
-                wt * 4.0 * wa * wb * (hi - lo) / 2.0 * theta.sin()
+                wt * 4.0 * wa * wb * (hi - lo) / 2.0 * theta.psin()
             })
         };
-        let exact = 16.0 * rad.powi(3) / 3.0;
+        let exact = 16.0 * rad.ppowi(3) / 3.0;
         assert!(
             (v(1e-12) - exact).abs() < 1e-9 * exact,
             "{} against {exact}",

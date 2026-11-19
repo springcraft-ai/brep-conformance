@@ -3,18 +3,19 @@
 //! ball rolls.
 
 use super::*;
+use crate::portable::Portable;
 
 /// The area two discs of radius `rho` share with their centres `d` apart.
 fn lens(rho: f64, d: f64) -> f64 {
     if d >= 2.0 * rho {
         return 0.0;
     }
-    2.0 * rho * rho * (d / (2.0 * rho)).acos() - d / 2.0 * (4.0 * rho * rho - d * d).sqrt()
+    2.0 * rho * rho * (d / (2.0 * rho)).pacos() - d / 2.0 * (4.0 * rho * rho - d * d).sqrt()
 }
 
 /// A length from a twentieth to a ten-thousandth of `scale`, even in its exponent.
 fn thin(r: &mut Rng, scale: f64) -> f64 {
-    scale * 10f64.powf(r.range(-4.0, -1.3))
+    scale * 10f64.ppowf(r.range(-4.0, -1.3))
 }
 
 /// A plate drilled with a grid of holes packed until the web between neighbours is thin, gone
@@ -51,7 +52,7 @@ pub(super) fn dense_holes(r: &mut Rng) -> Drawn {
     let pairs = ((nx - 1) * ny + nx * (ny - 1)) as f64;
     let holes = n * PI * rho * rho - pairs * lens(rho, pitch);
     let lost_arc = if pitch < 2.0 * rho {
-        4.0 * rho * (pitch / (2.0 * rho)).acos()
+        4.0 * rho * (pitch / (2.0 * rho)).pacos()
     } else {
         0.0
     };
@@ -77,7 +78,7 @@ pub(super) fn dense_holes(r: &mut Rng) -> Drawn {
 /// smooth at both ends.
 pub(super) fn crossing_near_tangent(r: &mut Rng) -> (Primitive, Primitive, Exact) {
     let (ra, rb) = (r.range(1.0, 6.0), r.range(1.0, 6.0));
-    let delta = ra.min(rb) * 10f64.powf(r.range(-6.0, -1.0));
+    let delta = ra.min(rb) * 10f64.ppowf(r.range(-6.0, -1.0));
     let c = ra + rb - delta;
     let len = 4.0 * ra.max(rb) + 4.0;
     let a = Primitive::Cylinder {
@@ -92,10 +93,10 @@ pub(super) fn crossing_near_tangent(r: &mut Rng) -> (Primitive, Primitive, Exact
     };
     let lo = c - rb;
     let f = |theta: f64| {
-        let z = lo + delta * (1.0 - theta.cos()) / 2.0;
+        let z = lo + delta * (1.0 - theta.pcos()) / 2.0;
         let wa = (ra * ra - z * z).max(0.0).sqrt();
         let wb = (rb * rb - (z - c) * (z - c)).max(0.0).sqrt();
-        4.0 * wa * wb * delta / 2.0 * theta.sin()
+        4.0 * wa * wb * delta / 2.0 * theta.psin()
     };
     let volume = gauss(0.0, PI, 64, |t, wt| wt * f(t));
     let exact = Exact {
@@ -160,7 +161,7 @@ fn tight_parts(r: &mut Rng) -> (FeatureDraw, Shape) {
             let (a, b) = (pts[i], pts[(i + 1) % n]);
             let (c, e) = (q[i], q[(i + 1) % n]);
             let along = (b[0] - a[0]) * (e[0] - c[0]) + (b[1] - a[1]) * (e[1] - c[1]);
-            let len = (b[0] - a[0]).hypot(b[1] - a[1]);
+            let len = (b[0] - a[0]).phypot(b[1] - a[1]);
             along > 0.2 * len * len
         })
     };
@@ -209,7 +210,7 @@ fn tight_parts(r: &mut Rng) -> (FeatureDraw, Shape) {
         shape = Shape::bool(Op::Union, shape, sphere([a[0], a[1], z], rad));
     }
     let (a, ai, li) = (outer.area(), inner.area(), inner.perimeter());
-    let balls = a * z + ai * rad + PI * rad * rad / 4.0 * li + 2.0 * PI / 3.0 * rad.powi(3);
+    let balls = a * z + ai * rad + PI * rad * rad / 4.0 * li + 2.0 * PI / 3.0 * rad.ppowi(3);
     let k = 1.0 - PI / 4.0;
     let mut certain = 0.0;
     let mut contacts = Vec::new();
@@ -219,7 +220,7 @@ fn tight_parts(r: &mut Rng) -> (FeatureDraw, Shape) {
         let Seg::Line { a: p, b: q } = *seg else {
             continue;
         };
-        let len = (q[0] - p[0]).hypot(q[1] - p[1]);
+        let len = (q[0] - p[0]).phypot(q[1] - p[1]);
         certain += k * rad * rad * (len - 4.0 * rad).max(0.0);
         if len > 4.0 * rad {
             let along = [(q[0] - p[0]) / len, (q[1] - p[1]) / len];
@@ -261,23 +262,23 @@ fn tight_parts(r: &mut Rng) -> (FeatureDraw, Shape) {
     let off = |p: [f64; 2], a: [f64; 2], b: [f64; 2]| {
         let (d, q) = ([b[0] - a[0], b[1] - a[1]], [p[0] - a[0], p[1] - a[1]]);
         let t = ((q[0] * d[0] + q[1] * d[1]) / (d[0] * d[0] + d[1] * d[1])).clamp(0.0, 1.0);
-        (q[0] - t * d[0]).hypot(q[1] - t * d[1])
+        (q[0] - t * d[0]).phypot(q[1] - t * d[1])
     };
     let scans = (0..n)
         .map(|i| {
             let c = pts[i];
             let (before, after) = ((i + n - 1) % n, (i + 1) % n);
             let unit = |q: [f64; 2]| {
-                let l = (q[0] - c[0]).hypot(q[1] - c[1]);
+                let l = (q[0] - c[0]).phypot(q[1] - c[1]);
                 ([(q[0] - c[0]) / l, (q[1] - c[1]) / l], l)
             };
             let ((u, lu), (v, lv)) = (unit(pts[before]), unit(pts[after]));
             let straight =
-                |len: f64, next: usize| len >= reach + rho * (turns[next].0.abs() / 2.0).tan();
+                |len: f64, next: usize| len >= reach + rho * (turns[next].0.abs() / 2.0).ptan();
             let clear = (0..n)
                 .filter(|&k| k != i && (k + 1) % n != i)
                 .all(|k| off(c, pts[k], pts[(k + 1) % n]) >= reach);
-            let halves = (u[0] + v[0]).hypot(u[1] + v[1]);
+            let halves = (u[0] + v[0]).phypot(u[1] + v[1]);
             let same = if straight(lu, before) && straight(lv, after) && clear && halves > 1e-9 {
                 vec![upright_mirror(
                     c,
@@ -424,14 +425,14 @@ mod tests {
         let c = ra + rb - delta;
         let lo = c - rb;
         let f = |theta: f64| {
-            let z = lo + delta * (1.0 - theta.cos()) / 2.0;
+            let z = lo + delta * (1.0 - theta.pcos()) / 2.0;
             let wa = (ra * ra - z * z).max(0.0).sqrt();
             let wb = (rb * rb - (z - c) * (z - c)).max(0.0).sqrt();
-            4.0 * wa * wb * delta / 2.0 * theta.sin()
+            4.0 * wa * wb * delta / 2.0 * theta.psin()
         };
         let v = gauss(0.0, PI, 64, |t, wt| wt * f(t));
         let (hx, hy) = (
-            (rb * rb - (rb - delta).powi(2)).sqrt(),
+            (rb * rb - (rb - delta).ppowi(2)).sqrt(),
             (2.0 * ra * delta).sqrt(),
         );
         let n = 200_000;
@@ -439,7 +440,8 @@ mod tests {
         let mut rng = Rng::new(3);
         for _ in 0..n {
             let p = [rng.range(-hx, hx), rng.range(-hy, hy), rng.range(lo, ra)];
-            if p[1] * p[1] + p[2] * p[2] <= ra * ra && p[0] * p[0] + (p[2] - c).powi(2) <= rb * rb {
+            if p[1] * p[1] + p[2] * p[2] <= ra * ra && p[0] * p[0] + (p[2] - c).ppowi(2) <= rb * rb
+            {
                 hit += 1;
             }
         }

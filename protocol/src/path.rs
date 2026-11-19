@@ -10,6 +10,7 @@
 use crate::profile::Profile;
 
 use crate::model::spline_point;
+use crate::portable::Portable;
 
 type V = [f64; 3];
 
@@ -194,7 +195,7 @@ impl PathSweep {
             // T′ in arc length: the second derivative's part square to T, over speed².
             let curv = mul(sub(d2, mul(tn, dot(d2, tn))), 1.0 / (speed * speed));
             let phi = twist * s / length;
-            let (c, sn) = (phi.cos(), phi.sin());
+            let (c, sn) = (phi.pcos(), phi.psin());
             let e1 = add(mul(r, c), mul(n2, sn));
             let e2 = add(mul(r, -sn), mul(n2, c));
             stations.push(Station {
@@ -211,10 +212,10 @@ impl PathSweep {
         }
         let (lo, hi) = profile.bounds();
         let reach = [
-            lo[0].hypot(lo[1]),
-            hi[0].hypot(hi[1]),
-            lo[0].hypot(hi[1]),
-            hi[0].hypot(lo[1]),
+            lo[0].phypot(lo[1]),
+            hi[0].phypot(hi[1]),
+            lo[0].phypot(hi[1]),
+            hi[0].phypot(lo[1]),
         ]
         .into_iter()
         .fold(0.0, f64::max);
@@ -314,7 +315,7 @@ impl PathSweep {
                 -arc(&self.path, u, before.u)
             };
         let phi = self.twist * s / self.length;
-        let (c, sn) = (phi.cos(), phi.sin());
+        let (c, sn) = (phi.pcos(), phi.psin());
         (p, add(mul(r, c), mul(n2, sn)), add(mul(r, -sn), mul(n2, c)))
     }
 

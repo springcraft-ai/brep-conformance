@@ -4,6 +4,7 @@
 use std::f64::consts::TAU;
 
 use crate::model::{Frame, Op, Primitive, Shape, Vec3, add, scale};
+use crate::portable::Portable;
 use crate::profile::Profile;
 use brep_protocol::path::{PathCurve, PathSweep};
 
@@ -200,7 +201,7 @@ fn swept(path: &PathCurve, profile: &Profile, twist: f64) -> std::rc::Rc<PathSwe
 /// from outside, in closed form; `None` for any other primitive.
 pub fn boundary_distance(prim: &Primitive, p: Vec3) -> Option<f64> {
     let l = local(&prim.frame(), p);
-    let rho = l[0].hypot(l[1]);
+    let rho = l[0].phypot(l[1]);
     // The distance from (rho, z) to a segment of a meridian.
     let to_segment = |a: [f64; 2], b: [f64; 2]| {
         let (ux, uy) = (b[0] - a[0], b[1] - a[1]);
@@ -210,7 +211,7 @@ pub fn boundary_distance(prim: &Primitive, p: Vec3) -> Option<f64> {
         } else {
             0.0
         };
-        (rho - a[0] - t * ux).hypot(l[2] - a[1] - t * uy)
+        (rho - a[0] - t * ux).phypot(l[2] - a[1] - t * uy)
     };
     // The boundary of a solid of revolution is its meridian's sides off the axis, turned.
     let meridian = |corners: &[[f64; 2]]| {
@@ -243,7 +244,7 @@ pub fn boundary_distance(prim: &Primitive, p: Vec3) -> Option<f64> {
             ..
         } => meridian(&[[0.0, 0.0], [*bottom, 0.0], [*top, *height], [0.0, *height]]),
         Primitive::Sphere { radius, .. } => (dot(l, l).sqrt() - radius).abs(),
-        Primitive::Torus { major, minor, .. } => ((rho - major).hypot(l[2]) - minor).abs(),
+        Primitive::Torus { major, minor, .. } => ((rho - major).phypot(l[2]) - minor).abs(),
         _ => return None,
     })
 }
@@ -279,7 +280,7 @@ fn prim_contains(prim: &Primitive, p: Vec3) -> bool {
         }
         Primitive::Sphere { radius, .. } => dot(l, l) <= radius * radius,
         Primitive::Torus { major, minor, .. } => {
-            let rho = l[0].hypot(l[1]) - major;
+            let rho = l[0].phypot(l[1]) - major;
             rho * rho + l[2] * l[2] <= minor * minor
         }
         Primitive::Cone {
@@ -289,14 +290,14 @@ fn prim_contains(prim: &Primitive, p: Vec3) -> bool {
             ..
         } => {
             let r = bottom + (top - bottom) * l[2] / height;
-            l[2] >= 0.0 && l[2] <= *height && l[0].hypot(l[1]) <= r
+            l[2] >= 0.0 && l[2] <= *height && l[0].phypot(l[1]) <= r
         }
         Primitive::Extrude {
             profile, height, ..
         } => l[2] >= 0.0 && l[2] <= *height && profile.contains([l[0], l[1]]),
         Primitive::Revolve { profile, angle, .. } => {
-            let phi = l[1].atan2(l[0]).rem_euclid(TAU);
-            (*angle >= TAU || phi <= *angle) && profile.contains([l[0].hypot(l[1]), l[2]])
+            let phi = l[1].patan2(l[0]).rem_euclid(TAU);
+            (*angle >= TAU || phi <= *angle) && profile.contains([l[0].phypot(l[1]), l[2]])
         }
         Primitive::Screw {
             profile,
@@ -306,7 +307,7 @@ fn prim_contains(prim: &Primitive, p: Vec3) -> bool {
         } => {
             // The point lies on the meridian half-plane at every turn t ≡ its angle; it is in the
             // solid when the profile, risen to that turn, holds it there.
-            let (rho, mut t) = (l[0].hypot(l[1]), l[1].atan2(l[0]).rem_euclid(TAU));
+            let (rho, mut t) = (l[0].phypot(l[1]), l[1].patan2(l[0]).rem_euclid(TAU));
             while t <= *angle {
                 if profile.contains([rho, l[2] - rise * t]) {
                     return true;
@@ -372,9 +373,9 @@ pub fn section_area(s: &Shape, origin: Vec3, normal: Vec3, n: usize) -> (f64, f6
     let nn = dot(normal, normal).sqrt();
     let z = scale(normal, 1.0 / nn);
     let f = Frame::along(origin, z);
-    let half = (0..3).map(|k| (hi[k] - lo[k]).powi(2)).sum::<f64>().sqrt()
+    let half = (0..3).map(|k| (hi[k] - lo[k]).ppowi(2)).sum::<f64>().sqrt()
         + (0..3)
-            .map(|k| (0.5 * (lo[k] + hi[k]) - origin[k]).powi(2))
+            .map(|k| (0.5 * (lo[k] + hi[k]) - origin[k]).ppowi(2))
             .sum::<f64>()
             .sqrt();
     const SHIFT: [f64; 2] = [0.414_213_562_373_095, 0.732_050_807_568_877];
@@ -458,7 +459,7 @@ pub fn joints(p: &Primitive) -> Vec<(Vec3, Option<Vec3>)> {
             let (q, t_in) = segs[i].eval(1.0);
             let (_, t_out) = segs[(i + 1) % segs.len()].eval(0.0);
             let unit = |t: [f64; 2]| {
-                let n = t[0].hypot(t[1]);
+                let n = t[0].phypot(t[1]);
                 [t[0] / n, t[1] / n]
             };
             let (a, b) = (unit(t_in), unit(t_out));
@@ -474,7 +475,7 @@ pub fn joints(p: &Primitive) -> Vec<(Vec3, Option<Vec3>)> {
                     if q[0] < 1e-9 {
                         continue;
                     }
-                    let (s, c) = phi.sin_cos();
+                    let (s, c) = phi.psin_cos();
                     (
                         world(f, [q[0] * c, q[0] * s, q[1]]),
                         [0, 1, 2].map(|k| f.x[k] * n2[0] * c + f.y[k] * n2[0] * s + f.z[k] * n2[1]),

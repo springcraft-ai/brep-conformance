@@ -6,6 +6,7 @@
 use super::*;
 
 pub(crate) mod fasteners;
+use crate::portable::Portable;
 use brep_protocol::path::PathCurve;
 
 const Z: Vec3 = [0.0, 0.0, 1.0];
@@ -151,7 +152,7 @@ fn union_of(tools: Vec<Primitive>) -> Shape {
 }
 
 fn rot(p: [f64; 2], a: f64) -> [f64; 2] {
-    let (c, s) = (a.cos(), a.sin());
+    let (c, s) = (a.pcos(), a.psin());
     [c * p[0] - s * p[1], s * p[0] + c * p[1]]
 }
 
@@ -209,7 +210,7 @@ fn quad(f: impl Fn(f64) -> f64, a: f64, b: f64) -> f64 {
 /// 4∫ √(a² − x²)·√(r² − x²) dx over |x| ≤ a, with x = a·sin θ.
 fn crossing(r: f64, a: f64) -> f64 {
     4.0 * quad(
-        |t| a * a * t.cos().powi(2) * (r * r - (a * t.sin()).powi(2)).sqrt(),
+        |t| a * a * t.pcos().ppowi(2) * (r * r - (a * t.psin()).ppowi(2)).sqrt(),
         -PI / 2.0,
         PI / 2.0,
     )
@@ -218,7 +219,7 @@ fn crossing(r: f64, a: f64) -> f64 {
 /// The area of the disc of radius `r` within `|y| ≤ w/2` on the side x ≥ 0.
 fn half_strip(r: f64, w: f64) -> f64 {
     let y = w / 2.0;
-    y * (r * r - y * y).sqrt() + r * r * (y / r).asin()
+    y * (r * r - y * y).sqrt() + r * r * (y / r).pasin()
 }
 
 /// The volume a cone chamfer takes from a hexagonal prism's end: the hexagon (inradius `d`)
@@ -226,13 +227,13 @@ fn half_strip(r: f64, w: f64) -> f64 {
 fn hex_chamfer(d: f64, rho0: f64, tan_a: f64) -> f64 {
     let a_hex = 2.0 * 3f64.sqrt() * d * d;
     let rc = 2.0 * d / 3f64.sqrt();
-    let inner = a_hex * (d - rho0) - PI * (d.powi(3) - rho0.powi(3)) / 3.0;
+    let inner = a_hex * (d - rho0) - PI * (d.ppowi(3) - rho0.ppowi(3)) / 3.0;
     // Past the inradius the circle leaves six segments of itself beyond the flats; with r = d +
     // (rc − d)u² the segment's (r − d)^{3/2} start is smooth in u.
     let outer = quad(
         |u| {
             let r = d + (rc - d) * u * u;
-            let seg = r * r * (d / r).acos() - d * (r * r - d * d).sqrt();
+            let seg = r * r * (d / r).pacos() - d * (r * r - d * d).sqrt();
             (a_hex - PI * r * r + 6.0 * seg) * 2.0 * (rc - d) * u
         },
         0.0,
@@ -260,18 +261,18 @@ fn hexagon(rc: f64) -> Vec<[f64; 2]> {
     (0..6)
         .map(|i| {
             let a = PI / 3.0 * i as f64;
-            [rc * a.cos(), rc * a.sin()]
+            [rc * a.pcos(), rc * a.psin()]
         })
         .collect()
 }
 
 /// A slot of radius `rho` between centres `a` and `b`, counter-clockwise.
 fn stadium(a: [f64; 2], b: [f64; 2], rho: f64) -> Vec<Seg> {
-    let l = (b[0] - a[0]).hypot(b[1] - a[1]);
+    let l = (b[0] - a[0]).phypot(b[1] - a[1]);
     let u = [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
     let n = [-u[1], u[0]];
     let off = |p: [f64; 2], s: f64| [p[0] + n[0] * rho * s, p[1] + n[1] * rho * s];
-    let down = (-n[1]).atan2(-n[0]);
+    let down = (-n[1]).patan2(-n[0]);
     vec![
         Seg::Line {
             a: off(a, -1.0),
@@ -298,7 +299,7 @@ fn stadium(a: [f64; 2], b: [f64; 2], rho: f64) -> Vec<Seg> {
 
 /// A bore of radius `r` with a keyway `2k` wide reaching `r + depth` along +x, counter-clockwise.
 fn keyed_bore(r: f64, k: f64, depth: f64) -> Vec<Seg> {
-    let b = (k / r).asin();
+    let b = (k / r).pasin();
     let s = [(r * r - k * k).sqrt(), k];
     vec![
         Seg::Arc {
@@ -365,8 +366,8 @@ fn ordered(mut pts: Vec<[f64; 2]>) -> Vec<[f64; 2]> {
 
 /// tan α − α at radius `rho` of an involute of the circle `rb`.
 fn inv_at(rb: f64, rho: f64) -> f64 {
-    let a = (rb / rho).min(1.0).acos();
-    a.tan() - a
+    let a = (rb / rho).min(1.0).pacos();
+    a.ptan() - a
 }
 
 /// A conic piece `(a, apex, b, w)`: its ends, the apex of its tangents there, and its weight.
@@ -394,7 +395,7 @@ impl Gear {
         Gear {
             z,
             rp,
-            rb: rp * 20f64.to_radians().cos(),
+            rb: rp * 20f64.to_radians().pcos(),
             psi: PI / (2.0 * z as f64) - backlash / (2.0 * rp),
             ra: rp + m,
             rf: rp - 1.25 * m,
@@ -430,8 +431,8 @@ impl Gear {
                 .iter()
                 .map(|&s| {
                     let q = at(s);
-                    let rho = q[0].hypot(q[1]);
-                    (rho * (q[1].atan2(q[0]) + self.half(rho))).abs()
+                    let rho = q[0].phypot(q[1]);
+                    (rho * (q[1].patan2(q[0]) + self.half(rho))).abs()
                 })
                 .fold(0.0, f64::max);
             if stray > 1e-5 * m && out.len() + todo.len() < 64 {
@@ -450,12 +451,12 @@ impl Gear {
     fn flank_piece(&self, lo: f64, hi: f64) -> Conic {
         let at = |rho: f64| {
             let a = -self.half(rho);
-            [rho * a.cos(), rho * a.sin()]
+            [rho * a.pcos(), rho * a.psin()]
         };
         let tangent = |rho: f64| {
             let a = -self.half(rho);
-            let t = ((rho / self.rb).powi(2) - 1.0).max(0.0).sqrt();
-            [a.cos() - t * a.sin(), a.sin() + t * a.cos()]
+            let t = ((rho / self.rb).ppowi(2) - 1.0).max(0.0).sqrt();
+            [a.pcos() - t * a.psin(), a.psin() + t * a.pcos()]
         };
         let (p0, p1, t0, t1) = (at(lo), at(hi), tangent(lo), tangent(hi));
         let det = t0[0] * -t1[1] + t1[0] * t0[1];
@@ -468,7 +469,7 @@ impl Gear {
                 mid[0] + s * (apex[0] - mid[0]),
                 mid[1] + s * (apex[1] - mid[1]),
             ];
-            q[1].atan2(q[0]) + self.half(q[0].hypot(q[1]))
+            q[1].patan2(q[0]) + self.half(q[0].phypot(q[1]))
         };
         let (mut lo, mut hi) = (0.0, 1.0);
         let up = off(hi) > off(lo);
@@ -503,18 +504,18 @@ impl Gear {
         } else {
             0.0
         };
-        let delta = (rho / (rf + rho)).asin();
+        let delta = (rho / (rf + rho)).pasin();
         let s = (rf * rf + 2.0 * rf * rho).sqrt();
         assert!(
             pitch - 2.0 * h0 - 2.0 * delta > 0.0,
             "a gear's root fillets must not meet"
         );
-        let polar = |r: f64, ang: f64| [r * ang.cos(), r * ang.sin()];
+        let polar = |r: f64, ang: f64| [r * ang.pcos(), r * ang.psin()];
         // The fillet about its centre at angle `c_ang`, from `p` to `q` the short way round.
         let fillet = |c_ang: f64, p: [f64; 2], q: [f64; 2]| {
             let c = polar(rf + rho, c_ang);
-            let start = (p[1] - c[1]).atan2(p[0] - c[0]);
-            let end = (q[1] - c[1]).atan2(q[0] - c[0]);
+            let start = (p[1] - c[1]).patan2(p[0] - c[0]);
+            let end = (q[1] - c[1]).patan2(q[0] - c[0]);
             let sweep = (end - start + PI).rem_euclid(TAU) - PI;
             Seg::Arc {
                 center: c,
@@ -589,7 +590,7 @@ fn bolt_circle(n: usize, rc: f64, rh: f64, z0: f64, h: f64, a0: f64) -> Shape {
         (0..n)
             .map(|i| {
                 let a = a0 + TAU * i as f64 / n as f64;
-                cyl([rc * a.cos(), rc * a.sin(), z0], Z, rh, h)
+                cyl([rc * a.pcos(), rc * a.psin(), z0], Z, rh, h)
             })
             .collect(),
     )
@@ -622,7 +623,7 @@ pub(super) fn spur_gear(z: usize, m: f64, h: f64, holes: usize) -> Drawn {
         return part.done();
     }
     let rc = (hub_r + g.rf) / 2.0;
-    let rh = ((g.rf - hub_r) * 0.3).min(rc * (PI / holes as f64).sin() * 0.6);
+    let rh = ((g.rf - hub_r) * 0.3).min(rc * (PI / holes as f64).psin() * 0.6);
     part.cut(
         bolt_circle(holes, rc, rh, -1.0, h + 2.0, PI / holes as f64),
         holes as f64 * PI * rh * rh * h,
@@ -646,7 +647,7 @@ pub(super) fn helical_gear(z: usize, m: f64, h: f64, beta: f64, hand: f64) -> Dr
             knots: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
             ctrl: (0..4).map(|i| [0.0, 0.0, h * i as f64 / 3.0]).collect(),
         },
-        twist: hand * h * beta.tan() / g.rp,
+        twist: hand * h * beta.ptan() / g.rp,
     };
     let bore_r = g.rf * 0.35;
     Part::new(body)
@@ -664,7 +665,7 @@ pub(super) fn internal_gear(z: usize, m: f64, h: f64, holes: usize) -> Drawn {
     let spaces = Gear {
         z,
         rp,
-        rb: rp * 20f64.to_radians().cos(),
+        rb: rp * 20f64.to_radians().pcos(),
         psi: PI / (2.0 * z as f64),
         ra: rp + 1.25 * m,
         rf: rp - m,
@@ -690,7 +691,7 @@ pub(super) fn internal_gear(z: usize, m: f64, h: f64, holes: usize) -> Drawn {
 /// `n` teeth of module `m`, `b` wide.
 pub(super) fn rack(n: usize, m: f64, b: f64) -> Drawn {
     let p = PI * m;
-    let tan = 20f64.to_radians().tan();
+    let tan = 20f64.to_radians().ptan();
     let bar = 6.0 * m;
     let (yb, yp) = (bar, bar + 1.25 * m);
     let yt = yp + m;
@@ -728,7 +729,7 @@ pub(super) fn timing_pulley(r: &mut Rng) -> Drawn {
     let z = count(r, 16, 40);
     let ro = r.range(8.0, 18.0);
     let g = TAU * ro / z as f64 * r.range(0.2, 0.3);
-    let delta = (1.0 - g * g / (2.0 * ro * ro)).acos();
+    let delta = (1.0 - g * g / (2.0 * ro * ro)).pacos();
     let pitch = TAU / z as f64;
     let mut lp = Vec::new();
     for k in 0..z {
@@ -740,17 +741,17 @@ pub(super) fn timing_pulley(r: &mut Rng) -> Drawn {
             sweep: pitch - 2.0 * delta,
         });
         let tn = t + pitch;
-        let c = [ro * tn.cos(), ro * tn.sin()];
+        let c = [ro * tn.pcos(), ro * tn.psin()];
         let from = [
-            ro * (tn - delta).cos() - c[0],
-            ro * (tn - delta).sin() - c[1],
+            ro * (tn - delta).pcos() - c[0],
+            ro * (tn - delta).psin() - c[1],
         ];
         let to = [
-            ro * (tn + delta).cos() - c[0],
-            ro * (tn + delta).sin() - c[1],
+            ro * (tn + delta).pcos() - c[0],
+            ro * (tn + delta).psin() - c[1],
         ];
-        let start = from[1].atan2(from[0]);
-        let d = (to[1].atan2(to[0]) - start).rem_euclid(TAU);
+        let start = from[1].patan2(from[0]);
+        let d = (to[1].patan2(to[0]) - start).rem_euclid(TAU);
         lp.push(Seg::Arc {
             center: c,
             radius: g,
@@ -776,15 +777,15 @@ pub(super) fn timing_pulley(r: &mut Rng) -> Drawn {
 
 /// A roller-chain sprocket's outline: seats for the rollers, straight flanks out to the tips.
 fn sprocket_outline(z: usize, p: f64) -> (Vec<Seg>, f64, f64) {
-    let rp = p / (2.0 * (PI / z as f64).sin());
+    let rp = p / (2.0 * (PI / z as f64).psin());
     let rs = 0.32 * p;
     let beta = 20f64.to_radians();
     let pitch = TAU / z as f64;
     let seat = |k: usize| {
         let t = pitch * k as f64;
-        let c = [rp * t.cos(), rp * t.sin()];
+        let c = [rp * t.pcos(), rp * t.psin()];
         let (s, e) = (t - PI / 2.0 - beta, t + PI / 2.0 + beta);
-        let on = |a: f64| [c[0] + rs * a.cos(), c[1] + rs * a.sin()];
+        let on = |a: f64| [c[0] + rs * a.pcos(), c[1] + rs * a.psin()];
         // Leaving the seat clockwise at e, and arriving clockwise at s.
         (
             c,
@@ -792,8 +793,8 @@ fn sprocket_outline(z: usize, p: f64) -> (Vec<Seg>, f64, f64) {
             e,
             on(s),
             on(e),
-            [e.sin(), -e.cos()],
-            [s.sin(), -s.cos()],
+            [e.psin(), -e.pcos()],
+            [s.psin(), -s.pcos()],
         )
     };
     let hit = |p0: [f64; 2], d: [f64; 2], radius: f64, sign: f64| {
@@ -809,8 +810,8 @@ fn sprocket_outline(z: usize, p: f64) -> (Vec<Seg>, f64, f64) {
     let q = [s1[0] - e0[0], s1[1] - e0[1]];
     let u = (q[0] * d1[1] - q[1] * d1[0]) / det;
     let peak = [e0[0] + u * d0[0], e0[1] + u * d0[1]];
-    let re = e0[0].hypot(e0[1]);
-    let ra = re + 0.8 * (peak[0].hypot(peak[1]) - re);
+    let re = e0[0].phypot(e0[1]);
+    let ra = re + 0.8 * (peak[0].phypot(peak[1]) - re);
     let mut out = Vec::new();
     for k in 0..z {
         let (c, s, e, _, ek, dk, _) = seat(k);
@@ -824,8 +825,8 @@ fn sprocket_outline(z: usize, p: f64) -> (Vec<Seg>, f64, f64) {
         let t0 = hit(ek, dk, ra, 1.0);
         let t1 = hit(sn, dn, ra, -1.0);
         out.push(Seg::Line { a: ek, b: t0 });
-        let a0 = t0[1].atan2(t0[0]);
-        let sweep = (t1[1].atan2(t1[0]) - a0).rem_euclid(TAU);
+        let a0 = t0[1].patan2(t0[0]);
+        let sweep = (t1[1].patan2(t1[0]) - a0).rem_euclid(TAU);
         out.push(Seg::Arc {
             center: [0.0, 0.0],
             radius: ra,
@@ -861,9 +862,9 @@ pub(super) fn sprocket(r: &mut Rng) -> Drawn {
 
 /// The outline of a splined shaft's section: `n` square splines `w` wide from radius `rm` to `ro`.
 fn spline_section(n: usize, rm: f64, ro: f64, w: f64) -> Vec<Seg> {
-    let (am, ao) = ((w / 2.0 / rm).asin(), (w / 2.0 / ro).asin());
+    let (am, ao) = ((w / 2.0 / rm).pasin(), (w / 2.0 / ro).pasin());
     let pitch = TAU / n as f64;
-    let at = |rad: f64, a: f64| [rad * a.cos(), rad * a.sin()];
+    let at = |rad: f64, a: f64| [rad * a.pcos(), rad * a.psin()];
     let mut out = Vec::new();
     for k in 0..n {
         let t = pitch * k as f64;
@@ -898,7 +899,7 @@ pub(super) fn splined_shaft(r: &mut Rng) -> Drawn {
     let n = count(r, 6, 10);
     let ro = r2 * r.range(0.9, 1.0);
     let rm = ro * r.range(0.78, 0.88);
-    let w = (rm * (PI / n as f64).sin() * r.range(0.6, 0.9)).min(ro * 0.5);
+    let w = (rm * (PI / n as f64).psin() * r.range(0.6, 0.9)).min(ro * 0.5);
     let ls = r.range(8.0, 14.0);
     let shaft = rev(
         [0.0; 3],
@@ -1021,9 +1022,9 @@ fn keyway(rad: f64, w: f64, len: f64, t: f64) -> f64 {
     let rho = w / 2.0;
     quad(
         |th| {
-            let x = rho * th.sin();
-            let l = len + 2.0 * rho * th.cos();
-            l * ((rad * rad - x * x).sqrt() - (rad - t)) * rho * th.cos()
+            let x = rho * th.psin();
+            let l = len + 2.0 * rho * th.pcos();
+            l * ((rad * rad - x * x).sqrt() - (rad - t)) * rho * th.pcos()
         },
         -PI / 2.0,
         PI / 2.0,
@@ -1114,7 +1115,7 @@ pub(super) fn pipe_flange(r: &mut Rng) -> Drawn {
     );
     let n = count(r, 4, 8);
     let rc = (rr.max(rh + f) + rf) / 2.0;
-    let rb = ((rf - rr.max(rh + f)) / 2.0 * 0.6).min(rc * (PI / n as f64).sin() * 0.6);
+    let rb = ((rf - rr.max(rh + f)) / 2.0 * 0.6).min(rc * (PI / n as f64).psin() * 0.6);
     Part::new(body)
         .blend(
             Act::Fillet,
@@ -1137,7 +1138,7 @@ pub(super) fn v_pulley(r: &mut Rng) -> Drawn {
     let n_g = count(r, 1, 3);
     let gw = r.range(4.0, 7.0);
     let gd = gw * r.range(0.6, 0.8);
-    let gb = gw - 2.0 * gd * 19f64.to_radians().tan();
+    let gb = gw - 2.0 * gd * 19f64.to_radians().ptan();
     let land = gw * 0.4;
     let w = n_g as f64 * (gw + land) + land;
     let ro = rhub + r.range(10.0, 18.0);
@@ -1176,7 +1177,7 @@ pub(super) fn v_pulley(r: &mut Rng) -> Drawn {
     };
     let n = count(r, 4, 6);
     let rc = (rhub + rin) / 2.0;
-    let rh = ((rin - rhub) * 0.3).min(rc * (PI / n as f64).sin() * 0.6);
+    let rh = ((rin - rhub) * 0.3).min(rc * (PI / n as f64).psin() * 0.6);
     Part::new(rev([0.0; 3], poly(&pts)))
         .cut(key, w * (kw * (ri + kd) - half_strip(ri, kw)))
         .cut(
@@ -1189,7 +1190,7 @@ pub(super) fn v_pulley(r: &mut Rng) -> Drawn {
 /// A kidney-shaped window: an arc slot of half-width `wk` round radius `rc`, its ends' centres
 /// `phi` either side of angle `t`, counter-clockwise.
 fn kidney(rc: f64, wk: f64, phi: f64, t: f64) -> Vec<Seg> {
-    let end = |a: f64| [rc * (t + a).cos(), rc * (t + a).sin()];
+    let end = |a: f64| [rc * (t + a).pcos(), rc * (t + a).psin()];
     vec![
         Seg::Arc {
             center: [0.0, 0.0],
@@ -1228,7 +1229,7 @@ pub(super) fn windowed_wheel(r: &mut Rng) -> Drawn {
     let n = count(r, 4, 7);
     let rc = (rh + ri) / 2.0;
     let wk = (ri - rh) * r.range(0.2, 0.3);
-    let phi = (PI / n as f64 - 2.0 * (wk / rc).asin()).max(0.05) * r.range(0.5, 0.8);
+    let phi = (PI / n as f64 - 2.0 * (wk / rc).pasin()).max(0.05) * r.range(0.5, 0.8);
     let windows = union_of(
         (0..n)
             .map(|i| {
@@ -1307,8 +1308,8 @@ pub(super) fn turbine_disc(r: &mut Rng) -> Drawn {
         Seg::Arc {
             center: [0.0, 0.0],
             radius: ro,
-            start: lo[1].atan2(lo[0]),
-            sweep: hi[1].atan2(hi[0]) - lo[1].atan2(lo[0]),
+            start: lo[1].patan2(lo[0]),
+            sweep: hi[1].patan2(hi[0]) - lo[1].patan2(lo[0]),
         },
         Seg::Line {
             a: hi,
@@ -1323,7 +1324,7 @@ pub(super) fn turbine_disc(r: &mut Rng) -> Drawn {
         (0..n)
             .map(|i| {
                 let t = TAU * i as f64 / n as f64;
-                let (c, s) = (t.cos(), t.sin());
+                let (c, s) = (t.pcos(), t.psin());
                 ext(
                     frame([0.0, 0.0, -w / 2.0 - 1.0], [c, s, 0.0], [-s, c, 0.0]),
                     vec![poly(&[
@@ -1380,7 +1381,7 @@ pub(super) fn l_bracket(r: &mut Rng) -> Drawn {
         )],
         t + 2.0,
     );
-    let slot_a = 2.0 * rh * 0.8 * sl + PI * (rh * 0.8).powi(2);
+    let slot_a = 2.0 * rh * 0.8 * sl + PI * (rh * 0.8).ppowi(2);
     Part::new(body)
         .cut(base_holes, 2.0 * PI * rh * rh * t)
         .cut(leg_holes, 2.0 * PI * rh * rh * t)
@@ -1420,7 +1421,7 @@ pub(super) fn mounting_plate(r: &mut Rng) -> Drawn {
             })
             .collect(),
     );
-    let sink_v = PI * c / 3.0 * (rh * rh + rh * (rh + c) + (rh + c).powi(2)) - PI * rh * rh * c;
+    let sink_v = PI * c / 3.0 * (rh * rh + rh * (rh + c) + (rh + c).ppowi(2)) - PI * rh * rh * c;
     let (rb, rcb, dc) = (t * 0.6, t * 1.1, t * r.range(0.3, 0.5));
     Part::new(body)
         .cut(holes, 4.0 * PI * rh * rh * t)
@@ -1569,7 +1570,7 @@ pub(super) fn bent_bracket(r: &mut Rng) -> Drawn {
                 )],
                 t + 2.0,
             ),
-            (2.0 * rs * 0.8 * sl + PI * (rs * 0.8).powi(2)) * t,
+            (2.0 * rs * 0.8 * sl + PI * (rs * 0.8).ppowi(2)) * t,
         )
         .done()
 }
@@ -1799,12 +1800,12 @@ pub(super) fn pillow_block(r: &mut Rng) -> Drawn {
     let a = rbore * r.range(0.15, 0.25);
     let grease = quad(
         |th| {
-            let y = a * th.sin();
+            let y = a * th.psin();
             2.0 * a
-                * th.cos()
+                * th.pcos()
                 * ((rh * rh - y * y).sqrt() - (rbore * rbore - y * y).sqrt())
                 * a
-                * th.cos()
+                * th.pcos()
         },
         -PI / 2.0,
         PI / 2.0,
@@ -1918,7 +1919,7 @@ pub(super) fn valve_body(r: &mut Rng) -> Drawn {
 /// A molded plate with a drafted boss and a drafted rib standing on it, the boss cored.
 pub(super) fn drafted_boss_and_rib(r: &mut Rng) -> Drawn {
     let (w, d, t) = (r.range(40.0, 60.0), r.range(30.0, 45.0), r.range(2.0, 3.5));
-    let draft = r.range(1.0, 3.0).to_radians().tan();
+    let draft = r.range(1.0, 3.0).to_radians().ptan();
     let (rb, hb) = (r.range(4.0, 7.0), r.range(8.0, 15.0));
     let top = rb - hb * draft;
     let boss = Primitive::Cone {
@@ -2088,7 +2089,7 @@ pub(super) fn bottle_cap() -> Drawn {
         (0..n)
             .map(|i| {
                 let a = TAU * (i as f64 + 0.5) / n as f64;
-                let (c, s) = (a.cos(), a.sin());
+                let (c, s) = (a.pcos(), a.psin());
                 let o = rot([r0, -w / 2.0], a);
                 Primitive::Box {
                     frame: frame([o[0], o[1], -0.6], [c, s, 0.0], [-s, c, 0.0]),
@@ -2225,7 +2226,7 @@ pub(super) fn dovetail_slide(r: &mut Rng) -> Drawn {
     );
     let dd = t * r.range(0.3, 0.45);
     let wt = w * r.range(0.25, 0.35);
-    let wb = wt + 2.0 * dd / 60f64.to_radians().tan();
+    let wb = wt + 2.0 * dd / 60f64.to_radians().ptan();
     let slope = (wb - wt) / (2.0 * dd);
     let e = 1.0;
     let yc = w / 2.0;
@@ -2271,9 +2272,9 @@ pub(super) fn plate_cam(r: &mut Rng) -> Drawn {
     let mut ctrl: Vec<[f64; 2]> = (0..n)
         .map(|i| {
             let a = TAU * i as f64 / n as f64;
-            let bump = (-(a - PI).powi(2) / (2.0 * spread * spread)).exp();
+            let bump = (-(a - PI).ppowi(2) / (2.0 * spread * spread)).pexp();
             let rad = rb + lift * bump;
-            [rad * a.cos(), rad * a.sin()]
+            [rad * a.pcos(), rad * a.psin()]
         })
         .collect();
     ctrl.extend_from_within(..3);
@@ -2433,7 +2434,7 @@ pub(super) fn flanged_tube(r: &mut Rng) -> Drawn {
     );
     let n = count(r, 4, 8);
     let rc = (ro + f + rf) / 2.0;
-    let rb = ((rf - ro - f) / 2.0 * 0.6).min(rc * (PI / n as f64).sin() * 0.6);
+    let rb = ((rf - ro - f) / 2.0 * 0.6).min(rc * (PI / n as f64).psin() * 0.6);
     let holes = Shape::bool(
         Op::Union,
         bolt_circle(n, rc, rb, -tf - 1.0, tf + 1.5, 0.0),
@@ -2554,14 +2555,14 @@ mod tests {
     #[test]
     fn a_crossing_of_equal_cylinders_is_steinmetz() {
         let r: f64 = 1.7;
-        assert!((crossing(r, r) - 16.0 / 3.0 * r.powi(3)).abs() < 1e-12);
+        assert!((crossing(r, r) - 16.0 / 3.0 * r.ppowi(3)).abs() < 1e-12);
     }
 
     #[test]
     fn a_hexagon_chamfered_from_its_inradius_loses_its_corners_outside_the_cone() {
         // From a disc that holds the hexagon, the cone takes nothing below the flats' level only
         // at the corners: check against a direct sum of thin slices.
-        let (d, rho0, tan_a) = (2.0, 1.8, (PI / 6.0).tan());
+        let (d, rho0, tan_a) = (2.0, 1.8, (PI / 6.0).ptan());
         let rc = 2.0 * d / 3f64.sqrt();
         let a_hex = 2.0 * 3f64.sqrt() * d * d;
         let slices = 200_000;
@@ -2572,7 +2573,7 @@ mod tests {
             let inside = if rr <= d {
                 PI * rr * rr
             } else {
-                PI * rr * rr - 6.0 * (rr * rr * (d / rr).acos() - d * (rr * rr - d * d).sqrt())
+                PI * rr * rr - 6.0 * (rr * rr * (d / rr).pacos() - d * (rr * rr - d * d).sqrt())
             };
             sum += (a_hex - inside) * dr;
         }

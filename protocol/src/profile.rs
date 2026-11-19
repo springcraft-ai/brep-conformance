@@ -5,6 +5,7 @@
 use std::f64::consts::{PI, TAU};
 
 use crate::model::Spline;
+use crate::portable::Portable;
 
 /// One segment of a loop, in sketch coordinates.
 #[derive(Clone, Debug, PartialEq)]
@@ -53,8 +54,8 @@ pub enum Seg {
 fn gn_weights(order: u32, w: f64, t: f64) -> ([f64; 2], [f64; 2]) {
     let m = order as i32 + 1;
     let (s, u) = (1.0 - t, t);
-    let (big_a, big_b) = (s.powi(m), u.powi(m));
-    let (da, db) = (-(m as f64) * s.powi(m - 1), m as f64 * u.powi(m - 1));
+    let (big_a, big_b) = (s.ppowi(m), u.ppowi(m));
+    let (da, db) = (-(m as f64) * s.ppowi(m - 1), m as f64 * u.ppowi(m - 1));
     let sum = big_a + big_b;
     let f = big_a / sum;
     let df = (da * big_b - big_a * db) / (sum * sum);
@@ -116,8 +117,8 @@ pub fn gn_radius_at(order: u32, w: f64, alpha: f64, d: f64, t: f64) -> f64 {
         (at(-2.0) - 8.0 * at(-1.0) + 8.0 * at(1.0) - at(2.0)) / (12.0 * h)
     };
     let (a1, b1, a2, b2) = (d1[0], d1[1], second(0), second(1));
-    let speed = a1 * a1 + b1 * b1 + 2.0 * a1 * b1 * alpha.cos();
-    d * speed.powf(1.5) / ((a1 * b2 - a2 * b1).abs() * alpha.sin())
+    let speed = a1 * a1 + b1 * b1 + 2.0 * a1 * b1 * alpha.pcos();
+    d * speed.ppowf(1.5) / ((a1 * b2 - a2 * b1).abs() * alpha.psin())
 }
 
 /// Whether an order-`order` section of thumbweight `w` in a wedge of angle `alpha` curves most at
@@ -174,8 +175,8 @@ pub fn gn_center_w(order: u32, alpha: f64, d: f64, center: f64) -> f64 {
 /// `(cot(α/2) − (π − α)/2) / (cot(α/2)·cos²(α/2))`. `I` falls as `w` rises, so the root is
 /// bisected on a bracket stepped down from −1.
 pub fn gn_equal_area_w(order: u32, alpha: f64) -> f64 {
-    let c = 1.0 / (alpha / 2.0).tan();
-    let target = (c - (PI - alpha) / 2.0) / (c * (alpha / 2.0).cos().powi(2));
+    let c = 1.0 / (alpha / 2.0).ptan();
+    let target = (c - (PI - alpha) / 2.0) / (c * (alpha / 2.0).pcos().ppowi(2));
     let (mut lo, mut hi) = (-1.0f64, 1.0 - 1e-9);
     while gn_area_share(order, lo) < target {
         hi = lo;
@@ -273,7 +274,7 @@ impl Seg {
                 start,
                 sweep,
             } => {
-                let (s, co) = (start + t * sweep).sin_cos();
+                let (s, co) = (start + t * sweep).psin_cos();
                 (
                     [c[0] + r * co, c[1] + r * s],
                     [-r * sweep * s, r * sweep * co],
@@ -306,10 +307,10 @@ impl Seg {
 
     pub fn length(&self) -> f64 {
         match *self {
-            Seg::Line { a, b } => (b[0] - a[0]).hypot(b[1] - a[1]),
+            Seg::Line { a, b } => (b[0] - a[0]).phypot(b[1] - a[1]),
             Seg::Arc { radius, sweep, .. } => radius * sweep.abs(),
             Seg::Spline(_) | Seg::Conic { .. } | Seg::Gn { .. } => {
-                self.integrate(|_, d| d[0].hypot(d[1]))
+                self.integrate(|_, d| d[0].phypot(d[1]))
             }
         }
     }
@@ -325,7 +326,8 @@ impl Seg {
                 sweep: w,
             } => {
                 let e = s + w;
-                0.5 * (r * c[0] * (e.sin() - s.sin()) - r * c[1] * (e.cos() - s.cos()) + r * r * w)
+                0.5 * (r * c[0] * (e.psin() - s.psin()) - r * c[1] * (e.pcos() - s.pcos())
+                    + r * r * w)
             }
             Seg::Spline(_) | Seg::Conic { .. } | Seg::Gn { .. } => {
                 self.integrate(|q, d| 0.5 * (q[0] * d[1] - q[1] * d[0]))
@@ -348,9 +350,10 @@ impl Seg {
             } => {
                 // x = cx + r cos θ, dy = r cos θ dθ.
                 let e = s + w;
-                let i1 = e.sin() - s.sin();
-                let i2 = 0.5 * w + 0.25 * ((2.0 * e).sin() - (2.0 * s).sin());
-                let i3 = (e.sin() - e.sin().powi(3) / 3.0) - (s.sin() - s.sin().powi(3) / 3.0);
+                let i1 = e.psin() - s.psin();
+                let i2 = 0.5 * w + 0.25 * ((2.0 * e).psin() - (2.0 * s).psin());
+                let i3 =
+                    (e.psin() - e.psin().ppowi(3) / 3.0) - (s.psin() - s.psin().ppowi(3) / 3.0);
                 0.5 * r * (c[0] * c[0] * i1 + 2.0 * c[0] * r * i2 + r * r * i3)
             }
             Seg::Spline(_) | Seg::Conic { .. } | Seg::Gn { .. } => {
@@ -368,9 +371,9 @@ impl Seg {
                 radius: r,
                 start: s,
                 sweep: w,
-            } => r * (c[0] * w.abs() + w.signum() * r * ((s + w).sin() - s.sin())),
+            } => r * (c[0] * w.abs() + w.signum() * r * ((s + w).psin() - s.psin())),
             Seg::Spline(_) | Seg::Conic { .. } | Seg::Gn { .. } => {
-                self.integrate(|q, d| q[0] * d[0].hypot(d[1]))
+                self.integrate(|q, d| q[0] * d[0].phypot(d[1]))
             }
         }
     }
@@ -448,8 +451,8 @@ impl Seg {
                             let (pa, pb) = (self.eval(ta).0, self.eval(tb).0);
                             let mid = self.eval(0.5 * (ta + tb)).0;
                             let sag = 2.0
-                                * ((mid[0] - 0.5 * (pa[0] + pb[0])).powi(2)
-                                    + (mid[1] - 0.5 * (pa[1] + pb[1])).powi(2))
+                                * ((mid[0] - 0.5 * (pa[0] + pb[0])).ppowi(2)
+                                    + (mid[1] - 0.5 * (pa[1] + pb[1])).ppowi(2))
                                 .sqrt()
                                 + 1e-12;
                             let bx = [
@@ -598,16 +601,16 @@ impl Seg {
                 if v.abs() >= 1.0 - 1e-12 {
                     return 0;
                 }
-                let t1 = v.asin();
+                let t1 = v.pasin();
                 let mut n = 0;
                 for theta in [t1, PI - t1] {
-                    if c[0] + r * theta.cos() <= q[0] {
+                    if c[0] + r * theta.pcos() <= q[0] {
                         continue;
                     }
                     // How far along the arc, in its own direction, the crossing lies.
                     let along = ((theta - start) * sweep.signum()).rem_euclid(TAU);
                     if along < sweep.abs() || sweep.abs() >= TAU {
-                        n += if theta.cos() * sweep > 0.0 { 1 } else { -1 };
+                        n += if theta.pcos() * sweep > 0.0 { 1 } else { -1 };
                     }
                 }
                 n
@@ -800,7 +803,7 @@ impl Profile {
 
     /// ∫∫ xᵏ yᵐ dA over the region, by Green's theorem as ∮ xᵏ⁺¹ yᵐ / (k + 1) dy.
     pub fn area_moment(&self, k: i32, m: i32) -> f64 {
-        self.boundary_integral(|q, d| q[0].powi(k + 1) * q[1].powi(m) / f64::from(k + 1) * d[1])
+        self.boundary_integral(|q, d| q[0].ppowi(k + 1) * q[1].ppowi(m) / f64::from(k + 1) * d[1])
     }
 
     /// ∫∫ x dA: the first moment about the sketch's y axis.
@@ -861,7 +864,7 @@ impl Profile {
                     start,
                     sweep,
                 } => {
-                    let at = |t: f64| [c[0] + r * t.cos(), c[1] + r * t.sin()];
+                    let at = |t: f64| [c[0] + r * t.pcos(), c[1] + r * t.psin()];
                     let mut pts = vec![at(*start), at(start + sweep)];
                     for k in 0..4 {
                         let t = f64::from(k) * PI / 2.0;
@@ -989,13 +992,13 @@ pub fn gn_rounded(pts: &[[f64; 2]], r: &[f64], center: &[f64], order: u32) -> Ve
             unit([prev[0] - p[0], prev[1] - p[1]]),
             unit([next[0] - p[0], next[1] - p[1]]),
         );
-        (u[0] * v[0] + u[1] * v[1]).clamp(-1.0, 1.0).acos()
+        (u[0] * v[0] + u[1] * v[1]).clamp(-1.0, 1.0).pacos()
     };
     let ends: Vec<([f64; 2], [f64; 2])> = (0..n)
         .map(|i| {
             let (p, prev, next) = (pts[i], pts[(i + n - 1) % n], pts[(i + 1) % n]);
             if r[i] > 0.0 {
-                let d = r[i] / (interior(i) / 2.0).tan();
+                let d = r[i] / (interior(i) / 2.0).ptan();
                 (toward(p, prev, d), toward(p, next, d))
             } else {
                 (p, p)
@@ -1007,7 +1010,7 @@ pub fn gn_rounded(pts: &[[f64; 2]], r: &[f64], center: &[f64], order: u32) -> Ve
         if r[i] > 0.0 {
             let alpha = interior(i);
             let w = if center[i] > 0.0 {
-                gn_center_w(order, alpha, r[i] / (alpha / 2.0).tan(), center[i])
+                gn_center_w(order, alpha, r[i] / (alpha / 2.0).ptan(), center[i])
             } else {
                 gn_equal_area_w(order, alpha)
             };
@@ -1081,14 +1084,14 @@ pub fn rounded(pts: &[[f64; 2]], r: &[f64]) -> Vec<Seg> {
             ends.push((q, q, None));
             continue;
         }
-        let turn = (u[0] * v[1] - u[1] * v[0]).atan2(u[0] * v[0] + u[1] * v[1]);
-        let t = r[i] * (turn.abs() / 2.0).tan();
+        let turn = (u[0] * v[1] - u[1] * v[0]).patan2(u[0] * v[0] + u[1] * v[1]);
+        let t = r[i] * (turn.abs() / 2.0).ptan();
         let a = [q[0] - u[0] * t, q[1] - u[1] * t];
         let b = [q[0] + v[0] * t, q[1] + v[1] * t];
         // The centre is r to the left of a left turn's side, to the right of a right turn's.
         let side = turn.signum();
         let c = [a[0] - u[1] * r[i] * side, a[1] + u[0] * r[i] * side];
-        let start = (a[1] - c[1]).atan2(a[0] - c[0]);
+        let start = (a[1] - c[1]).patan2(a[0] - c[0]);
         ends.push((a, b, Some((c, start, turn))));
     }
     let mut out = Vec::new();
@@ -1155,7 +1158,7 @@ fn range(sp: &Spline) -> (f64, f64) {
 }
 
 fn unit(v: [f64; 2]) -> [f64; 2] {
-    let n = v[0].hypot(v[1]);
+    let n = v[0].phypot(v[1]);
     [v[0] / n, v[1] / n]
 }
 
@@ -1191,8 +1194,8 @@ mod tests {
         let mut ctrl: Vec<[f64; 2]> = (0..n)
             .map(|i| {
                 let a = TAU * i as f64 / n as f64;
-                let rad = 15.0 + 5.0 * (-(a - PI).powi(2) / 1.28).exp();
-                [rad * a.cos(), rad * a.sin()]
+                let rad = 15.0 + 5.0 * (-(a - PI).ppowi(2) / 1.28).pexp();
+                [rad * a.pcos(), rad * a.psin()]
             })
             .collect();
         ctrl.extend_from_within(..3);
@@ -1391,8 +1394,8 @@ mod tests {
         );
         for alpha in [0.6f64, 1.2, PI / 2.0, 2.2, 2.8] {
             let w = gn_equal_area_w(2, alpha);
-            let c = 1.0 / (alpha / 2.0).tan();
-            let want = (c - (PI - alpha) / 2.0) / (c * (alpha / 2.0).cos().powi(2));
+            let c = 1.0 / (alpha / 2.0).ptan();
+            let want = (c - (PI - alpha) / 2.0) / (c * (alpha / 2.0).pcos().ppowi(2));
             assert!((gn_area_share(2, w) - want).abs() < 1e-13, "alpha {alpha}");
         }
         let Some(s) = g2.loops[0].iter().find(|s| matches!(s, Seg::Gn { .. })) else {
@@ -1414,7 +1417,7 @@ mod tests {
             let (_, d0) = s.eval(t);
             let (_, d1) = s.eval(t + h);
             let dd = [(d1[0] - d0[0]) / h, (d1[1] - d0[1]) / h];
-            (d0[0] * dd[1] - d0[1] * dd[0]).abs() / d0[0].hypot(d0[1]).powi(3)
+            (d0[0] * dd[1] - d0[1] * dd[0]).abs() / d0[0].phypot(d0[1]).ppowi(3)
         };
         assert!(
             bend(1e-4) < 1e-3 / 0.8 && bend(0.5) > 0.5 / 0.8,
@@ -1437,14 +1440,14 @@ mod tests {
             let s = Seg::Gn {
                 a: [d, 0.0],
                 apex: [0.0, 0.0],
-                b: [d * alpha.cos(), d * alpha.sin()],
+                b: [d * alpha.pcos(), d * alpha.psin()],
                 order: 2,
                 w,
             };
             let h = 1e-5;
             let ((p0, t0), (p1, t1)) = (s.eval(0.5 - h), s.eval(0.5 + h));
-            let turn = (t0[0] * t1[1] - t0[1] * t1[0]).atan2(t0[0] * t1[0] + t0[1] * t1[1]);
-            let radius = (p1[0] - p0[0]).hypot(p1[1] - p0[1]) / turn.abs();
+            let turn = (t0[0] * t1[1] - t0[1] * t1[0]).patan2(t0[0] * t1[0] + t0[1] * t1[1]);
+            let radius = (p1[0] - p0[0]).phypot(p1[1] - p0[1]) / turn.abs();
             assert!(
                 (radius - center).abs() < 1e-6 * center,
                 "{radius} for {center}"

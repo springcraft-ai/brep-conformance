@@ -2,10 +2,11 @@
 //! short and close with one patch, a fillet between two faces that need not meet, and a full round.
 
 use super::*;
+use crate::portable::Portable;
 use crate::profile::{conic_rounded, gn_center_radius, gn_equal_area_w, gn_peaked_w, gn_rounded};
 
 fn unit2(v: [f64; 2]) -> [f64; 2] {
-    let l = v[0].hypot(v[1]);
+    let l = v[0].phypot(v[1]);
     [v[0] / l, v[1] / l]
 }
 
@@ -87,7 +88,7 @@ pub(super) fn g2_prism(r: &mut Rng) -> FeatureDraw {
     let half = |i: usize| (PI - c[i].0.abs()) / 2.0;
     let most = chosen
         .iter()
-        .map(|&i| 0.45 * c[i].1 * half(i).tan())
+        .map(|&i| 0.45 * c[i].1 * half(i).ptan())
         .fold(f64::INFINITY, f64::min);
     let rad = most * r.range(0.2, 1.0);
     let height = r.range(2.0, 10.0);
@@ -99,7 +100,7 @@ pub(super) fn g2_prism(r: &mut Rng) -> FeatureDraw {
     // every chosen corner, the soft corner a blend is mostly asked for, from 0.4 times up to the
     // largest such; the rest from 0.6 to 1.6 times the equal-area one, shoulders and all.
     let first = chosen[0];
-    let (alpha, d0) = (2.0 * half(first), rad / half(first).tan());
+    let (alpha, d0) = (2.0 * half(first), rad / half(first).ptan());
     let even = gn_center_radius(2, gn_equal_area_w(2, alpha), alpha, d0);
     let (center, test) = match r.next_u64() % 3 {
         0 => (even, "fillets/g2-equal-area"),
@@ -107,7 +108,7 @@ pub(super) fn g2_prism(r: &mut Rng) -> FeatureDraw {
             let most = chosen
                 .iter()
                 .map(|&i| {
-                    let (a, d) = (2.0 * half(i), rad / half(i).tan());
+                    let (a, d) = (2.0 * half(i), rad / half(i).ptan());
                     gn_center_radius(2, gn_peaked_w(2, a), a, d)
                 })
                 .fold(f64::INFINITY, f64::min);
@@ -123,7 +124,7 @@ pub(super) fn g2_prism(r: &mut Rng) -> FeatureDraw {
     let mut probes = Vec::new();
     for &i in &chosen {
         let (prev, at, next) = (pts[(i + n - 1) % n], pts[i], pts[(i + 1) % n]);
-        let d = rad / half(i).tan();
+        let d = rad / half(i).ptan();
         for side in [prev, next] {
             let q = toward(at, side, d - 1e-3 * d);
             probes.push(Probe {
@@ -257,8 +258,8 @@ pub(super) fn setback_corner(r: &mut Rng, blend: Act) -> FeatureDraw {
     let exact = Exact {
         sound: Some(Sound {
             zone: Some(zone),
-            outside: full - side.powi(3) - along(side),
-            least: full - along(s) - s.powi(3),
+            outside: full - side.ppowi(3) - along(side),
+            least: full - along(s) - s.ppowi(3),
             most: full - along(s),
             betti: [1, 0, 0],
             contacts,
@@ -293,10 +294,10 @@ pub(super) fn face_fillet(r: &mut Rng) -> FeatureDraw {
     let half = turn.abs() / 2.0;
     // A ball of radius R touches the sides R·tan(half) from the corner, and passes it
     // R·(1/cos(half) − 1) away; the chamfer's line passes it c·sin(half) away.
-    let reach = |rad: f64| rad * (1.0 / half.cos() - 1.0);
-    let rad_most = 0.45 * shortest / half.tan();
-    let c = reach(rad_most) / (1.3 * half.sin()) * r.range(0.3, 1.0);
-    let rad_least = 1.3 * c * half.sin() / (1.0 / half.cos() - 1.0);
+    let reach = |rad: f64| rad * (1.0 / half.pcos() - 1.0);
+    let rad_most = 0.45 * shortest / half.ptan();
+    let c = reach(rad_most) / (1.3 * half.psin()) * r.range(0.3, 1.0);
+    let rad_least = 1.3 * c * half.psin() / (1.0 / half.pcos() - 1.0);
     let rad = rad_least + (rad_most - rad_least) * r.range(0.0, 1.0);
     let height = r.range(2.0, 10.0);
     let mut cuts = vec![0.0; n];
@@ -343,13 +344,13 @@ pub(super) fn full_round(r: &mut Rng) -> FeatureDraw {
     let (b, t) = (bottom / 2.0, top / 2.0);
     let pts = [[-b, 0.0], [b, 0.0], [t, h], [-t, h]];
     let lean = b - t;
-    let side = lean.hypot(h);
+    let side = lean.phypot(h);
     // The circle touching the top at (0, h) has its centre at (0, h − ρ), ρ from each side.
     let rho = h * t / (side - lean);
     let n = [h / side, lean / side];
     let centre = [0.0, h - rho];
     let touch = [centre[0] + rho * n[0], centre[1] + rho * n[1]];
-    let start = n[1].atan2(n[0]);
+    let start = n[1].patan2(n[0]);
     let lp = vec![
         Seg::Line {
             a: [-b, 0.0],
@@ -417,7 +418,7 @@ mod tests {
                 [corner[0] - foot[0], corner[1] - foot[1]],
                 [center[0] - foot[0], center[1] - foot[1]],
             );
-            let off = (e[0] * f[1] - e[1] * f[0]).abs() / e[0].hypot(e[1]);
+            let off = (e[0] * f[1] - e[1] * f[0]).abs() / e[0].phypot(e[1]);
             assert!((off - radius).abs() < 1e-12, "{off} against {radius}");
             // A rectangle of width w and height h keeps w·(h − w/2) and the half disc π·w²/8.
             if (corner[0] - foot[0]).abs() < 1e-15 {

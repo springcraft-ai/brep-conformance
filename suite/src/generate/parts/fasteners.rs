@@ -13,6 +13,7 @@
 //! volume is the slices' integral over height.
 
 use super::*;
+use crate::portable::Portable;
 
 /// A thread of the metric basic profile: 60° flanks, the crest flat `P/8` wide on the major
 /// diameter of an external thread and `P/4` on the minor of an internal one. Its ridge reaches
@@ -81,7 +82,7 @@ impl Thread {
         // w = α + βρ on the ridge.
         let beta = if self.external { -flank() } else { flank() };
         let alpha = self.width(self.crest) - beta * self.crest;
-        2.0 * PI / self.p * (alpha * (b * b - a * a) / 2.0 + beta * (b.powi(3) - a.powi(3)) / 3.0)
+        2.0 * PI / self.p * (alpha * (b * b - a * a) / 2.0 + beta * (b.ppowi(3) - a.ppowi(3)) / 3.0)
     }
 
     /// The ridge from a pitch below `lo` to a pitch above `hi`: a screw of the profile about z,
@@ -168,7 +169,7 @@ pub(crate) fn hex_nut(size: Size, m: f64) -> Drawn {
         vec![poly(&hexagon(rc)), circle([0.0, 0.0], bore, false)],
         m,
     );
-    let tan30 = (PI / 6.0).tan();
+    let tan30 = (PI / 6.0).ptan();
     let rho0 = 0.45 * s;
     let chamfer = hex_chamfer(a, rho0, tan30);
     let r0 = 1.08 * size.d / 2.0;
@@ -184,7 +185,7 @@ pub(crate) fn hex_nut(size: Size, m: f64) -> Drawn {
 
 /// `tan 60°`: a 120° countersink's radius shrinks by it for each unit of depth.
 fn sink_slope() -> f64 {
-    (PI / 3.0).tan()
+    (PI / 3.0).ptan()
 }
 
 /// What a 120° countersink of radius `r0` at the face takes from a bore at the root of internal
@@ -195,7 +196,7 @@ fn countersunk(th: &Thread, r0: f64) -> f64 {
     let bore = th.root;
     let rc = |dep: f64| r0 - dep * t;
     let (d1, d2) = ((r0 - bore) / t, (r0 - th.crest) / t);
-    let wall = quad(|dep| PI * (rc(dep).powi(2) - bore * bore), 0.0, d1);
+    let wall = quad(|dep| PI * (rc(dep).ppowi(2) - bore * bore), 0.0, d1);
     let ridge = quad_at(|dep| th.slice(th.crest, rc(dep).min(bore)), 0.0, d2, &[d1]);
     wall + ridge
 }
@@ -326,7 +327,7 @@ pub(crate) fn socket_head_screw(size: Size, len: f64) -> Drawn {
         vec![poly(&hexagon(s / 3f64.sqrt()))],
         t + 1.0,
     );
-    let point_h = s / 2.0 / 59f64.to_radians().tan();
+    let point_h = s / 2.0 / 59f64.to_radians().ptan();
     let point = Primitive::Cone {
         frame: Frame::at([0.0, 0.0, -k + t]),
         bottom: s / 2.0,
@@ -338,7 +339,7 @@ pub(crate) fn socket_head_screw(size: Size, len: f64) -> Drawn {
         .join(shank, shank_v)
         .join(ridge, added)
         .cut(socket, 3f64.sqrt() / 2.0 * s * s * t)
-        .cut(point, PI / 3.0 * (s / 2.0).powi(2) * point_h)
+        .cut(point, PI / 3.0 * (s / 2.0).ppowi(2) * point_h)
         .done()
 }
 
@@ -366,7 +367,7 @@ pub(crate) fn hex_head_screw(size: Size, len: f64) -> Drawn {
     let (a, rc) = (s / 2.0, s / 3f64.sqrt());
     let head = ext(Frame::at([0.0, 0.0, -k]), vec![poly(&hexagon(rc))], k - c);
     let face = cyl([0.0, 0.0, -c], Z, dw / 2.0, c);
-    let tan30 = (PI / 6.0).tan();
+    let tan30 = (PI / 6.0).ptan();
     let rho0 = 0.45 * s;
     let shank_v = Primitive::volume(&shank);
     Part::new(head)
@@ -374,7 +375,7 @@ pub(crate) fn hex_head_screw(size: Size, len: f64) -> Drawn {
             chamfer_tool(-k, rho0, rc, tan30, false),
             hex_chamfer(a, rho0, tan30),
         )
-        .join(face, PI * (dw / 2.0).powi(2) * c)
+        .join(face, PI * (dw / 2.0).ppowi(2) * c)
         .join(shank, shank_v)
         .join(ridge, added)
         .done()
@@ -409,7 +410,7 @@ pub(crate) fn plain_washer(size: Size) -> Drawn {
 /// added and its area less the disc's is the teeth's alone.
 pub(crate) fn knurl_outline(rv: f64, peak: f64, n: usize) -> Vec<Seg> {
     let step = TAU / n as f64;
-    let at = |r: f64, a: f64| [r * a.cos(), r * a.sin()];
+    let at = |r: f64, a: f64| [r * a.pcos(), r * a.psin()];
     let mut out = Vec::with_capacity(4 * n);
     for k in 0..n {
         let a = step * k as f64;
@@ -499,7 +500,7 @@ pub(crate) fn heat_set_insert(size: Size) -> Drawn {
         ])),
     );
     let n = 18;
-    let tan30 = (PI / 6.0).tan();
+    let tan30 = (PI / 6.0).ptan();
     let (lower, lower_v) = knurl_band(rv, peak, n, zp, zg0 - zp, (zg0 - zp) * tan30 / rv);
     let (upper, upper_v) = knurl_band(rv, peak, n, zg1, zc - zg1, -(zc - zg1) * tan30 / rv);
     let r0 = 1.08 * size.d / 2.0;

@@ -3,6 +3,7 @@
 //! reaches a solid another family already has the closed form of, by a longer road.
 
 use super::*;
+use crate::portable::Portable;
 
 fn drawn(base: Shape, want: Shape, steps: Vec<Step>, volume: f64, area: Option<f64>) -> Drawn {
     let exact = Exact {
@@ -57,7 +58,7 @@ fn rounded_prism(pts: &[[f64; 2]], radii: &[f64], h: f64) -> Primitive {
 /// A radius for each chosen corner that keeps its round within 0.45 of both its sides.
 fn fitting_radius(pts: &[[f64; 2]], i: usize, f: f64) -> f64 {
     let (turn, side) = corners(pts)[i];
-    0.45 * side * f / (turn.abs() / 2.0).tan()
+    0.45 * side * f / (turn.abs() / 2.0).ptan()
 }
 
 /// An L-prism made as the union of its two arm boxes, every convex edge then filleted: the edges
@@ -121,12 +122,12 @@ pub(super) fn rim_after_cut(r: &mut Rng) -> Drawn {
     let v0 = w * d * t - PI * rad * rad * t;
     let s0 = 2.0 * (w * d - PI * rad * rad) + 2.0 * (w + d) * t + TAU * rad * t;
     let volume = v0 - TAU * at * cut;
-    let ring = PI * ((rad + size).powi(2) - rad * rad);
+    let ring = PI * ((rad + size).ppowi(2) - rad * rad);
     let area = s0 - ring - TAU * rad * size + face;
     let rim = r.range(0.5, 2.5);
     let step = act_of(
         blend,
-        vec![[c[0] + rad * rim.cos(), c[1] + rad * rim.sin(), t]],
+        vec![[c[0] + rad * rim.pcos(), c[1] + rad * rim.psin(), t]],
         size,
     );
     drawn(
@@ -196,7 +197,7 @@ pub(super) fn rims_of_a_pattern(r: &mut Rng) -> Drawn {
     let nf = n as f64;
     let v0 = w * d * t - nf * PI * rad * rad * t;
     let s0 = 2.0 * (w * d - nf * PI * rad * rad) + 2.0 * (w + d) * t + nf * TAU * rad * t;
-    let ring = PI * ((rad + size).powi(2) - rad * rad);
+    let ring = PI * ((rad + size).ppowi(2) - rad * rad);
     let volume = v0 - nf * TAU * at * cut;
     let area = s0 + nf * (face - ring - TAU * rad * size);
     drawn(
@@ -229,7 +230,7 @@ pub(super) fn top_loop_after_corners(r: &mut Rng) -> Drawn {
     let lines: Vec<([f64; 2], [f64; 2])> = profile.loops[0]
         .iter()
         .filter_map(|s| match s {
-            Seg::Line { a, b } if (b[0] - a[0]).hypot(b[1] - a[1]) > 1e-12 => Some((*a, *b)),
+            Seg::Line { a, b } if (b[0] - a[0]).phypot(b[1] - a[1]) > 1e-12 => Some((*a, *b)),
             _ => None,
         })
         .collect();
@@ -274,14 +275,14 @@ pub(super) fn edges_of_a_chamfer(r: &mut Rng) -> Drawn {
     let cut_pts: Vec<[f64; 2]> = chamfered(&pts, &cuts)
         .iter()
         .filter_map(|s| match s {
-            Seg::Line { a, b } if (b[0] - a[0]).hypot(b[1] - a[1]) > 0.0 => Some(*a),
+            Seg::Line { a, b } if (b[0] - a[0]).phypot(b[1] - a[1]) > 0.0 => Some(*a),
             _ => None,
         })
         .collect();
     let m = cut_pts.len();
     // The chamfer's two ends: the corners of the new profile nearest the old corner.
     let mut near: Vec<usize> = (0..m).collect();
-    let dist = |j: usize| (cut_pts[j][0] - pts[i][0]).hypot(cut_pts[j][1] - pts[i][1]);
+    let dist = |j: usize| (cut_pts[j][0] - pts[i][0]).phypot(cut_pts[j][1] - pts[i][1]);
     near.sort_by(|&a, &b| dist(a).total_cmp(&dist(b)));
     let ends = [near[0], near[1]];
     let f = r.range(0.2, 1.0);
@@ -339,7 +340,7 @@ pub(super) fn chamfers_beside_fillets(r: &mut Rng) -> Drawn {
         if cuts[i] > 0.0 {
             let (p, prev, next) = (pts[i], pts[(i + n - 1) % n], pts[(i + 1) % n]);
             let toward = |q: [f64; 2]| {
-                let l = (q[0] - p[0]).hypot(q[1] - p[1]);
+                let l = (q[0] - p[0]).phypot(q[1] - p[1]);
                 [
                     p[0] + (q[0] - p[0]) * cut / l,
                     p[1] + (q[1] - p[1]) * cut / l,
@@ -528,7 +529,7 @@ pub(super) fn offset_twice(r: &mut Rng) -> Drawn {
             sphere([0.0; 3], rad).into(),
             all.into(),
             vec![offset(a), offset(b)],
-            4.0 / 3.0 * PI * big.powi(3),
+            4.0 / 3.0 * PI * big.ppowi(3),
             Some(4.0 * PI * big * big),
         )
     }

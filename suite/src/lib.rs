@@ -12,6 +12,7 @@ pub mod glb;
 pub mod html;
 pub mod mass;
 pub mod oracle;
+pub use brep_protocol::portable;
 pub mod registry;
 pub mod report;
 pub mod run;

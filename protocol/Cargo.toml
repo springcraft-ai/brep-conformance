@@ -13,6 +13,8 @@ keywords = ["brep", "cad", "geometry", "kernel", "conformance"]
 # crates.io dependencies only: the protocol must build outside this repository.
 [dependencies]
 serde_json = "1"
+# One maths library everywhere, so the same seed draws the same cases on every platform.
+libm = "0.2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
