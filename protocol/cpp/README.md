@@ -36,15 +36,16 @@ adapter drives.
 
 ## Usage
 
-Each release of the binding is an archive attached to this repository's release `cpp-v<version>`:
-the header, its CMake file, the licence and the example, and nothing else from the repository. An
-adapter's CMake build fetches it by URL and pins it by the hash the release's notes give:
+Each release of the protocol, `brep-protocol@<version>`, carries the C++ binding at that version as
+an archive: the header, its CMake file, the licence and the example, and nothing else from the
+repository. An adapter's CMake build fetches it by URL and pins it by the hash the release's notes
+give:
 
 ```cmake
 include(FetchContent)
 FetchContent_Declare(
     brep_protocol
-    URL https://github.com/springcraft-ai/brep-conformance/releases/download/cpp-v1.0.0/brep_protocol-1.0.0.tar.xz
+    URL https://github.com/springcraft-ai/brep-conformance/releases/download/brep-protocol-v1.0.0/brep_protocol-1.0.0.tar.xz
     URL_HASH SHA256=<the release's hash>
 )
 FetchContent_MakeAvailable(brep_protocol)
@@ -102,12 +103,15 @@ The suite gives it the same outcome on every case as the Rust example.
 
 ## Releases
 
-The binding's version is the `VERSION` in [`CMakeLists.txt`](CMakeLists.txt). Its major number is
-the protocol's, as the Rust crate's is, and [`pack.py`](pack.py) refuses to pack a version whose
-major number differs from `PROTOCOL_VERSION`.
+There is one release per version of the protocol's bindings, `brep-protocol@<version>`: the Rust
+crate at that version on crates.io, and the C++ binding at that version attached to the release. The
+C++ binding's version is the `VERSION` in [`CMakeLists.txt`](CMakeLists.txt), and
+[`pack.py`](pack.py) refuses to pack it unless it is the crate's version in
+[`../Cargo.toml`](../Cargo.toml).
 
-To release, push a tag `cpp-v<version>` at a commit of `main` where `CMakeLists.txt` has that
-version. The [release workflow](../../.github/workflows/cpp-release.yml) builds and tests the
+Publishing a `brep-protocol-v<version>` release runs the
+[release workflow](../../.github/workflows/cpp-release.yml) on its tag: it builds and tests the
 binding, packs it, checks that the archive builds on its own and as a dependency pinned by its hash,
-and attaches it to the tag's release with that hash. Every pull request packs and checks the archive
-the same way, in the `cpp-binding` job.
+attaches it to the release, and adds the hash to the release's notes. Run by hand with a release's
+tag, the workflow does the same for a release published without the archive. Every pull request
+packs and checks the archive the same way, in the `cpp-binding` job.

@@ -1,21 +1,33 @@
 # SPDX-License-Identifier: MIT
 name: C++ binding release
 
-# A tag cpp-v<version> publishes the C++ binding at that version: protocol/cpp packed into
-# brep_protocol-<version>.tar.xz, attached to the tag's release with its SHA-256, which adapters
-# fetch by URL and pin by hash. The version is protocol/cpp/CMakeLists.txt's, whose major number is
-# the protocol's.
+# Each release of the protocol, brep-protocol@<version>, carries every binding at that version: the
+# Rust crate on crates.io, and the C++ binding as brep_protocol-<version>.tar.xz attached here,
+# which adapters fetch by URL and pin by the SHA-256 the release's notes give. Publishing a
+# protocol release attaches the C++ archive, packed from its tag. A run by hand attaches it to a
+# release published without one, packed from the branch it runs on.
 on:
-  push:
-    tags: ['cpp-v*']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: The tag of the protocol release to attach the C++ binding to
+        required: true
+        default: brep-protocol-v1.0.0
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  attach:
+    if: >-
+      github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name,
+      'brep-protocol-v')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      RELEASE: ${{ github.event.release.tag_name || inputs.release }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: The binding builds without a warning and its tests pass
@@ -23,15 +35,15 @@ jobs:
           cmake -S protocol/cpp -B protocol/cpp/build -DCMAKE_BUILD_TYPE=Release
           cmake --build protocol/cpp/build
           ctest --test-dir protocol/cpp/build --output-on-failure
-      - name: Pack the binding, at the version the tag names
+      - name: Pack the binding, at the release's version
         run: |
           out=$(python3 -I protocol/cpp/pack.py dist)
           archive=$(echo "$out" | sed -n 1p)
           hash=$(echo "$out" | sed -n 2p)
           version=${archive##*/brep_protocol-}
           version=${version%.tar.xz}
-          if [ "$GITHUB_REF_NAME" != "cpp-v$version" ]; then
-              echo "The tag is $GITHUB_REF_NAME, but protocol/cpp is at version $version."
+          if [ "$RELEASE" != "brep-protocol-v$version" ]; then
+              echo "The release is $RELEASE, but protocol/cpp is at version $version."
               exit 1
           fi
           protocol/cpp/check-package.sh "$archive" "$hash"
@@ -40,14 +52,20 @@ jobs:
               echo "HASH=$hash"
               echo "VERSION=$version"
           } >> "$GITHUB_ENV"
-      - name: Publish the release
+      - name: Attach the archive to the release, and its hash to the release's notes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          gh release upload "$RELEASE" "$ARCHIVE" --repo "$GITHUB_REPOSITORY"
           releases="https://github.com/$GITHUB_REPOSITORY/releases/download"
-          url="$releases/$GITHUB_REF_NAME/${ARCHIVE##*/}"
-          cat > notes.md <<EOF
-          The C++ binding of the protocol, version $VERSION. An adapter's CMake build fetches it:
+          url="$releases/$RELEASE/${ARCHIVE##*/}"
+          gh release view "$RELEASE" --repo "$GITHUB_REPOSITORY" --json body --jq .body > notes.md
+          cat >> notes.md <<EOF
+
+          ## C++
+
+          The C++ binding at version $VERSION, packed from \`$GITHUB_SHA\`. An adapter's CMake
+          build fetches it:
 
           \`\`\`cmake
           include(FetchContent)
@@ -61,5 +79,4 @@ jobs:
 
           SHA-256 of \`${ARCHIVE##*/}\`: \`$HASH\`
           EOF
-          gh release create "$GITHUB_REF_NAME" "$ARCHIVE" --title "C++ binding $VERSION" \
-              --notes-file notes.md
+          gh release edit "$RELEASE" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
