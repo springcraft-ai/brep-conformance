@@ -13,9 +13,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use crate::model::{Op, Primitive, Side, Vec3};
-use crate::{
-    Display, DisplayFace, FUNCTIONS, Kernel, Mesh, PROTOCOL_VERSION, Refusal, TimedOut, speaks,
-};
+use crate::{Display, DisplayFace, Kernel, Mesh, PROTOCOL_VERSION, Refusal, TimedOut, speaks};
 
 struct Worker {
     child: Child,
@@ -691,14 +689,8 @@ impl Kernel for Remote {
         }
     }
 
-    fn unsupported(&self) -> Vec<String> {
-        let supports: Vec<String> =
-            serde_json::from_value(self.hello["supports"].clone()).unwrap_or_default();
-        FUNCTIONS
-            .iter()
-            .filter(|&&f| !supports.iter().any(|s| s == f))
-            .map(|&f| String::from(f))
-            .collect()
+    fn supports(&self) -> Vec<String> {
+        serde_json::from_value(self.hello["supports"].clone()).unwrap_or_default()
     }
 
     fn write_step(&self, s: &Handle) -> Result<String, Refusal> {
@@ -766,6 +758,7 @@ impl Remote {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use crate::FUNCTIONS;
 
     #[test]
     fn a_worker_of_another_protocol_version_is_turned_away() {

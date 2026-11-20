@@ -68,10 +68,11 @@ output. [Calling a kernel](api.md#calling-a-kernel) is the whole of what it must
    `Kernel` class has the same methods and whose example is the same box kernel. An adapter in
    another language answers the same lines of JSON without either.
 
-3. **Declare the rest unsupported.** `unsupported` lists the functions your kernel has no one call
-   for; `hello` reports the others, and the suite runs no case that needs a missing one. Never build
-   a function out of others: [the adapter rule](contract.md#what-an-adapter-may-do) says why.
-   [Refusals](api.md#refusals) says what to answer for an input you cannot build.
+3. **List what your kernel offers.** `supports` lists the functions your kernel has one call for;
+   `hello` reports them, and the suite runs no case that needs another. A function you do not list
+   is not offered, whatever its method does. Never build a function out of others:
+   [the adapter rule](contract.md#what-an-adapter-may-do) says why. [Refusals](api.md#refusals)
+   says what to answer for an input you cannot build.
 
 4. **Run the suite, and read the report.** `--html report.html` writes a page with every case, its
    checks and the shapes it drew. `--family` runs one area of the suite while you work on it.

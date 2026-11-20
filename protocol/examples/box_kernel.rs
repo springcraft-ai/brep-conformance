@@ -8,7 +8,7 @@
 //! ```
 
 use brep_protocol::model::{Frame, Primitive, Side, Vec3};
-use brep_protocol::{FUNCTIONS, Kernel, Refusal};
+use brep_protocol::{Kernel, Refusal};
 
 const TOLERANCE: f64 = 1e-7;
 const SUPPORTED: [&str; 5] = ["box", "volume", "area", "check", "classify"];
@@ -40,13 +40,9 @@ impl Kernel for BoxKernel {
         TOLERANCE
     }
 
-    /// The functions `hello` leaves out; the suite runs no case that needs one.
-    fn unsupported(&self) -> Vec<String> {
-        FUNCTIONS
-            .iter()
-            .filter(|f| !SUPPORTED.contains(f))
-            .map(|f| f.to_string())
-            .collect()
+    /// The functions `hello` lists; the suite runs no case that needs another.
+    fn supports(&self) -> Vec<String> {
+        SUPPORTED.iter().map(|f| f.to_string()).collect()
     }
 
     fn make(&self, p: &Primitive) -> Result<Block, Refusal> {

@@ -301,11 +301,15 @@ pub struct Measure {
 /// the kernel declined, with a reason. A panic is a crash.
 ///
 /// A function added to the protocol comes with a default body, refusing it as unsupported, so an
-/// adapter written before it still builds.
+/// adapter written before it still builds; it is offered only once the adapter lists it.
 pub trait Kernel: Sync {
     type Solid;
     fn name(&self) -> String;
     fn version(&self) -> String;
+    /// The functions of [`FUNCTIONS`] this kernel offers, by name: `hello` lists these, and the
+    /// suite runs no case that needs another. A function not listed is not offered, whatever its
+    /// method does, and a name that is no function is left out.
+    fn supports(&self) -> Vec<String>;
     /// The linear tolerance the kernel declares, mm: the loosest still governing its results.
     fn tolerance(&self) -> f64;
     /// What the adapter set differently from the kernel's defaults; empty when nothing.
@@ -686,10 +690,15 @@ pub trait Kernel: Sync {
     }
     /// Releases every solid this caller made, once it is done with them.
     fn reset(&self) {}
-    /// The functions of [`FUNCTIONS`] this kernel does not offer, by name: `hello` lists the rest
-    /// as supported, and the suite does not run a case that needs one of these.
+    /// The functions of [`FUNCTIONS`] this kernel does not offer: every one [`Kernel::supports`]
+    /// leaves out.
     fn unsupported(&self) -> Vec<String> {
-        Vec::new()
+        let offered = self.supports();
+        FUNCTIONS
+            .iter()
+            .filter(|&&f| !offered.iter().any(|s| s == f))
+            .map(|&f| f.to_string())
+            .collect()
     }
 
     fn boolean(&self, op: Op, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal> {

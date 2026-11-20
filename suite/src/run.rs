@@ -4081,6 +4081,12 @@ mod tests {
 
     impl Kernel for Sticky {
         type Solid = ();
+        fn supports(&self) -> Vec<String> {
+            brep_protocol::FUNCTIONS
+                .iter()
+                .map(|&f| f.to_string())
+                .collect()
+        }
         fn name(&self) -> String {
             "sticky".into()
         }
@@ -4245,6 +4251,12 @@ mod tests {
 
     impl Kernel for Declines {
         type Solid = ();
+        fn supports(&self) -> Vec<String> {
+            brep_protocol::FUNCTIONS
+                .iter()
+                .map(|&f| f.to_string())
+                .collect()
+        }
         fn name(&self) -> String {
             "declines".into()
         }
@@ -4310,6 +4322,12 @@ mod tests {
 
     impl Kernel for RefusesBlends {
         type Solid = ();
+        fn supports(&self) -> Vec<String> {
+            brep_protocol::FUNCTIONS
+                .iter()
+                .map(|&f| f.to_string())
+                .collect()
+        }
         fn name(&self) -> String {
             "refuses-blends".into()
         }

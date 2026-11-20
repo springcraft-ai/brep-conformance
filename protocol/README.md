@@ -14,8 +14,10 @@ This crate is the Rust binding of that protocol:
 
 - `model`, `profile` and `path` hold the values a request carries: frames, primitives,
   profiles and paths.
-- `Kernel` is the trait an adapter implements, with one method per function of the protocol. Ten
-  methods are required. Every other method has a default that refuses the call as `unsupported`.
+- `Kernel` is the trait an adapter implements, with one method per function of the protocol, and
+  `supports`, which lists the functions the kernel offers. Eleven methods are required. Every other
+  method has a default that refuses the call as `unsupported`, and a function is offered only when
+  `supports` lists it.
 - `serve` answers the protocol on stdin and stdout with any implementation of `Kernel`. It holds the
   solids by handle, and it replies `crash` when a method panics.
 - `Remote` is an implementation of `Kernel` that sends each call to worker processes that speak the
@@ -61,6 +63,11 @@ impl Kernel for Adapter {
     fn name(&self) -> String { "my-kernel".into() }
     fn version(&self) -> String { my_kernel::VERSION.into() }
     fn tolerance(&self) -> f64 { 1e-7 }
+    fn supports(&self) -> Vec<String> {
+        ["box", "union", "intersection", "difference", "volume", "area", "check"]
+            .map(String::from)
+            .to_vec()
+    }
     fn make(&self, p: &Primitive) -> Result<Self::Solid, Refusal> { todo!() }
     fn union(&self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal> { todo!() }
     fn intersection(&self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal> { todo!() }
