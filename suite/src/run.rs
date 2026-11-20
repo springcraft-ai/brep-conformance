@@ -244,7 +244,7 @@ fn attempt<T>(f: impl FnOnce() -> Result<T, Refusal>) -> Result<T, Ran> {
 /// Whether `s` holds each point, by the kernel's classifier. `None` where the kernel has no
 /// classifier for them, which leaves a check out. The reason where it has one that gave no answer:
 /// a membership the kernel could not give is a check failed, not a check passed over.
-fn placed<K: Kernel>(k: &K, s: &K::Solid, pts: &[Vec3]) -> Option<Result<Vec<bool>, String>> {
+fn placed<K: Kernel>(k: &mut K, s: &K::Solid, pts: &[Vec3]) -> Option<Result<Vec<bool>, String>> {
     match attempt(|| k.holds(s, pts)) {
         Ok(got) => Some(Ok(got)),
         Err(e) if e.outcome() == Outcome::Unsupported => None,
@@ -275,7 +275,7 @@ fn makes(unsupported: &[String], p: &Primitive) -> bool {
 /// or, where the kernel says it has no mirror, the mirrored primitive made in its place. A case
 /// about a boolean or a fillet across a mirror does not turn on whether the kernel can mirror.
 fn mirror_image<K: Kernel>(
-    k: &K,
+    k: &mut K,
     p: &Primitive,
     a: &K::Solid,
     m: [[f64; 4]; 3],
@@ -309,7 +309,7 @@ fn lacks<K: Kernel + ?Sized>(k: &K) -> Vec<String> {
 
 /// Makes a primitive as an operand: a case about a boolean or a fillet does not turn on whether the
 /// kernel has a constructor for the solid it starts from.
-fn construct<K: Kernel>(k: &K, p: &Primitive) -> Result<K::Solid, Refusal> {
+fn construct<K: Kernel>(k: &mut K, p: &Primitive) -> Result<K::Solid, Refusal> {
     match stand_in(&lacks(k), p) {
         Some(q) => k.make(&q),
         None => k.make(p),
@@ -355,10 +355,13 @@ fn stand_ins(unsupported: &[String]) -> Value {
 }
 
 /// Builds an operand with the kernel: a primitive by its constructor, a boolean from its operands.
-fn build<K: Kernel>(k: &K, s: &Shape) -> Result<K::Solid, Refusal> {
+fn build<K: Kernel>(k: &mut K, s: &Shape) -> Result<K::Solid, Refusal> {
     match s {
         Shape::Prim(p) => construct(k, p),
-        Shape::Bool(op, a, b) => k.boolean(*op, &build(k, a)?, &build(k, b)?),
+        Shape::Bool(op, a, b) => {
+            let (a, b) = (build(k, a)?, build(k, b)?);
+            k.boolean(*op, &a, &b)
+        }
     }
 }
 
@@ -399,7 +402,7 @@ impl std::ops::Deref for Got {
     }
 }
 
-fn got<K: Kernel>(k: &K, s: &K::Solid) -> Got {
+fn got<K: Kernel>(k: &mut K, s: &K::Solid) -> Got {
     let m = k.measure(s);
     let mass = (|| {
         let (c, j) = (k.centroid(s)?, k.inertia(s)?);
@@ -762,7 +765,7 @@ fn b0_primitive(
 /// Runs a sound case: the act's result is open within limits, so it is checked against those
 /// (Q1–Q5) and not against one answer.
 fn run_sound<K: Kernel<Solid: Clone + 'static>>(
-    k: &K,
+    k: &mut K,
     c: &Case,
     f: &Feature,
     sound: &Sound,
@@ -824,7 +827,8 @@ fn run_sound<K: Kernel<Solid: Clone + 'static>>(
     if let Some(zone) = &sound.zone {
         let outside = attempt(|| {
             let zone = construct(k, zone)?;
-            k.volume(&k.difference(&s, &zone)?)
+            let outside = k.difference(&s, &zone)?;
+            k.volume(&outside)
         });
         match outside {
             Ok(v) => check(
@@ -920,7 +924,7 @@ fn run_sound<K: Kernel<Solid: Clone + 'static>>(
 /// What the scans across a result's blend find: Q11, no crease; Q12, where a scan asks, no jump
 /// in curvature; Q13, where a scan names motions, no difference under them.
 fn scan_checks<K: Kernel>(
-    k: &K,
+    k: &mut K,
     s: &K::Solid,
     scans: &[crate::generate::Scan],
 ) -> Vec<(&'static str, bool, String)> {
@@ -978,7 +982,7 @@ fn scan_checks<K: Kernel>(
 }
 
 /// One act on a solid, as the feature it names asks.
-fn act<K: Kernel>(k: &K, s: &K::Solid, f: &Feature) -> Result<K::Solid, Refusal> {
+fn act<K: Kernel>(k: &mut K, s: &K::Solid, f: &Feature) -> Result<K::Solid, Refusal> {
     match f.act {
         Act::Fillet => k.fillet(s, &f.points, f.size),
         Act::OffsetFaces => k.offset_faces(s, &f.points, f.size),
@@ -1054,13 +1058,12 @@ fn act<K: Kernel>(k: &K, s: &K::Solid, f: &Feature) -> Result<K::Solid, Refusal>
     }
 }
 
-fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) -> Value {
+fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &mut K, c: &Case, f: &Feature) -> Value {
     if let Some(sound) = &c.exact.sound {
         return run_sound(k, c, f, sound);
     }
     let mut ops: Vec<Value> = Vec::new();
     let mut worst = Outcome::Pass;
-    let apply = |s: &K::Solid, f: &Feature| act(k, s, f);
     let header = |outcome: Outcome, ops: Vec<Value>, checks: Vec<Value>| {
         json!({"id": c.id, "family": c.family, "outcome": outcome.word(),
                "a": c.a.to_json(), "b": c.b.to_json(), "feature": f.to_json(),
@@ -1082,7 +1085,7 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
     };
     if c.refuse {
         // B18: an act the input does not allow must be refused.
-        let r = attempt(|| apply(&a, f).map(|_| ()));
+        let r = attempt(|| act(k, &a, f).map(|_| ()));
         let (outcome, detail) = match &r {
             Ok(()) => (
                 Outcome::Fail,
@@ -1140,7 +1143,7 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
     let t = Instant::now();
     export::keep("before", "main", &a);
     let r = attempt(|| {
-        apply(&a, f).map(|s| {
+        act(k, &a, f).map(|s| {
             export::keep("after", "main", &s);
             got(k, &s)
         })
@@ -1149,7 +1152,7 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
     let t = Instant::now();
     let r = attempt(|| {
         let moved = construct(k, &base.moved(&c.motion))?;
-        apply(&moved, &f.moved(&c.motion)).map(|s| got(k, &s))
+        act(k, &moved, &f.moved(&c.motion)).map(|s| got(k, &s))
     });
     let moved = record("moved", r, t.elapsed().as_secs_f64() * 1e3);
     let step = !lacks(k)
@@ -1159,8 +1162,10 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
         .then(|| {
             let t = Instant::now();
             let r = attempt(|| {
-                let text = k.write_step(&apply(&a, f)?)?;
-                Ok(got(k, &k.read_step(&text)?))
+                let s = act(k, &a, f)?;
+                let text = k.write_step(&s)?;
+                let read = k.read_step(&text)?;
+                Ok(got(k, &read))
             });
             record("through STEP", r, t.elapsed().as_secs_f64() * 1e3)
         })
@@ -1206,7 +1211,7 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
             let hi = [0, 1, 2].map(|i| x.1[i].max(y.1[i]));
             let pts = oracle::samples((lo, hi), SAMPLES);
             let truth: Vec<bool> = pts.iter().map(|&p| oracle::contains(&c.b, p)).collect();
-            let blended = attempt(|| apply(&a, f)).ok();
+            let blended = attempt(|| act(k, &a, f)).ok();
             match blended.and_then(|s| placed(k, &s, &pts)) {
                 Some(Ok(gotten)) => {
                     let off = gotten.iter().zip(&truth).filter(|(g, t)| g != t).count();
@@ -1267,7 +1272,10 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
     let joints = want_prim.map(oracle::joints).unwrap_or_default();
     if blend && !joints.is_empty() && !lacks(k).iter().any(|u| u == "normal") {
         let pts: Vec<Vec3> = joints.iter().map(|j| j.0).collect();
-        match attempt(|| k.normal(&apply(&a, f)?, &pts)) {
+        match attempt(|| {
+            let s = act(k, &a, f)?;
+            k.normal(&s, &pts)
+        }) {
             Ok(got) => {
                 let off = normals_off(&got, &joints);
                 check(
@@ -1288,7 +1296,7 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
     }
     // B39: by its seams the blend bends as what it meets does.
     if built && !c.exact.probes.is_empty() {
-        match attempt(|| apply(&a, f)) {
+        match attempt(|| act(k, &a, f)) {
             Ok(s) => {
                 if let Some((ok, detail)) = probes_check(k, &s, &c.exact.probes) {
                     check("B39", ok, detail);
@@ -1321,7 +1329,7 @@ fn kinds(s: &Shape) -> Vec<String> {
 }
 
 /// Runs one STEP-corpus case: the suite's file for `c.a`, read by the kernel, must be `c.a`.
-fn run_step<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case) -> Value {
+fn run_step<K: Kernel<Solid: Clone + 'static>>(k: &mut K, c: &Case) -> Value {
     let Shape::Prim(p) = &c.a else {
         return json!({"id": c.id, "family": c.family, "outcome": "crash", "checks": [], "ops": []});
     };
@@ -1401,7 +1409,11 @@ fn run_step<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case) -> Value {
 
 /// Runs one transform case (B25): `c.a` moved by `m` holds the moved sample points, with its volume
 /// and area scaled.
-fn run_transform<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: [[f64; 4]; 3]) -> Value {
+fn run_transform<K: Kernel<Solid: Clone + 'static>>(
+    k: &mut K,
+    c: &Case,
+    m: [[f64; 4]; 3],
+) -> Value {
     let header = |outcome: Outcome, ops: Vec<Value>, checks: Vec<Value>| {
         json!({"id": c.id, "family": c.family, "outcome": outcome.word(), "a": c.a.to_json(),
                "matrix": m, "checks": checks, "ops": ops})
@@ -1521,7 +1533,7 @@ fn singular_values(m: &[[f64; 4]; 3]) -> [f64; 3] {
 /// Runs one affine case (B32): `c.a` mapped by a stretch or shear `m` holds the mapped sample
 /// points, with its volume and moments mapped exactly and its area between σ₂σ₃ and σ₁σ₂ times the
 /// solid's, the least and most any surface element can grow by.
-fn run_affine<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: [[f64; 4]; 3]) -> Value {
+fn run_affine<K: Kernel<Solid: Clone + 'static>>(k: &mut K, c: &Case, m: [[f64; 4]; 3]) -> Value {
     let header = |outcome: Outcome, ops: Vec<Value>, checks: Vec<Value>| {
         json!({"id": c.id, "family": c.family, "outcome": outcome.word(), "a": c.a.to_json(),
                "matrix": m, "checks": checks, "ops": ops})
@@ -1626,7 +1638,7 @@ fn run_affine<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: [[f64; 4]; 
 }
 
 /// Makes `c.a`, or reports why it could not, after checking the kernel offers `function`.
-fn made<K: Kernel>(k: &K, c: &Case, function: &str) -> Result<K::Solid, Value> {
+fn made<K: Kernel>(k: &mut K, c: &Case, function: &str) -> Result<K::Solid, Value> {
     if lacks(k).iter().any(|u| u == function) {
         return Err(finish(c, Outcome::Unsupported, vec![], vec![]));
     }
@@ -1658,7 +1670,7 @@ fn timed<T>(
 
 /// B24: a solid with itself. Its union and intersection are itself, its difference empty. The
 /// one handle is both operands of each call.
-fn run_itself<K: Kernel>(k: &K, c: &Case) -> Value {
+fn run_itself<K: Kernel>(k: &mut K, c: &Case) -> Value {
     let a = match made(k, c, "union") {
         Ok(a) => a,
         Err(v) => return v,
@@ -1699,7 +1711,7 @@ fn run_itself<K: Kernel>(k: &K, c: &Case) -> Value {
 }
 
 /// B33: the box the kernel gives is the least round the solid, to within the tolerance.
-fn run_bbox<K: Kernel>(k: &K, c: &Case, want: [Vec3; 2]) -> Value {
+fn run_bbox<K: Kernel>(k: &mut K, c: &Case, want: [Vec3; 2]) -> Value {
     let s = match made(k, c, "bounding_box") {
         Ok(s) => s,
         Err(v) => return v,
@@ -1728,7 +1740,7 @@ fn run_bbox<K: Kernel>(k: &K, c: &Case, want: [Vec3; 2]) -> Value {
 
 /// B40: the point of the solid the kernel gives as nearest each point is as far from it as the
 /// closed form says, and is a point of the solid: the one nearest point where there is only one.
-fn run_closest<K: Kernel>(k: &K, c: &Case) -> Value {
+fn run_closest<K: Kernel>(k: &mut K, c: &Case) -> Value {
     let s = match made(k, c, "closest") {
         Ok(s) => s,
         Err(v) => return v,
@@ -1786,7 +1798,7 @@ fn run_closest<K: Kernel>(k: &K, c: &Case) -> Value {
 
 /// B41: a point of the boundary is on it, and a point clear of the boundary is in or out as the
 /// solid holds it.
-fn run_sides<K: Kernel>(k: &K, c: &Case) -> Value {
+fn run_sides<K: Kernel>(k: &mut K, c: &Case) -> Value {
     let s = match made(k, c, "classify") {
         Ok(s) => s,
         Err(v) => return v,
@@ -1821,7 +1833,7 @@ fn run_sides<K: Kernel>(k: &K, c: &Case) -> Value {
 
 /// B34: the pieces of a split are valid, their volumes add up to the solid's, and each holds the
 /// sample points of the solid on its side of the plane and no others.
-fn run_split<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, o: Vec3, n: Vec3) -> Value {
+fn run_split<K: Kernel<Solid: Clone + 'static>>(k: &mut K, c: &Case, o: Vec3, n: Vec3) -> Value {
     let s = match made(k, c, "split") {
         Ok(s) => s,
         Err(v) => return v,
@@ -1915,7 +1927,7 @@ const SECTION_TOLERANCE: f64 = 0.01;
 /// B35: a plane section gives as many closed curves as the closed form, every point on the plane
 /// and the solid's boundary, and a total length short of the curves' by no more than chords within
 /// the tolerance can lose, s/(3ρ) of each arc where s is the sagitta.
-fn run_section<K: Kernel>(k: &K, c: &Case, sec: &crate::generate::Section) -> Value {
+fn run_section<K: Kernel>(k: &mut K, c: &Case, sec: &crate::generate::Section) -> Value {
     let s = match made(k, c, "section") {
         Ok(s) => s,
         Err(v) => return v,
@@ -1996,7 +2008,7 @@ fn run_section<K: Kernel>(k: &K, c: &Case, sec: &crate::generate::Section) -> Va
 /// at every point, each principal curvature within the probe's tolerance. A kernel without the
 /// query cannot show a curvature-continuous blend, and fails.
 fn probes_check<K: Kernel>(
-    k: &K,
+    k: &mut K,
     s: &K::Solid,
     probes: &[crate::generate::Probe],
 ) -> Option<(bool, String)> {
@@ -2051,18 +2063,30 @@ fn step_words(steps: &[crate::generate::Step]) -> Vec<&'static str> {
 }
 
 fn apply_step<K: Kernel>(
-    k: &K,
+    k: &mut K,
     s: &K::Solid,
     st: &crate::generate::Step,
 ) -> Result<K::Solid, Refusal> {
     use crate::generate::Step;
     match st {
         Step::Act(f) => act(k, s, f),
-        Step::Cut(tool) => k.difference(s, &build(k, tool)?),
-        Step::Join(tool) => k.union(s, &build(k, tool)?),
+        Step::Cut(tool) => {
+            let tool = build(k, tool)?;
+            k.difference(s, &tool)
+        }
+        Step::Join(tool) => {
+            let tool = build(k, tool)?;
+            k.union(s, &tool)
+        }
         Step::Move(m) => k.transform(s, *m),
-        Step::MirrorJoin(m) => k.union(s, &k.transform(s, *m)?),
-        Step::StepRoundTrip => k.read_step(&k.write_step(s)?),
+        Step::MirrorJoin(m) => {
+            let image = k.transform(s, *m)?;
+            k.union(s, &image)
+        }
+        Step::StepRoundTrip => {
+            let text = k.write_step(s)?;
+            k.read_step(&text)
+        }
     }
 }
 
@@ -2071,7 +2095,7 @@ fn apply_step<K: Kernel>(
 /// points as the expected shape `c.b` does (B15). Each step's time and outcome is recorded, so a
 /// failure says which step broke.
 fn run_chain<K: Kernel<Solid: Clone + 'static>>(
-    k: &K,
+    k: &mut K,
     c: &Case,
     steps: &[crate::generate::Step],
 ) -> Value {
@@ -2104,7 +2128,8 @@ fn run_chain<K: Kernel<Solid: Clone + 'static>>(
         let r = attempt(|| match (i, st, &c.a) {
             // The base itself joined to its mirror image: the image may be a stand-in.
             (0, crate::generate::Step::MirrorJoin(m), Shape::Prim(p)) => {
-                k.union(&s, &mirror_image(k, p, &s, *m)?)
+                let image = mirror_image(k, p, &s, *m)?;
+                k.union(&s, &image)
             }
             _ => apply_step(k, &s, st),
         });
@@ -2178,7 +2203,7 @@ fn diagonal(s: &Shape) -> f64 {
 
 /// B37: the principal curvatures at the boundary point nearest each point, to a millionth of the
 /// larger of their size and the reciprocal of the solid's size.
-fn run_curvature<K: Kernel>(k: &K, c: &Case, cv: &crate::generate::Curvatures) -> Value {
+fn run_curvature<K: Kernel>(k: &mut K, c: &Case, cv: &crate::generate::Curvatures) -> Value {
     let s = match made(k, c, "curvature") {
         Ok(s) => s,
         Err(v) => return v,
@@ -2270,7 +2295,7 @@ fn to_piece(q: [f64; 2], p: &crate::generate::Piece, flat: &dyn Fn(Vec3) -> [f64
 /// B38: a hidden-line projection draws, seen and hidden apart, every vertex on a curve of its kind,
 /// every chord within the tolerance of one, every stretch of those curves within the tolerance of
 /// its chords, and no more length than the curves have.
-fn run_projection<K: Kernel>(k: &K, c: &Case, dr: &crate::generate::Drawing) -> Value {
+fn run_projection<K: Kernel>(k: &mut K, c: &Case, dr: &crate::generate::Drawing) -> Value {
     let s = match made(k, c, "project") {
         Ok(s) => s,
         Err(v) => return v,
@@ -2360,7 +2385,7 @@ pub const DISPLAY_TOLERANCE: f64 = 0.01;
 
 /// B42: a display's faces close the solid and bound its volume, its normals are units pointing out,
 /// and its edges are the solid's creases.
-fn run_display<K: Kernel>(k: &K, c: &Case, want: &crate::generate::DisplayExact) -> Value {
+fn run_display<K: Kernel>(k: &mut K, c: &Case, want: &crate::generate::DisplayExact) -> Value {
     let s = match made(k, c, "display") {
         Ok(s) => s,
         Err(v) => return v,
@@ -2379,7 +2404,7 @@ fn run_display<K: Kernel>(k: &K, c: &Case, want: &crate::generate::DisplayExact)
 /// B36: a prism's loose faces, shifted apart by up to `SEW_GAP` and some inside out, sew into a
 /// valid solid holding the prism's volume and area to what the shifts allow, and its points.
 fn run_sew<K: Kernel<Solid: Clone + 'static>>(
-    k: &K,
+    k: &mut K,
     c: &Case,
     sew: &crate::generate::Sew,
 ) -> Value {
@@ -2474,7 +2499,7 @@ fn finish(c: &Case, outcome: Outcome, ops: Vec<Value>, checks: Vec<Value>) -> Va
 }
 
 /// Whether the kernel offers every function named, and every constructor the primitives call.
-fn offers<K: Kernel>(k: &K, functions: &[&str], prims: &[&Primitive]) -> bool {
+fn offers<K: Kernel>(k: &mut K, functions: &[&str], prims: &[&Primitive]) -> bool {
     let unsupported = lacks(k);
     !functions.iter().any(|f| unsupported.iter().any(|u| u == f))
         && prims.iter().all(|p| makes(&unsupported, p))
@@ -2483,7 +2508,7 @@ fn offers<K: Kernel>(k: &K, functions: &[&str], prims: &[&Primitive]) -> bool {
 /// Runs an assembly case: B27, the pairs that interfere, with their shared volumes and gaps. The
 /// suite makes each part where it stands and asks the kernel about one pair at a time, leaving out
 /// the pairs whose bounding balls are farther apart than the clearance.
-fn run_assembly<K: Kernel>(k: &K, c: &Case, a: &Assembly) -> Value {
+fn run_assembly<K: Kernel>(k: &mut K, c: &Case, a: &Assembly) -> Value {
     let prims: Vec<&Primitive> = a.shapes.iter().collect();
     if !offers(k, &["interference"], &prims) {
         return finish(c, Outcome::Unsupported, vec![], vec![]);
@@ -2609,7 +2634,7 @@ fn run_assembly<K: Kernel>(k: &K, c: &Case, a: &Assembly) -> Value {
 
 /// Runs a pattern case: B28, a boolean of many solids in one call, against its closed form and
 /// against the same booleans one at a time.
-fn run_many<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: &Many) -> Value {
+fn run_many<K: Kernel<Solid: Clone + 'static>>(k: &mut K, c: &Case, m: &Many) -> Value {
     let function = if m.target.is_some() {
         "difference_all"
     } else {
@@ -2642,10 +2667,10 @@ fn run_many<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: &Many) -> Val
     let n = refs.len();
     let mut ops = Vec::new();
     let mut worst = Outcome::Pass;
-    let mut timed = |name: String, f: &dyn Fn() -> Result<K::Solid, Refusal>| {
+    let mut timed = |k: &mut K, name: String, f: &dyn Fn(&mut K) -> Result<K::Solid, Refusal>| {
         let t = Instant::now();
         let r = attempt(|| {
-            f().map(|s| {
+            f(k).map(|s| {
                 if name.starts_with("all at once") {
                     export::keep("result", "main", &s);
                 }
@@ -2669,11 +2694,11 @@ fn run_many<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: &Many) -> Val
             }
         }
     };
-    let all = timed(format!("all at once ×{n}"), &|| match &target {
+    let all = timed(k, format!("all at once ×{n}"), &|k| match &target {
         Some(t) => k.difference_all(t, &refs),
         None => k.union_all(&refs),
     });
-    let each = timed(format!("one at a time ×{n}"), &|| {
+    let each = timed(k, format!("one at a time ×{n}"), &|k| {
         let (mut acc, rest) = match &target {
             Some(t) => (k.difference(t, refs[0])?, &refs[1..]),
             None => (k.union(refs[0], refs[1])?, &refs[2..]),
@@ -2710,7 +2735,7 @@ fn run_many<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: &Many) -> Val
 }
 
 /// Runs a mirror case: B29, the part joined to its image in a mirror.
-fn run_mirror<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: &Mirror) -> Value {
+fn run_mirror<K: Kernel<Solid: Clone + 'static>>(k: &mut K, c: &Case, m: &Mirror) -> Value {
     let Shape::Prim(p) = &c.a else {
         return finish(c, Outcome::Crash, vec![], vec![]);
     };
@@ -2770,7 +2795,7 @@ fn normals_off(got: &[Option<Vec3>], want: &[(Vec3, Option<Vec3>)]) -> Vec<Strin
 }
 
 /// Runs a normals case: B30, the outward normals at points of a solid's boundary.
-fn run_normals<K: Kernel>(k: &K, c: &Case, n: &Normals) -> Value {
+fn run_normals<K: Kernel>(k: &mut K, c: &Case, n: &Normals) -> Value {
     let prims: Vec<&Primitive> = [&c.a, &c.b]
         .into_iter()
         .filter_map(|s| match s {
@@ -2787,7 +2812,10 @@ fn run_normals<K: Kernel>(k: &K, c: &Case, n: &Normals) -> Value {
         let a = build(k, &c.a)?;
         let s = match n.op {
             None => a,
-            Some(op) => k.boolean(op, &a, &build(k, &c.b)?)?,
+            Some(op) => {
+                let b = build(k, &c.b)?;
+                k.boolean(op, &a, &b)?
+            }
         };
         k.normal(&s, &pts)
     });
@@ -2819,7 +2847,7 @@ fn run_normals<K: Kernel>(k: &K, c: &Case, n: &Normals) -> Value {
 }
 
 /// Runs a smooth loft: sound, Q1–Q3, and Q7, that it passes through its inner sections.
-fn run_loft<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, l: &LoftThrough) -> Value {
+fn run_loft<K: Kernel<Solid: Clone + 'static>>(k: &mut K, c: &Case, l: &LoftThrough) -> Value {
     if !offers(k, &["loft_through"], &[]) {
         let mut v = finish(c, Outcome::Unsupported, vec![], vec![]);
         v["sound"] = json!(true);
@@ -2935,7 +2963,11 @@ fn run_loft<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, l: &LoftThrough)
     v
 }
 
-fn run_case<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, peer: Option<&Remote>) -> Value {
+fn run_case<K: Kernel<Solid: Clone + 'static>>(
+    k: &mut K,
+    c: &Case,
+    peer: Option<&mut Remote>,
+) -> Value {
     if c.exact.itself {
         return run_itself(k, c);
     }
@@ -3029,7 +3061,7 @@ fn run_case<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, peer: Option<&Re
     let mut ops: Vec<Value> = Vec::new();
     let mut worst = Outcome::Pass;
     // Runs and measures one operation, records it, and gives back its measure if it completed.
-    let mut ran = |name: &str, f: &dyn Fn() -> Result<Got, Refusal>| -> Option<Got> {
+    let mut ran = |name: &str, f: &mut dyn FnMut() -> Result<Got, Refusal>| -> Option<Got> {
         let t = Instant::now();
         let r = attempt(f);
         let mut o = json!({"op": name, "ms": t.elapsed().as_secs_f64() * 1e3});
@@ -3079,7 +3111,7 @@ fn run_case<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, peer: Option<&Re
                           "error": format!("making an operand: {msg}"), "checks": [], "ops": []});
         }
     };
-    let op = |name: &str, o: Op, x: &K::Solid, y: &K::Solid| {
+    let op = |k: &mut K, name: &str, o: Op, x: &K::Solid, y: &K::Solid| {
         k.boolean(o, x, y).map(|s| {
             export::keep(name, "main", &s);
             got(k, &s)
@@ -3087,27 +3119,34 @@ fn run_case<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, peer: Option<&Re
     };
     export::keep("a", "main", &a);
     export::keep("b", "main", &b);
-    let ma = ran("a", &|| Ok(got(k, &a)));
-    let mb = ran("b", &|| Ok(got(k, &b)));
-    let u = ran("a ∪ b", &|| op("a ∪ b", Op::Union, &a, &b));
-    let i = ran("a ∩ b", &|| op("a ∩ b", Op::Intersection, &a, &b));
-    let ib = ran("b ∩ a", &|| op("b ∩ a", Op::Intersection, &b, &a));
-    let dab = ran("a ∖ b", &|| op("a ∖ b", Op::Difference, &a, &b));
-    let dba = ran("b ∖ a", &|| op("b ∖ a", Op::Difference, &b, &a));
+    let ma = ran("a", &mut || Ok(got(k, &a)));
+    let mb = ran("b", &mut || Ok(got(k, &b)));
+    let u = ran("a ∪ b", &mut || op(k, "a ∪ b", Op::Union, &a, &b));
+    let i = ran("a ∩ b", &mut || op(k, "a ∩ b", Op::Intersection, &a, &b));
+    let ib = ran("b ∩ a", &mut || op(k, "b ∩ a", Op::Intersection, &b, &a));
+    let dab = ran("a ∖ b", &mut || op(k, "a ∖ b", Op::Difference, &a, &b));
+    let dba = ran("b ∖ a", &mut || op(k, "b ∖ a", Op::Difference, &b, &a));
     let (am, bm) = (c.a.moved(&c.motion), c.b.moved(&c.motion));
-    let im = ran("moved a ∩ moved b", &|| {
+    let im = ran("moved a ∩ moved b", &mut || {
         let (x, y) = (build(k, &am)?, build(k, &bm)?);
-        op("moved a ∩ moved b", Op::Intersection, &x, &y)
+        op(k, "moved a ∩ moved b", Op::Intersection, &x, &y)
     });
     let step = supports("write_step") && supports("read_step");
     let text = step
-        .then(|| attempt(|| k.write_step(&k.union(&a, &b)?)).ok())
+        .then(|| {
+            attempt(|| {
+                let u = k.union(&a, &b)?;
+                k.write_step(&u)
+            })
+            .ok()
+        })
         .flatten();
     let rt = step
         .then(|| {
-            ran("a ∪ b through STEP", &|| {
+            ran("a ∪ b through STEP", &mut || {
                 let text = text.as_ref().ok_or("writing a ∪ b as STEP failed")?;
-                Ok(got(k, &k.read_step(text)?))
+                let read = k.read_step(text)?;
+                Ok(got(k, &read))
             })
         })
         .flatten();
@@ -3120,8 +3159,8 @@ fn run_case<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, peer: Option<&Re
         _ => None,
     };
     // B20 asks for the intersection again: the same input must give the same answer.
-    let again = ran("a ∩ b again", &|| {
-        op("a ∩ b again", Op::Intersection, &a, &b)
+    let again = ran("a ∩ b again", &mut || {
+        op(k, "a ∩ b again", Op::Intersection, &a, &b)
     });
     // B26: a ray through a ∪ b, from outside its box, toward a point near its middle.
     let union_shape = Shape::bool(Op::Union, c.a.clone(), c.b.clone());
@@ -3135,24 +3174,25 @@ fn run_case<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, peer: Option<&Re
     });
     let ray_hits = match (ray, supports("raycast")) {
         (Some((o, d, _)), true) => Some(attempt(|| {
-            Ok(crossings(k.raycast(&k.union(&a, &b)?, o, d)?, d))
+            let u = k.union(&a, &b)?;
+            Ok(crossings(k.raycast(&u, o, d)?, d))
         })),
         _ => None,
     };
     // The Betti numbers of the operands and results whose ones are known.
-    let topo = |x: &K::Solid| attempt(|| k.betti(x)).ok();
-    let betti_a = c.exact.betti_a.and(topo(&a));
-    let betti_b = c.exact.betti_b.and(topo(&b));
+    let topo = |k: &mut K, x: &K::Solid| attempt(|| k.betti(x)).ok();
+    let betti_a = c.exact.betti_a.and(topo(k, &a));
+    let betti_b = c.exact.betti_b.and(topo(k, &b));
     let betti_u = c
         .exact
         .betti_union
         .and_then(|_| attempt(|| k.union(&a, &b)).ok())
-        .and_then(|s| topo(&s));
+        .and_then(|s| topo(k, &s));
     let betti_d = c
         .exact
         .betti_difference
         .and_then(|_| attempt(|| k.difference(&a, &b)).ok())
-        .and_then(|s| topo(&s));
+        .and_then(|s| topo(k, &s));
     // The intersection's section by a plane through its sample box, square to a direction drawn
     // from the case's motion, and its mesh.
     let inter = attempt(|| k.intersection(&a, &b)).ok();
@@ -3171,7 +3211,7 @@ fn run_case<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, peer: Option<&Re
     };
     let after = (attempt(|| Ok(k.measure(&a))), attempt(|| Ok(k.measure(&b))));
     // Distances: both ways round, and after the rigid motion.
-    let mut far = |name: &str, f: &dyn Fn() -> Result<f64, Refusal>| -> Option<f64> {
+    let mut far = |name: &str, f: &mut dyn FnMut() -> Result<f64, Refusal>| -> Option<f64> {
         let t = Instant::now();
         let r = attempt(f);
         let mut o = json!({"op": name, "ms": t.elapsed().as_secs_f64() * 1e3});
@@ -3202,9 +3242,9 @@ fn run_case<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, peer: Option<&Re
         (None, None, None)
     } else {
         (
-            far("distance a b", &|| k.distance(&a, &b)),
-            far("distance b a", &|| k.distance(&b, &a)),
-            far("distance moved a b", &|| {
+            far("distance a b", &mut || k.distance(&a, &b)),
+            far("distance b a", &mut || k.distance(&b, &a)),
+            far("distance moved a b", &mut || {
                 let (x, y) = (build(k, &am)?, build(k, &bm)?);
                 k.distance(&x, &y)
             }),
@@ -3643,7 +3683,7 @@ const STATED_REL: f64 = 1e-3;
 /// volume and area its exporter states are set beside the kernel's own, for the reader, and no check
 /// weighs them: they are another program's numbers, not the suite's.
 fn run_nist<K: Kernel<Solid: Clone + 'static>>(
-    k: &K,
+    k: &mut K,
     c: &Case,
     f: &crate::generate::NistFile,
 ) -> Value {
@@ -3701,11 +3741,14 @@ fn run_nist<K: Kernel<Solid: Clone + 'static>>(
     header(outcome, vec![op], checks)
 }
 
+/// Runs `cases` on `threads` threads, each thread on a kernel of its own from `make`, reset after
+/// each case. `peer`, when given, makes each thread a second kernel, which reads the STEP files the
+/// first writes.
 pub fn run<K: Kernel<Solid: Clone + 'static>>(
-    k: &K,
+    make: impl Fn() -> K + Sync,
     cases: &[Case],
     threads: usize,
-    peer: Option<&Remote>,
+    peer: Option<&(dyn Fn() -> Remote + Sync)>,
     exports: &Exports,
 ) -> Value {
     let next = Mutex::new(0usize);
@@ -3715,6 +3758,8 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
     std::thread::scope(|s| {
         for _ in 0..threads.max(1) {
             s.spawn(|| {
+                let mut k = make();
+                let mut p = peer.map(|make| make());
                 loop {
                     let i = {
                         let mut n = next.lock().unwrap();
@@ -3726,22 +3771,22 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
                     if exports.any() {
                         export::begin();
                     }
-                    let mut v = run_case(k, c, peer);
+                    let mut v = run_case(&mut k, c, p.as_mut());
                     v["test"] = json!(c.test);
                     judge(&mut v, c);
                     v["asset_step"] = json!(!crate::assets::of_case(c).step.is_empty());
                     if exports.any() {
-                        export::export_case(k, c, exports, &mut v);
+                        export::export_case(&mut k, c, exports, &mut v);
                     }
                     // How far over the suite's tolerance its worst measure went, for a case that failed.
                     let worst = WORST.with(|w| w.get());
                     if v["outcome"] == "fail" && worst > 1.0 {
                         v["over"] = json!(if worst.is_finite() { worst } else { f64::MAX });
                     }
-                    // Solids live in the workers until released; a run keeps none past its case.
+                    // A run keeps no solid past its case.
                     let _ = catch_unwind(AssertUnwindSafe(|| {
                         k.reset();
-                        if let Some(p) = peer {
+                        if let Some(p) = &mut p {
                             p.reset();
                         }
                     }));
@@ -3753,6 +3798,8 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
     std::panic::set_hook(quiet);
     let mut out = out.into_inner().unwrap();
     out.sort_by_key(|x| x.0);
+    // After the threads' kernels have gone, so a run never holds more than `threads` at once.
+    let mut k = make();
     json!({
         "format": RESULTS_FORMAT,
         "suite": SUITE_VERSION,
@@ -3760,8 +3807,8 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
         "tolerance": TOLERANCE,
         "kernel": {"name": k.name(), "version": k.version(), "tolerance": k.tolerance(),
                    "configuration": k.configuration()},
-        "unsupported": lacks(k),
-        "stand_ins": stand_ins(&lacks(k)),
+        "unsupported": lacks(&k),
+        "stand_ins": stand_ins(&lacks(&k)),
         "environment": {
             "os": std::env::consts::OS,
             "arch": std::env::consts::ARCH,
@@ -3771,7 +3818,7 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
         "unix": std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs()),
-        "calibration_ms": calibrate(k),
+        "calibration_ms": calibrate(&mut k),
         "cases": out.into_iter().map(|x| x.1).collect::<Vec<_>>(),
     })
 }
@@ -3854,8 +3901,8 @@ fn judge(v: &mut Value, c: &Case) {
 /// The time of a reference workload on this kernel and machine, ms: the median of 15 rounds of
 /// two crossing cylinders, their intersection and its volume. Reports divide times by it, so they
 /// compare across machines as multiples of one kernel doing one simple thing.
-pub fn calibrate<K: Kernel>(k: &K) -> f64 {
-    let round = || {
+pub fn calibrate<K: Kernel>(k: &mut K) -> f64 {
+    let mut round = || {
         let t = Instant::now();
         let a = construct(
             k,
@@ -4083,7 +4130,7 @@ mod tests {
 
     /// A kernel whose STEP reader runs past the time limit on a file named slow, and which, as a
     /// lost worker does, ends every later call the same way until it is reset.
-    struct Sticky(std::sync::atomic::AtomicBool);
+    struct Sticky(std::cell::Cell<bool>);
 
     impl Kernel for Sticky {
         type Solid = ();
@@ -4102,42 +4149,41 @@ mod tests {
         fn tolerance(&self) -> f64 {
             TOLERANCE
         }
-        fn make(&self, _p: &Primitive) -> Result<(), Refusal> {
+        fn make(&mut self, _p: &Primitive) -> Result<(), Refusal> {
             Ok(())
         }
-        fn union(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn union(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn intersection(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn intersection(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn difference(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn difference(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn volume(&self, _s: &()) -> Result<f64, Refusal> {
+        fn volume(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(1.0)
         }
-        fn area(&self, _s: &()) -> Result<f64, Refusal> {
+        fn area(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(6.0)
         }
-        fn check(&self, _s: &()) -> Result<Vec<String>, Refusal> {
+        fn check(&mut self, _s: &()) -> Result<Vec<String>, Refusal> {
             Ok(Vec::new())
         }
-        fn transform(&self, _s: &(), _m: [[f64; 4]; 3]) -> Result<(), Refusal> {
+        fn transform(&mut self, _s: &(), _m: [[f64; 4]; 3]) -> Result<(), Refusal> {
             Ok(())
         }
-        fn read_step(&self, text: &str) -> Result<(), Refusal> {
-            use std::sync::atomic::Ordering;
-            if text.contains("slow") || self.0.load(Ordering::SeqCst) {
-                self.0.store(true, Ordering::SeqCst);
+        fn read_step(&mut self, text: &str) -> Result<(), Refusal> {
+            if text.contains("slow") || self.0.get() {
+                self.0.set(true);
                 std::panic::panic_any(brep_protocol::TimedOut("read_step".into()));
             }
             Ok(())
         }
-        fn reset(&self) {
-            self.0.store(false, std::sync::atomic::Ordering::SeqCst);
+        fn reset(&mut self) {
+            self.0.set(false);
         }
-        fn display(&self, _s: &(), _tolerance: f64) -> Result<brep_protocol::Display, Refusal> {
+        fn display(&mut self, _s: &(), _tolerance: f64) -> Result<brep_protocol::Display, Refusal> {
             Ok(brep_protocol::Display::new(
                 vec![brep_protocol::DisplayFace::new(
                     vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
@@ -4168,7 +4214,7 @@ mod tests {
         let dir = nist_folder("read");
         let cases = crate::generate::nist_cases(&dir).unwrap();
         let r = run(
-            &Sticky(Default::default()),
+            || Sticky(Default::default()),
             &cases,
             1,
             None,
@@ -4206,7 +4252,7 @@ mod tests {
             glb: Some(out.clone()),
             step: None,
         };
-        let r = run(&Sticky(Default::default()), &cases, 1, None, &ex);
+        let r = run(|| Sticky(Default::default()), &cases, 1, None, &ex);
         let read = &r["cases"][1]["exports"];
         let key = read["glb"].as_str().unwrap_or_default().to_string();
         let bytes = std::fs::read(out.join(&key)).unwrap_or_default();
@@ -4241,7 +4287,7 @@ mod tests {
         let dir = nist_folder("slow");
         let cases = crate::generate::nist_cases(&dir).unwrap();
         let r = run(
-            &Sticky(Default::default()),
+            || Sticky(Default::default()),
             &cases,
             1,
             None,
@@ -4272,31 +4318,35 @@ mod tests {
         fn tolerance(&self) -> f64 {
             TOLERANCE
         }
-        fn make(&self, _p: &Primitive) -> Result<(), Refusal> {
+        fn make(&mut self, _p: &Primitive) -> Result<(), Refusal> {
             Ok(())
         }
-        fn union(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn union(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn intersection(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn intersection(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn difference(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn difference(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn volume(&self, _s: &()) -> Result<f64, Refusal> {
+        fn volume(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(0.0)
         }
-        fn area(&self, _s: &()) -> Result<f64, Refusal> {
+        fn area(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(0.0)
         }
-        fn check(&self, _s: &()) -> Result<Vec<String>, Refusal> {
+        fn check(&mut self, _s: &()) -> Result<Vec<String>, Refusal> {
             Ok(Vec::new())
         }
-        fn transform(&self, _s: &(), _m: [[f64; 4]; 3]) -> Result<(), Refusal> {
+        fn transform(&mut self, _s: &(), _m: [[f64; 4]; 3]) -> Result<(), Refusal> {
             Ok(())
         }
-        fn classify(&self, _s: &(), _points: &[Vec3]) -> Result<Vec<crate::model::Side>, Refusal> {
+        fn classify(
+            &mut self,
+            _s: &(),
+            _points: &[Vec3],
+        ) -> Result<Vec<crate::model::Side>, Refusal> {
             Err(Refusal::new(self.0, "could not place the points"))
         }
     }
@@ -4309,7 +4359,7 @@ mod tests {
             .find(|c| c.family == "transforms" && oracle::bounds(&c.a).is_some())
             .unwrap();
         let placing = |kind: Kind| -> Vec<Value> {
-            let v = run_transform(&Declines(kind), c, c.matrix.unwrap());
+            let v = run_transform(&mut Declines(kind), c, c.matrix.unwrap());
             let checks = v["checks"].as_array().unwrap();
             let of_points = |ch: &&Value| ch["detail"].as_str().unwrap_or("").contains("classify");
             checks.iter().filter(of_points).cloned().collect()
@@ -4343,34 +4393,34 @@ mod tests {
         fn tolerance(&self) -> f64 {
             TOLERANCE
         }
-        fn make(&self, _p: &Primitive) -> Result<(), Refusal> {
+        fn make(&mut self, _p: &Primitive) -> Result<(), Refusal> {
             Ok(())
         }
-        fn union(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn union(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn intersection(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn intersection(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn difference(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn difference(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn volume(&self, _s: &()) -> Result<f64, Refusal> {
+        fn volume(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(0.0)
         }
-        fn area(&self, _s: &()) -> Result<f64, Refusal> {
+        fn area(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(0.0)
         }
-        fn check(&self, _s: &()) -> Result<Vec<String>, Refusal> {
+        fn check(&mut self, _s: &()) -> Result<Vec<String>, Refusal> {
             Ok(Vec::new())
         }
-        fn transform(&self, _s: &(), _m: [[f64; 4]; 3]) -> Result<(), Refusal> {
+        fn transform(&mut self, _s: &(), _m: [[f64; 4]; 3]) -> Result<(), Refusal> {
             Ok(())
         }
-        fn normal(&self, _s: &(), points: &[Vec3]) -> Result<Vec<Option<Vec3>>, Refusal> {
+        fn normal(&mut self, _s: &(), points: &[Vec3]) -> Result<Vec<Option<Vec3>>, Refusal> {
             Ok(vec![None; points.len()])
         }
-        fn fillet(&self, _s: &(), _edges: &[Vec3], _radius: f64) -> Result<(), Refusal> {
+        fn fillet(&mut self, _s: &(), _edges: &[Vec3], _radius: f64) -> Result<(), Refusal> {
             Err(Refusal::failed("the ball is larger than its face can hold"))
         }
     }
@@ -4386,7 +4436,7 @@ mod tests {
                     && matches!(&c.b, Shape::Prim(p) if !oracle::joints(p).is_empty())
             })
             .unwrap();
-        let v = run_feature(&RefusesBlends, c, c.feature.as_ref().unwrap());
+        let v = run_feature(&mut RefusesBlends, c, c.feature.as_ref().unwrap());
         assert_eq!(v["ops"][0]["outcome"], "refused", "{v}");
         let checks = v["checks"].as_array().unwrap();
         assert!(

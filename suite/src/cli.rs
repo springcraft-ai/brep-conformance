@@ -73,7 +73,9 @@ pub fn main() -> ExitCode {
 
     let limit = value("--timeout").map_or(120.0, |s| s.parse().expect("--timeout takes seconds"));
     let limit = std::time::Duration::from_secs_f64(limit);
-    let kernel = match Remote::new(adapter, threads, limit) {
+    // One worker started here, to check it before the run, and dropped before the run starts its
+    // own: a run holds no more workers than threads.
+    let kernel = match Remote::new(adapter.clone(), limit) {
         Ok(k) => k,
         Err(e) => {
             eprintln!("{e}");
@@ -114,11 +116,12 @@ pub fn main() -> ExitCode {
         })
         .collect();
     // A second kernel's adapter, to read the STEP files this one writes.
-    let peer = match value("--peer") {
+    let peer: Option<Vec<String>> = match value("--peer") {
         Some(cmd) => {
-            let cmd = cmd.split_whitespace().map(String::from).collect();
-            match Remote::new(cmd, threads, limit) {
-                Ok(p) => Some(p),
+            let cmd: Vec<String> = cmd.split_whitespace().map(String::from).collect();
+            // Checked here, as the kernel's own worker is.
+            match Remote::new(cmd.clone(), limit) {
+                Ok(_) => Some(cmd),
                 Err(e) => {
                     eprintln!("the peer: {e}");
                     return ExitCode::from(2);
@@ -131,7 +134,20 @@ pub fn main() -> ExitCode {
         glb: value("--glb").map(PathBuf::from),
         step: value("--step").map(PathBuf::from),
     };
-    let mut results = run::run(&kernel, &cases, threads, peer.as_ref(), &exports);
+    drop(kernel);
+    let start = |cmd: &[String]| {
+        Remote::new(cmd.to_vec(), limit).unwrap_or_else(|e| panic!("starting a worker: {e}"))
+    };
+    let make_peer = peer.as_deref().map(|cmd| move || start(cmd));
+    let mut results = run::run(
+        || start(&adapter),
+        &cases,
+        threads,
+        make_peer
+            .as_ref()
+            .map(|f| f as &(dyn Fn() -> Remote + Sync)),
+        &exports,
+    );
     if let Some(e) = &official {
         results["adapter"] = e.stamp();
     }

@@ -1,12 +1,9 @@
-//! A [`Kernel`] that forwards every call to worker processes speaking the protocol: one worker
-//! per calling thread, each solid living in the worker that made it.
+//! A [`Kernel`] that forwards every call to a worker process speaking the protocol, which holds its
+//! solids.
 
-use std::cell::Cell;
 use std::io::{BufRead, BufReader, Write};
 use std::panic::AssertUnwindSafe;
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::time::{Duration, Instant};
 
@@ -94,10 +91,9 @@ impl Worker {
     }
 }
 
-/// A solid: the worker holding it, and its handle there.
+/// A solid: its handle in the worker.
 #[derive(Clone, Copy, Debug)]
 pub struct Handle {
-    worker: usize,
     handle: u64,
 }
 
@@ -108,28 +104,38 @@ enum Loss {
     Died(String),
 }
 
+/// A refusal for a reply to `cmd` that does not decode as the protocol says.
+fn malformed(cmd: &'static str) -> impl FnOnce(serde_json::Error) -> Refusal {
+    move |e| Refusal::failed(format!("{cmd}: {e}"))
+}
+
+/// Ends a call the way its worker was lost: a timeout or a crash.
+fn lose(loss: Loss) -> ! {
+    match loss {
+        Loss::TimedOut(what) => std::panic::panic_any(TimedOut(what)),
+        Loss::Died(what) => panic!("{what}"),
+    }
+}
+
+/// One session of an adapter's kernel, in a worker process of its own.
 pub struct Remote {
     command: Vec<String>,
-    workers: Vec<Mutex<Option<Worker>>>,
-    /// Each worker's loss since its caller last reset it. The solids of a lost worker are gone,
-    /// so every later call for them ends as the call that lost it did, until the reset.
-    lost: Vec<Mutex<Option<Loss>>>,
-    next: AtomicUsize,
+    /// None after a loss, until the reset that replaces it.
+    worker: Option<Worker>,
+    /// The worker's loss since the last reset. Its solids are gone, so every later call ends as
+    /// the call that lost it did, until the reset.
+    lost: Option<Loss>,
     hello: Value,
     limit: Duration,
 }
 
-thread_local! {
-    static MINE: Cell<Option<usize>> = const { Cell::new(None) };
-}
-
 impl Remote {
-    /// Starts one worker to ask its name; `threads` more start as threads first call. A call that
-    /// takes longer than `limit` is a crash: its worker is killed and replaced. A worker that
-    /// speaks another version of the protocol is an error.
-    pub fn new(command: Vec<String>, threads: usize, limit: Duration) -> Result<Remote, String> {
-        let mut first = Worker::spawn(&command)?;
-        let hello = first
+    /// Starts the worker and asks its name. A call that takes longer than `limit` is a crash: the
+    /// worker is killed, and the next reset starts another. A worker that speaks another version
+    /// of the protocol is an error.
+    pub fn new(command: Vec<String>, limit: Duration) -> Result<Remote, String> {
+        let mut worker = Worker::spawn(&command)?;
+        let hello = worker
             .call(&json!({"cmd": "hello"}), limit)
             .ok()
             .and_then(|r| r.get("ok").cloned())
@@ -140,70 +146,44 @@ impl Remote {
                 "the worker speaks protocol {theirs} and this client {PROTOCOL_VERSION}"
             ));
         }
-        let mut workers = vec![Mutex::new(Some(first))];
-        workers.extend((1..threads.max(1)).map(|_| Mutex::new(None)));
-        let lost = workers.iter().map(|_| Mutex::new(None)).collect();
         Ok(Remote {
             command,
-            workers,
-            lost,
-            next: AtomicUsize::new(0),
+            worker: Some(worker),
+            lost: None,
             hello,
             limit,
         })
     }
 
-    /// This thread's worker, the same for every call it makes.
-    fn mine(&self) -> usize {
-        MINE.with(|m| {
-            *m.get().get_or_insert_with(|| {
-                let i = self.next.fetch_add(1, Ordering::Relaxed) % self.workers.len();
-                m.set(Some(i));
-                i
-            })
-        })
-    }
-
-    /// A request to worker `w`. A `crash` reply, a worker that dies, or one past the time limit
-    /// panics: a crash of the operation it was running. A dead or killed worker is replaced on the
-    /// next request.
-    fn call(&self, w: usize, req: Value) -> Result<Value, Refusal> {
-        let lose = |loss: Loss| -> ! {
-            *self.lost[w].lock().unwrap_or_else(|p| p.into_inner()) = Some(loss.clone());
-            match loss {
-                Loss::TimedOut(what) => std::panic::panic_any(TimedOut(what)),
-                Loss::Died(what) => panic!("{what}"),
-            }
-        };
-        let before = self.lost[w]
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .clone();
-        if let Some(loss) = before {
-            lose(loss);
+    /// A request to the worker, or to a new one in place of a lost worker. A `crash` reply, a
+    /// worker that dies, or one past the time limit panics: a crash of the operation it was
+    /// running.
+    fn call(&mut self, req: Value) -> Result<Value, Refusal> {
+        if let Some(loss) = &self.lost {
+            lose(loss.clone());
         }
-        let mut slot = self.workers[w].lock().unwrap_or_else(|p| p.into_inner());
-        if slot.is_none() {
-            *slot = Some(Worker::spawn(&self.command)?);
+        let limit = self.limit;
+        if self.worker.is_none() {
+            self.worker = Some(Worker::spawn(&self.command)?);
         }
-        let reply = match slot.as_mut().map(|wk| wk.call(&req, self.limit)) {
+        let reply = match self.worker.as_mut().map(|wk| wk.call(&req, limit)) {
             Some(Ok(reply)) => reply,
             Some(Err(Lost::TimedOut)) => {
-                *slot = None;
-                drop(slot);
-                lose(Loss::TimedOut(format!(
-                    "{} took longer than {:?}",
-                    req["cmd"], self.limit
-                )));
+                self.worker = None;
+                let loss = Loss::TimedOut(format!("{} took longer than {limit:?}", req["cmd"]));
+                self.lost = Some(loss.clone());
+                lose(loss);
             }
             _ => {
-                let status = slot.as_mut().map(Worker::exit_status).unwrap_or_default();
-                *slot = None;
-                drop(slot);
-                lose(Loss::Died(format!(
-                    "the worker died on {} ({status})",
-                    req["cmd"]
-                )));
+                let status = self
+                    .worker
+                    .as_mut()
+                    .map(Worker::exit_status)
+                    .unwrap_or_default();
+                self.worker = None;
+                let loss = Loss::Died(format!("the worker died on {} ({status})", req["cmd"]));
+                self.lost = Some(loss.clone());
+                lose(loss);
             }
         };
         if let Some(c) = reply.get("crash") {
@@ -218,9 +198,15 @@ impl Remote {
         }
     }
 
-    fn handle(&self, w: usize, v: Value) -> Result<Handle, Refusal> {
+    /// A request whose reply is a new solid's handle.
+    fn solid(&mut self, req: Value) -> Result<Handle, Refusal> {
+        let v = self.call(req)?;
+        Self::handle(v)
+    }
+
+    fn handle(v: Value) -> Result<Handle, Refusal> {
         let handle = crate::wire::integer(&v).ok_or("the worker returned no handle")?;
-        Ok(Handle { worker: w, handle })
+        Ok(Handle { handle })
     }
 }
 
@@ -243,154 +229,149 @@ impl Kernel for Remote {
         self.hello["configuration"].as_str().unwrap_or("").into()
     }
 
-    fn make(&self, p: &Primitive) -> Result<Handle, Refusal> {
-        let w = self.mine();
-        let v = self.call(w, p.to_call())?;
-        self.handle(w, v)
+    fn make(&mut self, p: &Primitive) -> Result<Handle, Refusal> {
+        self.solid(p.to_call())
     }
 
-    fn union(&self, a: &Handle, b: &Handle) -> Result<Handle, Refusal> {
+    fn union(&mut self, a: &Handle, b: &Handle) -> Result<Handle, Refusal> {
         self.combine(Op::Union, a, b)
     }
 
-    fn intersection(&self, a: &Handle, b: &Handle) -> Result<Handle, Refusal> {
+    fn intersection(&mut self, a: &Handle, b: &Handle) -> Result<Handle, Refusal> {
         self.combine(Op::Intersection, a, b)
     }
 
-    fn difference(&self, a: &Handle, b: &Handle) -> Result<Handle, Refusal> {
+    fn difference(&mut self, a: &Handle, b: &Handle) -> Result<Handle, Refusal> {
         self.combine(Op::Difference, a, b)
     }
 
-    fn volume(&self, s: &Handle) -> Result<f64, Refusal> {
-        let v = self.call(s.worker, json!({"cmd": "volume", "s": s.handle}))?;
-        v.as_f64().ok_or_else(|| "volume: not a number".into())
+    fn volume(&mut self, s: &Handle) -> Result<f64, Refusal> {
+        serde_json::from_value(self.call(json!({"cmd": "volume", "s": s.handle}))?)
+            .map_err(malformed("volume"))
     }
 
-    fn area(&self, s: &Handle) -> Result<f64, Refusal> {
-        let v = self.call(s.worker, json!({"cmd": "area", "s": s.handle}))?;
-        v.as_f64().ok_or_else(|| "area: not a number".into())
+    fn area(&mut self, s: &Handle) -> Result<f64, Refusal> {
+        serde_json::from_value(self.call(json!({"cmd": "area", "s": s.handle}))?)
+            .map_err(malformed("area"))
     }
 
-    fn check(&self, s: &Handle) -> Result<Vec<String>, Refusal> {
-        let v = self.call(s.worker, json!({"cmd": "check", "s": s.handle}))?;
-        serde_json::from_value(v).map_err(|e| Refusal::failed(format!("check: {e}")))
+    fn check(&mut self, s: &Handle) -> Result<Vec<String>, Refusal> {
+        serde_json::from_value(self.call(json!({"cmd": "check", "s": s.handle}))?)
+            .map_err(malformed("check"))
     }
 
-    fn fillet(&self, s: &Handle, edges: &[Vec3], radius: f64) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "fillet", "s": s.handle, "edges": edges, "radius": radius});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+    fn fillet(&mut self, s: &Handle, edges: &[Vec3], radius: f64) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "fillet", "s": s.handle, "edges": edges, "radius": radius}))
     }
 
-    fn fillet_radii(&self, s: &Handle, edges: &[Vec3], radii: &[f64]) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "fillet_radii", "s": s.handle, "edges": edges, "radii": radii});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+    fn fillet_radii(
+        &mut self,
+        s: &Handle,
+        edges: &[Vec3],
+        radii: &[f64],
+    ) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "fillet_radii", "s": s.handle, "edges": edges, "radii": radii}))
     }
 
-    fn normal(&self, s: &Handle, points: &[Vec3]) -> Result<Vec<Option<Vec3>>, Refusal> {
-        let v = self.call(
-            s.worker,
-            json!({"cmd": "normal", "s": s.handle, "points": points}),
-        )?;
-        serde_json::from_value(v).map_err(|e| Refusal::failed(format!("normal: {e}")))
+    fn normal(&mut self, s: &Handle, points: &[Vec3]) -> Result<Vec<Option<Vec3>>, Refusal> {
+        serde_json::from_value(
+            self.call(json!({"cmd": "normal", "s": s.handle, "points": points}))?,
+        )
+        .map_err(malformed("normal"))
     }
 
     fn fillet_g2(
-        &self,
+        &mut self,
         s: &Handle,
         edges: &[Vec3],
         offset: f64,
         center: f64,
     ) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "fillet_g2", "s": s.handle, "edges": edges, "offset": offset,
-                         "center": center});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+        self.solid(
+            json!({"cmd": "fillet_g2", "s": s.handle, "edges": edges, "offset": offset,
+                   "center": center}),
+        )
     }
 
     fn fillet_conic(
-        &self,
+        &mut self,
         s: &Handle,
         edges: &[Vec3],
         setback: f64,
         rho: f64,
     ) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "fillet_conic", "s": s.handle, "edges": edges,
-                         "setback": setback, "rho": rho});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+        self.solid(json!({"cmd": "fillet_conic", "s": s.handle, "edges": edges,
+                         "setback": setback, "rho": rho}))
     }
 
     fn fillet_setback(
-        &self,
+        &mut self,
         s: &Handle,
         edges: &[Vec3],
         radius: f64,
         setback: f64,
     ) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "fillet_setback", "s": s.handle, "edges": edges,
-                         "radius": radius, "setback": setback});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+        self.solid(
+            json!({"cmd": "fillet_setback", "s": s.handle, "edges": edges,
+                   "radius": radius, "setback": setback}),
+        )
     }
 
     fn fillet_setback_g2(
-        &self,
+        &mut self,
         s: &Handle,
         edges: &[Vec3],
         radius: f64,
         setback: f64,
     ) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "fillet_setback_g2", "s": s.handle, "edges": edges,
-                         "radius": radius, "setback": setback});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+        self.solid(
+            json!({"cmd": "fillet_setback_g2", "s": s.handle, "edges": edges,
+                   "radius": radius, "setback": setback}),
+        )
     }
 
     fn fillet_faces(
-        &self,
+        &mut self,
         s: &Handle,
         face_a: Vec3,
         face_b: Vec3,
         radius: f64,
     ) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "fillet_faces", "s": s.handle, "face_a": face_a,
-                         "face_b": face_b, "radius": radius});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+        self.solid(
+            json!({"cmd": "fillet_faces", "s": s.handle, "face_a": face_a,
+                   "face_b": face_b, "radius": radius}),
+        )
     }
 
     fn full_round(
-        &self,
+        &mut self,
         s: &Handle,
         side_a: Vec3,
         middle: Vec3,
         side_b: Vec3,
     ) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "full_round", "s": s.handle, "side_a": side_a, "middle": middle,
-                         "side_b": side_b});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+        self.solid(
+            json!({"cmd": "full_round", "s": s.handle, "side_a": side_a, "middle": middle,
+                   "side_b": side_b}),
+        )
     }
 
-    fn curvature(&self, s: &Handle, points: &[Vec3]) -> Result<Vec<Option<[f64; 2]>>, Refusal> {
-        let v = self.call(
-            s.worker,
-            json!({"cmd": "curvature", "s": s.handle, "points": points}),
-        )?;
-        serde_json::from_value(v).map_err(|e| Refusal::failed(format!("curvature: {e}")))
+    fn curvature(&mut self, s: &Handle, points: &[Vec3]) -> Result<Vec<Option<[f64; 2]>>, Refusal> {
+        serde_json::from_value(
+            self.call(json!({"cmd": "curvature", "s": s.handle, "points": points}))?,
+        )
+        .map_err(malformed("curvature"))
     }
 
     fn project(
-        &self,
+        &mut self,
         s: &Handle,
         direction: Vec3,
         tolerance: f64,
     ) -> Result<crate::Projection, Refusal> {
         let req = json!({"cmd": "project", "s": s.handle, "direction": direction,
                          "tolerance": tolerance});
-        let v = self.call(s.worker, req)?;
+        let v = self.call(req)?;
         let part = |key: &str| {
             serde_json::from_value(v[key].clone())
                 .map_err(|e| Refusal::failed(format!("project: {key}: {e}")))
@@ -402,80 +383,75 @@ impl Kernel for Remote {
     }
 
     fn fillet_variable(
-        &self,
+        &mut self,
         s: &Handle,
         edge: Vec3,
         from: Vec3,
         r_from: f64,
         r_to: f64,
     ) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "fillet_variable", "s": s.handle, "edge": edge, "from": from,
-                         "r_from": r_from, "r_to": r_to});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+        self.solid(
+            json!({"cmd": "fillet_variable", "s": s.handle, "edge": edge, "from": from,
+                   "r_from": r_from, "r_to": r_to}),
+        )
     }
 
     fn loft_through(
-        &self,
+        &mut self,
         frame: &crate::model::Frame,
         profiles: &[crate::profile::Profile],
         heights: &[f64],
     ) -> Result<Handle, Refusal> {
         let f = json!({"origin": frame.origin, "x": frame.x, "y": frame.y, "z": frame.z});
         let ps: Vec<Value> = profiles.iter().map(|p| p.to_json()).collect();
-        let req = json!({"cmd": "loft_through", "frame": f, "profiles": ps, "heights": heights});
-        let w = self.mine();
-        let v = self.call(w, req)?;
-        self.handle(w, v)
+        self.solid(json!({"cmd": "loft_through", "frame": f, "profiles": ps, "heights": heights}))
     }
 
     fn chamfer_two(
-        &self,
+        &mut self,
         s: &Handle,
         edge: Vec3,
         face: Vec3,
         d1: f64,
         d2: f64,
     ) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "chamfer_two", "s": s.handle, "edge": edge, "face": face,
-                         "d1": d1, "d2": d2});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+        self.solid(
+            json!({"cmd": "chamfer_two", "s": s.handle, "edge": edge, "face": face,
+                   "d1": d1, "d2": d2}),
+        )
     }
 
     fn chamfer_distances(
-        &self,
+        &mut self,
         s: &Handle,
         edges: &[Vec3],
         distances: &[f64],
     ) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "chamfer_distances", "s": s.handle, "edges": edges,
-                         "distances": distances});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+        self.solid(
+            json!({"cmd": "chamfer_distances", "s": s.handle, "edges": edges,
+                   "distances": distances}),
+        )
     }
 
-    fn chamfer(&self, s: &Handle, edges: &[Vec3], distance: f64) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "chamfer", "s": s.handle, "edges": edges, "distance": distance});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+    fn chamfer(&mut self, s: &Handle, edges: &[Vec3], distance: f64) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "chamfer", "s": s.handle, "edges": edges, "distance": distance}))
     }
 
-    fn betti(&self, s: &Handle) -> Result<[u64; 3], Refusal> {
-        let v = self.call(s.worker, json!({"cmd": "betti", "s": s.handle}))?;
-        serde_json::from_value(v).map_err(|e| Refusal::failed(format!("betti: {e}")))
+    fn betti(&mut self, s: &Handle) -> Result<[u64; 3], Refusal> {
+        serde_json::from_value(self.call(json!({"cmd": "betti", "s": s.handle}))?)
+            .map_err(malformed("betti"))
     }
 
-    fn section_area(&self, s: &Handle, origin: Vec3, normal: Vec3) -> Result<f64, Refusal> {
-        let req = json!({"cmd": "section_area", "s": s.handle, "origin": origin, "normal": normal});
-        let v = self.call(s.worker, req)?;
-        v.as_f64()
-            .ok_or_else(|| Refusal::failed(format!("section_area: {v} is not a number")))
+    fn section_area(&mut self, s: &Handle, origin: Vec3, normal: Vec3) -> Result<f64, Refusal> {
+        serde_json::from_value(self.call(
+            json!({"cmd": "section_area", "s": s.handle, "origin": origin, "normal": normal}),
+        )?)
+        .map_err(malformed("section_area"))
     }
 
-    fn mesh(&self, s: &Handle, tolerance: f64) -> Result<Mesh, Refusal> {
+    fn mesh(&mut self, s: &Handle, tolerance: f64) -> Result<Mesh, Refusal> {
         let req = json!({"cmd": "mesh", "s": s.handle, "tolerance": tolerance});
-        let v = self.call(s.worker, req)?;
+        let v = self.call(req)?;
         Ok(Mesh {
             positions: serde_json::from_value(v["positions"].clone())
                 .map_err(|e| format!("mesh positions: {e}"))?,
@@ -484,9 +460,9 @@ impl Kernel for Remote {
         })
     }
 
-    fn display(&self, s: &Handle, tolerance: f64) -> Result<Display, Refusal> {
+    fn display(&mut self, s: &Handle, tolerance: f64) -> Result<Display, Refusal> {
         let req = json!({"cmd": "display", "s": s.handle, "tolerance": tolerance});
-        let v = self.call(s.worker, req)?;
+        let v = self.call(req)?;
         let part = |v: &Value, key: &str| -> Result<Value, Refusal> {
             Ok(v.get(key)
                 .ok_or_else(|| format!("display: no `{key}`"))?
@@ -513,39 +489,30 @@ impl Kernel for Remote {
         Ok(Display { faces, edges })
     }
 
-    fn offset(&self, s: &Handle, distance: f64) -> Result<Handle, Refusal> {
-        let v = self.call(
-            s.worker,
-            json!({"cmd": "offset", "s": s.handle, "distance": distance}),
-        )?;
-        self.handle(s.worker, v)
+    fn offset(&mut self, s: &Handle, distance: f64) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "offset", "s": s.handle, "distance": distance}))
     }
 
-    fn shell(&self, s: &Handle, open: &[Vec3], thickness: f64) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "shell", "s": s.handle, "open": open, "thickness": thickness});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+    fn shell(&mut self, s: &Handle, open: &[Vec3], thickness: f64) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "shell", "s": s.handle, "open": open, "thickness": thickness}))
     }
 
     fn draft(
-        &self,
+        &mut self,
         s: &Handle,
         faces: &[Vec3],
         origin: Vec3,
         pull: Vec3,
         angle: f64,
     ) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "draft", "s": s.handle, "faces": faces, "origin": origin,
-                         "pull": pull, "angle": angle});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+        self.solid(
+            json!({"cmd": "draft", "s": s.handle, "faces": faces, "origin": origin,
+                   "pull": pull, "angle": angle}),
+        )
     }
 
-    fn interference(&self, a: &Handle, b: &Handle) -> Result<crate::Meeting, Refusal> {
-        let v = self.call(
-            a.worker,
-            json!({"cmd": "interference", "a": a.handle, "b": b.handle}),
-        )?;
+    fn interference(&mut self, a: &Handle, b: &Handle) -> Result<crate::Meeting, Refusal> {
+        let v = self.call(json!({"cmd": "interference", "a": a.handle, "b": b.handle}))?;
         let n = |k: &str| v[k].as_f64().ok_or(format!("interference: no `{k}`"));
         Ok(crate::Meeting {
             volume: n("volume")?,
@@ -553,139 +520,116 @@ impl Kernel for Remote {
         })
     }
 
-    fn union_all(&self, solids: &[&Handle]) -> Result<Handle, Refusal> {
-        let w = solids.first().ok_or("a union of all needs solids")?.worker;
+    fn union_all(&mut self, solids: &[&Handle]) -> Result<Handle, Refusal> {
+        if solids.is_empty() {
+            return Err("a union of all needs solids".into());
+        }
         let hs: Vec<u64> = solids.iter().map(|s| s.handle).collect();
-        let v = self.call(w, json!({"cmd": "union_all", "solids": hs}))?;
-        self.handle(w, v)
+        self.solid(json!({"cmd": "union_all", "solids": hs}))
     }
 
-    fn difference_all(&self, target: &Handle, tools: &[&Handle]) -> Result<Handle, Refusal> {
+    fn difference_all(&mut self, target: &Handle, tools: &[&Handle]) -> Result<Handle, Refusal> {
         let hs: Vec<u64> = tools.iter().map(|s| s.handle).collect();
-        let req = json!({"cmd": "difference_all", "target": target.handle, "tools": hs});
-        let v = self.call(target.worker, req)?;
-        self.handle(target.worker, v)
+        self.solid(json!({"cmd": "difference_all", "target": target.handle, "tools": hs}))
     }
 
-    fn delete_faces(&self, s: &Handle, faces: &[Vec3]) -> Result<Handle, Refusal> {
-        let v = self.call(
-            s.worker,
-            json!({"cmd": "delete_faces", "s": s.handle, "faces": faces}),
-        )?;
-        self.handle(s.worker, v)
+    fn delete_faces(&mut self, s: &Handle, faces: &[Vec3]) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "delete_faces", "s": s.handle, "faces": faces}))
     }
 
     fn move_faces(
-        &self,
+        &mut self,
         s: &Handle,
         faces: &[Vec3],
         matrix: [[f64; 4]; 3],
     ) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "move_faces", "s": s.handle, "faces": faces, "matrix": matrix});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+        self.solid(json!({"cmd": "move_faces", "s": s.handle, "faces": faces, "matrix": matrix}))
     }
 
-    fn thicken(&self, s: &Handle, faces: &[Vec3], thickness: f64) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "thicken", "s": s.handle, "faces": faces,
-                         "thickness": thickness});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+    fn thicken(&mut self, s: &Handle, faces: &[Vec3], thickness: f64) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "thicken", "s": s.handle, "faces": faces,
+                         "thickness": thickness}))
     }
 
-    fn split(&self, s: &Handle, origin: Vec3, normal: Vec3) -> Result<(Handle, Handle), Refusal> {
+    fn split(
+        &mut self,
+        s: &Handle,
+        origin: Vec3,
+        normal: Vec3,
+    ) -> Result<(Handle, Handle), Refusal> {
         let req = json!({"cmd": "split", "s": s.handle, "origin": origin, "normal": normal});
-        let v = self.call(s.worker, req)?;
+        let v = self.call(req)?;
         let hs = v.as_array().ok_or("split: not a list")?;
         let [a, b] = hs.as_slice() else {
             return Err("split: not two handles".into());
         };
-        Ok((
-            self.handle(s.worker, a.clone())?,
-            self.handle(s.worker, b.clone())?,
-        ))
+        Ok((Self::handle(a.clone())?, Self::handle(b.clone())?))
     }
 
-    fn bounding_box(&self, s: &Handle) -> Result<[Vec3; 2], Refusal> {
-        let v = self.call(s.worker, json!({"cmd": "bounding_box", "s": s.handle}))?;
-        serde_json::from_value(v).map_err(|e| Refusal::failed(format!("bounding_box: {e}")))
+    fn bounding_box(&mut self, s: &Handle) -> Result<[Vec3; 2], Refusal> {
+        serde_json::from_value(self.call(json!({"cmd": "bounding_box", "s": s.handle}))?)
+            .map_err(malformed("bounding_box"))
     }
 
     fn section(
-        &self,
+        &mut self,
         s: &Handle,
         origin: Vec3,
         normal: Vec3,
         tolerance: f64,
     ) -> Result<Vec<Vec<Vec3>>, Refusal> {
-        let req = json!({"cmd": "section", "s": s.handle, "origin": origin, "normal": normal,
-                         "tolerance": tolerance});
-        let v = self.call(s.worker, req)?;
-        serde_json::from_value(v).map_err(|e| Refusal::failed(format!("section: {e}")))
+        serde_json::from_value(self.call(
+            json!({"cmd": "section", "s": s.handle, "origin": origin, "normal": normal,
+                   "tolerance": tolerance}),
+        )?)
+        .map_err(malformed("section"))
     }
 
-    fn sew(&self, text: &str, tolerance: f64) -> Result<Handle, Refusal> {
-        let w = self.mine();
-        let v = self.call(
-            w,
-            json!({"cmd": "sew", "text": text, "tolerance": tolerance}),
-        )?;
-        self.handle(w, v)
+    fn sew(&mut self, text: &str, tolerance: f64) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "sew", "text": text, "tolerance": tolerance}))
     }
 
-    fn offset_faces(&self, s: &Handle, faces: &[Vec3], distance: f64) -> Result<Handle, Refusal> {
-        let req = json!({"cmd": "offset_faces", "s": s.handle, "faces": faces,
-                         "distance": distance});
-        let v = self.call(s.worker, req)?;
-        self.handle(s.worker, v)
+    fn offset_faces(
+        &mut self,
+        s: &Handle,
+        faces: &[Vec3],
+        distance: f64,
+    ) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "offset_faces", "s": s.handle, "faces": faces,
+                         "distance": distance}))
     }
 
-    fn transform(&self, s: &Handle, matrix: [[f64; 4]; 3]) -> Result<Handle, Refusal> {
-        let v = self.call(
-            s.worker,
-            json!({"cmd": "transform", "s": s.handle, "matrix": matrix}),
-        )?;
-        self.handle(s.worker, v)
+    fn transform(&mut self, s: &Handle, matrix: [[f64; 4]; 3]) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "transform", "s": s.handle, "matrix": matrix}))
     }
 
-    fn affine(&self, s: &Handle, matrix: [[f64; 4]; 3]) -> Result<Handle, Refusal> {
-        let v = self.call(
-            s.worker,
-            json!({"cmd": "affine", "s": s.handle, "matrix": matrix}),
-        )?;
-        self.handle(s.worker, v)
+    fn affine(&mut self, s: &Handle, matrix: [[f64; 4]; 3]) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "affine", "s": s.handle, "matrix": matrix}))
     }
 
-    fn raycast(&self, s: &Handle, origin: Vec3, direction: Vec3) -> Result<Vec<f64>, Refusal> {
-        let req =
-            json!({"cmd": "raycast", "s": s.handle, "origin": origin, "direction": direction});
-        let v = self.call(s.worker, req)?;
-        serde_json::from_value(v).map_err(|e| Refusal::failed(format!("raycast: {e}")))
+    fn raycast(&mut self, s: &Handle, origin: Vec3, direction: Vec3) -> Result<Vec<f64>, Refusal> {
+        serde_json::from_value(self.call(
+            json!({"cmd": "raycast", "s": s.handle, "origin": origin, "direction": direction}),
+        )?)
+        .map_err(malformed("raycast"))
     }
 
-    fn raycasts(&self, s: &Handle, rays: &[(Vec3, Vec3)]) -> Result<Vec<Vec<f64>>, Refusal> {
+    fn raycasts(&mut self, s: &Handle, rays: &[(Vec3, Vec3)]) -> Result<Vec<Vec<f64>>, Refusal> {
         // A worker that reads only one ray a request answers the many-ray form with an error.
         let req = json!({"cmd": "raycast", "s": s.handle, "rays": rays});
-        match self
-            .call(s.worker, req)
-            .map(serde_json::from_value::<Vec<Vec<f64>>>)
-        {
+        match self.call(req).map(serde_json::from_value::<Vec<Vec<f64>>>) {
             Ok(Ok(all)) if all.len() == rays.len() => Ok(all),
             _ => rays.iter().map(|&(o, d)| self.raycast(s, o, d)).collect(),
         }
     }
 
-    fn reset(&self) {
-        // Only this thread's worker: the others hold other threads' cases.
-        let w = self.mine();
-        let lost = || self.lost[w].lock().unwrap_or_else(|p| p.into_inner());
-        *lost() = None;
-        let _ =
-            std::panic::catch_unwind(AssertUnwindSafe(|| self.call(w, json!({"cmd": "reset"}))));
-        // A worker lost on the reset holds no case's solids, so its loss is not the next case's:
-        // that case starts on a new worker, and the loss is reported here.
-        if let Some(Loss::Died(what) | Loss::TimedOut(what)) = lost().take() {
-            eprintln!("worker {w} lost between cases: {what}");
+    fn reset(&mut self) {
+        // A lost worker is replaced here, between cases, so a replacement that cannot start is
+        // not charged to the next case.
+        self.lost = None;
+        let _ = std::panic::catch_unwind(AssertUnwindSafe(|| self.call(json!({"cmd": "reset"}))));
+        if let Some(Loss::Died(what) | Loss::TimedOut(what)) = self.lost.take() {
+            eprintln!("the worker was lost between cases: {what}");
         }
     }
 
@@ -693,42 +637,33 @@ impl Kernel for Remote {
         serde_json::from_value(self.hello["supports"].clone()).unwrap_or_default()
     }
 
-    fn write_step(&self, s: &Handle) -> Result<String, Refusal> {
-        let v = self.call(s.worker, json!({"cmd": "write_step", "s": s.handle}))?;
-        v.as_str()
-            .map(String::from)
-            .ok_or_else(|| "write_step returned no text".into())
+    fn write_step(&mut self, s: &Handle) -> Result<String, Refusal> {
+        serde_json::from_value(self.call(json!({"cmd": "write_step", "s": s.handle}))?)
+            .map_err(malformed("write_step"))
     }
 
-    fn read_step(&self, text: &str) -> Result<Handle, Refusal> {
-        let w = self.mine();
-        let v = self.call(w, json!({"cmd": "read_step", "text": text}))?;
-        self.handle(w, v)
+    fn read_step(&mut self, text: &str) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "read_step", "text": text}))
     }
 
-    fn centroid(&self, s: &Handle) -> Result<Option<Vec3>, Refusal> {
-        let v = self.call(s.worker, json!({"cmd": "centroid", "s": s.handle}))?;
-        serde_json::from_value(v).map_err(|e| Refusal::failed(format!("centroid: {e}")))
+    fn centroid(&mut self, s: &Handle) -> Result<Option<Vec3>, Refusal> {
+        serde_json::from_value(self.call(json!({"cmd": "centroid", "s": s.handle}))?)
+            .map_err(malformed("centroid"))
     }
 
-    fn inertia(&self, s: &Handle) -> Result<[[f64; 3]; 3], Refusal> {
-        let v = self.call(s.worker, json!({"cmd": "inertia", "s": s.handle}))?;
-        serde_json::from_value(v).map_err(|e| Refusal::failed(format!("inertia: {e}")))
+    fn inertia(&mut self, s: &Handle) -> Result<[[f64; 3]; 3], Refusal> {
+        serde_json::from_value(self.call(json!({"cmd": "inertia", "s": s.handle}))?)
+            .map_err(malformed("inertia"))
     }
 
-    fn distance(&self, a: &Handle, b: &Handle) -> Result<f64, Refusal> {
-        assert_eq!(a.worker, b.worker, "both operands live in one worker");
-        let v = self.call(
-            a.worker,
-            json!({"cmd": "distance", "a": a.handle, "b": b.handle}),
-        )?;
-        v.as_f64()
-            .ok_or_else(|| Refusal::failed(format!("distance: {v} is not a number")))
+    fn distance(&mut self, a: &Handle, b: &Handle) -> Result<f64, Refusal> {
+        serde_json::from_value(self.call(json!({"cmd": "distance", "a": a.handle, "b": b.handle}))?)
+            .map_err(malformed("distance"))
     }
 
-    fn classify(&self, s: &Handle, points: &[Vec3]) -> Result<Vec<Side>, Refusal> {
+    fn classify(&mut self, s: &Handle, points: &[Vec3]) -> Result<Vec<Side>, Refusal> {
         let req = json!({"cmd": "classify", "s": s.handle, "points": points});
-        let v = self.call(s.worker, req)?;
+        let v = self.call(req)?;
         v.as_array()
             .and_then(|words| {
                 let side = |word: &Value| Side::from_word(word.as_str()?);
@@ -737,21 +672,17 @@ impl Kernel for Remote {
             .ok_or_else(|| Refusal::failed(format!("classify: {v} is not a list of sides")))
     }
 
-    fn closest(&self, s: &Handle, points: &[Vec3]) -> Result<Vec<Vec3>, Refusal> {
-        let v = self.call(
-            s.worker,
-            json!({"cmd": "closest", "s": s.handle, "points": points}),
-        )?;
-        serde_json::from_value(v).map_err(|e| Refusal::failed(format!("closest: {e}")))
+    fn closest(&mut self, s: &Handle, points: &[Vec3]) -> Result<Vec<Vec3>, Refusal> {
+        serde_json::from_value(
+            self.call(json!({"cmd": "closest", "s": s.handle, "points": points}))?,
+        )
+        .map_err(malformed("closest"))
     }
 }
 
 impl Remote {
-    fn combine(&self, op: Op, a: &Handle, b: &Handle) -> Result<Handle, Refusal> {
-        assert_eq!(a.worker, b.worker, "both operands live in one worker");
-        let req = json!({"cmd": op.word(), "a": a.handle, "b": b.handle});
-        let v = self.call(a.worker, req)?;
-        self.handle(a.worker, v)
+    fn combine(&mut self, op: Op, a: &Handle, b: &Handle) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": op.word(), "a": a.handle, "b": b.handle}))
     }
 }
 
@@ -764,7 +695,7 @@ mod tests {
         let worker = |hello: &str| {
             let script = format!("read line; echo '{{\"ok\": {hello}}}'; cat");
             let cmd = ["sh", "-c", &script].map(String::from).to_vec();
-            Remote::new(cmd, 1, Duration::from_secs(10))
+            Remote::new(cmd, Duration::from_secs(10))
         };
         let ours =
             format!(r#"{{"protocol": "{PROTOCOL_VERSION}", "supports": ["box", "volume"]}}"#);
@@ -810,7 +741,7 @@ mod tests {
     #[test]
     fn a_worker_that_dies_on_reset_is_not_charged_to_the_next_case() {
         let cmd = scripted(r#"*'"reset"'*) exit 3;;"#);
-        let k = Remote::new(cmd, 1, Duration::from_secs(10)).unwrap();
+        let mut k = Remote::new(cmd, Duration::from_secs(10)).unwrap();
         k.read_step("first case").unwrap();
         k.reset();
         assert_eq!(k.read_step("next case").unwrap().handle, 1);
@@ -827,7 +758,7 @@ mod tests {
             starts.display(),
             cmd[2]
         );
-        let k = Remote::new(cmd, 1, Duration::from_secs(10)).unwrap();
+        let mut k = Remote::new(cmd, Duration::from_secs(10)).unwrap();
         let s = k.read_step("first case").unwrap();
         let died = std::panic::catch_unwind(AssertUnwindSafe(|| k.volume(&s))).unwrap_err();
         let died = died.downcast_ref::<String>().cloned().unwrap_or_default();

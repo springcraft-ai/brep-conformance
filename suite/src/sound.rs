@@ -59,7 +59,7 @@ fn angle(a: Vec3, b: Vec3) -> f64 {
 /// Whether the result holds every sample all acceptable results hold and none that none does,
 /// over `within`: how many it places wrongly, and the first.
 pub fn between<K: Kernel>(
-    k: &K,
+    k: &mut K,
     s: &K::Solid,
     limits: &Limits,
     within: oracle::Bounds,
@@ -124,7 +124,7 @@ struct Seen {
 }
 
 struct Scanner<'a, K: Kernel> {
-    k: &'a K,
+    k: &'a mut K,
     s: &'a K::Solid,
     scan: &'a Scan,
     rays: usize,
@@ -232,7 +232,7 @@ impl<K: Kernel> Scanner<'_, K> {
 
 /// Scans the result across one grid of rays: for a break in its tangent plane, for a jump in its
 /// curvature where the blend is to carry it, and for a difference from itself moved.
-pub fn scan<K: Kernel>(k: &K, s: &K::Solid, scan: &Scan) -> Result<Found, Refusal> {
+pub fn scan<K: Kernel>(k: &mut K, s: &K::Solid, scan: &Scan) -> Result<Found, Refusal> {
     let mut sc = Scanner {
         k,
         s,

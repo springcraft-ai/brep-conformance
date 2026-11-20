@@ -41,7 +41,7 @@ fn handle(v: &Value) -> Result<u64, Refusal> {
 
 /// Answers requests until stdin closes. A refusal replies `err`; a panic replies `crash`, and the
 /// worker carries on.
-pub fn serve<K: Kernel>(k: &K) -> std::io::Result<()> {
+pub fn serve<K: Kernel>(k: &mut K) -> std::io::Result<()> {
     let mut solids: HashMap<u64, K::Solid> = HashMap::new();
     let mut next = 1u64;
     let quiet = std::panic::take_hook();
@@ -76,7 +76,7 @@ pub fn serve<K: Kernel>(k: &K) -> std::io::Result<()> {
 }
 
 fn answer<K: Kernel>(
-    k: &K,
+    k: &mut K,
     req: &Value,
     solids: &mut HashMap<u64, K::Solid>,
     next: &mut u64,
@@ -479,25 +479,25 @@ mod tests {
         fn tolerance(&self) -> f64 {
             1e-7
         }
-        fn make(&self, _p: &Primitive) -> Result<(), Refusal> {
+        fn make(&mut self, _p: &Primitive) -> Result<(), Refusal> {
             Ok(())
         }
-        fn union(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn union(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn intersection(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn intersection(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn difference(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn difference(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn volume(&self, _s: &()) -> Result<f64, Refusal> {
+        fn volume(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(1.0)
         }
-        fn area(&self, _s: &()) -> Result<f64, Refusal> {
+        fn area(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(6.0)
         }
-        fn check(&self, _s: &()) -> Result<Vec<String>, Refusal> {
+        fn check(&mut self, _s: &()) -> Result<Vec<String>, Refusal> {
             Err(Refusal {
                 kind: self.0,
                 reason: "no verdict".into(),
@@ -509,7 +509,13 @@ mod tests {
     fn a_checker_that_declines_is_an_issue_and_a_kernel_without_one_is_not_judged() {
         let mut solids = HashMap::from([(1, ())]);
         let asked = json!({"cmd": "check", "s": 1});
-        let e = answer(&Unchecked(crate::Kind::Failed), &asked, &mut solids, &mut 2).unwrap_err();
+        let e = answer(
+            &mut Unchecked(crate::Kind::Failed),
+            &asked,
+            &mut solids,
+            &mut 2,
+        )
+        .unwrap_err();
         assert_eq!(
             (e.kind, e.reason.as_str()),
             (crate::Kind::Failed, "no verdict")
@@ -542,25 +548,25 @@ mod tests {
         fn supports(&self) -> Vec<String> {
             ["box", "volume", "fillit"].map(String::from).to_vec()
         }
-        fn make(&self, _p: &Primitive) -> Result<(), Refusal> {
+        fn make(&mut self, _p: &Primitive) -> Result<(), Refusal> {
             Ok(())
         }
-        fn union(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn union(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn intersection(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn intersection(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn difference(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn difference(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn volume(&self, _s: &()) -> Result<f64, Refusal> {
+        fn volume(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(1.0)
         }
-        fn area(&self, _s: &()) -> Result<f64, Refusal> {
+        fn area(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(6.0)
         }
-        fn check(&self, _s: &()) -> Result<Vec<String>, Refusal> {
+        fn check(&mut self, _s: &()) -> Result<Vec<String>, Refusal> {
             Ok(Vec::new())
         }
     }
@@ -570,7 +576,7 @@ mod tests {
         // `union`, `area` and the rest have bodies here, but are not listed: they are not
         // offered. A name that is no function is never claimed.
         let hello = answer(
-            &Listed,
+            &mut Listed,
             &json!({"cmd": "hello"}),
             &mut HashMap::new(),
             &mut 1,
@@ -593,25 +599,25 @@ mod tests {
         fn tolerance(&self) -> f64 {
             1e-7
         }
-        fn make(&self, _p: &Primitive) -> Result<(), Refusal> {
+        fn make(&mut self, _p: &Primitive) -> Result<(), Refusal> {
             Ok(())
         }
-        fn union(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn union(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn intersection(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn intersection(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn difference(&self, _a: &(), _b: &()) -> Result<(), Refusal> {
+        fn difference(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
             Ok(())
         }
-        fn volume(&self, _s: &()) -> Result<f64, Refusal> {
+        fn volume(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(0.0)
         }
-        fn area(&self, _s: &()) -> Result<f64, Refusal> {
+        fn area(&mut self, _s: &()) -> Result<f64, Refusal> {
             Ok(0.0)
         }
-        fn check(&self, _s: &()) -> Result<Vec<String>, Refusal> {
+        fn check(&mut self, _s: &()) -> Result<Vec<String>, Refusal> {
             Ok(Vec::new())
         }
         fn supports(&self) -> Vec<String> {
@@ -627,21 +633,21 @@ mod tests {
     fn every_listed_function_is_a_command_serve_knows() {
         for f in FUNCTIONS {
             let (mut solids, mut next) = (HashMap::new(), 1);
-            let unknown = match answer(&Bare, &json!({"cmd": f}), &mut solids, &mut next) {
+            let unknown = match answer(&mut Bare, &json!({"cmd": f}), &mut solids, &mut next) {
                 Err(e) => e.reason.starts_with("unknown command"),
                 Ok(_) => false,
             };
             assert!(!unknown, "{f}");
         }
         let (mut solids, mut next) = (HashMap::new(), 1);
-        let e = answer(&Bare, &json!({"cmd": "later"}), &mut solids, &mut next).unwrap_err();
+        let e = answer(&mut Bare, &json!({"cmd": "later"}), &mut solids, &mut next).unwrap_err();
         assert_eq!(e.kind, crate::Kind::Unsupported);
     }
 
     #[test]
     fn hello_lists_what_the_kernel_offers_and_classify_refuses_where_it_has_none() {
         let (mut solids, mut next) = (HashMap::new(), 1);
-        let hello = answer(&Bare, &json!({"cmd": "hello"}), &mut solids, &mut next).unwrap();
+        let hello = answer(&mut Bare, &json!({"cmd": "hello"}), &mut solids, &mut next).unwrap();
         let supports: Vec<&str> = hello["supports"]
             .as_array()
             .unwrap()
@@ -653,7 +659,7 @@ mod tests {
         assert!(hello.get("unsupported").is_none());
         solids.insert(1, ());
         let asked = json!({"cmd": "classify", "s": 1, "points": [[0.0, 0.0, 0.0]]});
-        let e = answer(&Bare, &asked, &mut solids, &mut next).unwrap_err();
+        let e = answer(&mut Bare, &asked, &mut solids, &mut next).unwrap_err();
         assert_eq!(e.kind, crate::Kind::Unsupported);
     }
 }

@@ -106,7 +106,7 @@ fn written(e: super::Ran) -> String {
 
 /// The kernel's solid for a reference, built once per case.
 fn solid<K: Kernel<Solid: Clone>>(
-    k: &K,
+    k: &mut K,
     shapes: &[Value],
     built: &mut HashMap<String, Result<K::Solid, String>>,
     r: &Value,
@@ -122,7 +122,7 @@ fn solid<K: Kernel<Solid: Clone>>(
 
 /// The part of `a` outside `b` as the kernel draws it: `a ∖ b`, less each face and edge that lies
 /// on `b`'s boundary, so the ghost ends where the result's faces begin.
-fn ghost<K: Kernel>(k: &K, a: &K::Solid, b: &K::Solid, tol: f64) -> Result<Display, String> {
+fn ghost<K: Kernel>(k: &mut K, a: &K::Solid, b: &K::Solid, tol: f64) -> Result<Display, String> {
     let rest = attempt(|| k.difference(a, b)).map_err(written)?;
     let d = attempt(|| k.display(&rest, tol)).map_err(written)?;
     // A point inside each face: the middle of its largest triangle, put back on the face.
@@ -197,7 +197,7 @@ fn write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 /// expected STEP file's key, what could not be drawn or written as `errors`, and as `skipped` a ghost the
 /// kernel could not cut or a refused case's input it would not make.
 pub(super) fn export_case<K: Kernel<Solid: Clone + 'static>>(
-    k: &K,
+    k: &mut K,
     c: &Case,
     ex: &Exports,
     v: &mut Value,

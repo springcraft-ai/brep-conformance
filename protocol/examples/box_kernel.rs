@@ -45,7 +45,7 @@ impl Kernel for BoxKernel {
         SUPPORTED.iter().map(|f| f.to_string()).collect()
     }
 
-    fn make(&self, p: &Primitive) -> Result<Block, Refusal> {
+    fn make(&mut self, p: &Primitive) -> Result<Block, Refusal> {
         match p {
             Primitive::Box { frame, size } if size.iter().all(|&s| s > 0.0) => Ok(Block {
                 frame: *frame,
@@ -56,35 +56,35 @@ impl Kernel for BoxKernel {
         }
     }
 
-    fn union(&self, _: &Block, _: &Block) -> Result<Block, Refusal> {
+    fn union(&mut self, _: &Block, _: &Block) -> Result<Block, Refusal> {
         Err(Refusal::unsupported("no booleans"))
     }
 
-    fn intersection(&self, _: &Block, _: &Block) -> Result<Block, Refusal> {
+    fn intersection(&mut self, _: &Block, _: &Block) -> Result<Block, Refusal> {
         Err(Refusal::unsupported("no booleans"))
     }
 
-    fn difference(&self, _: &Block, _: &Block) -> Result<Block, Refusal> {
+    fn difference(&mut self, _: &Block, _: &Block) -> Result<Block, Refusal> {
         Err(Refusal::unsupported("no booleans"))
     }
 
-    fn volume(&self, s: &Block) -> Result<f64, Refusal> {
+    fn volume(&mut self, s: &Block) -> Result<f64, Refusal> {
         let [a, b, c] = s.size;
         Ok(a * b * c)
     }
 
-    fn area(&self, s: &Block) -> Result<f64, Refusal> {
+    fn area(&mut self, s: &Block) -> Result<f64, Refusal> {
         let [a, b, c] = s.size;
         Ok(2.0 * (a * b + b * c + c * a))
     }
 
-    fn check(&self, _: &Block) -> Result<Vec<String>, Refusal> {
+    fn check(&mut self, _: &Block) -> Result<Vec<String>, Refusal> {
         Ok(Vec::new())
     }
 
     /// A point is placed by its coordinates along the box's axes: inside each span by more than the
     /// tolerance is in, outside any span by more than it is out, and anything else is on.
-    fn classify(&self, s: &Block, points: &[Vec3]) -> Result<Vec<Side>, Refusal> {
+    fn classify(&mut self, s: &Block, points: &[Vec3]) -> Result<Vec<Side>, Refusal> {
         let f = &s.frame;
         Ok(points
             .iter()
@@ -106,5 +106,5 @@ impl Kernel for BoxKernel {
 }
 
 fn main() -> std::io::Result<()> {
-    brep_protocol::serve(&BoxKernel)
+    brep_protocol::serve(&mut BoxKernel)
 }

@@ -19,8 +19,12 @@ This crate is the Rust binding of that protocol:
   as `unsupported`, and a function is offered only when `supports` lists it.
 - `serve` answers the protocol on stdin and stdout with any implementation of `Kernel`. It holds the
   solids by handle, and it replies `crash` when a method panics.
-- `Remote` is an implementation of `Kernel` that sends each call to worker processes that speak the
-  protocol. The suite's runner uses it to drive an adapter.
+- `Remote` is an implementation of `Kernel` that sends each call to one worker process that speaks
+  the protocol. The suite's runner makes one for each of its threads.
+
+The methods that use the kernel take `&mut self`. `Kernel` does not require `Sync`: a caller that
+uses several kernels at once, as the suite's runner does with one per thread, takes a function that
+makes them.
 
 An adapter in another language does not need this crate. The protocol is lines of JSON. An adapter
 in C++ can use the C++ binding in [`cpp/`](cpp/README.md), which mirrors this crate. Its `Solid`
@@ -73,17 +77,17 @@ impl Kernel for Adapter {
             .map(String::from)
             .to_vec()
     }
-    fn make(&self, p: &Primitive) -> Result<Self::Solid, Refusal> { todo!() }
-    fn union(&self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal> { todo!() }
-    fn intersection(&self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal> { todo!() }
-    fn difference(&self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal> { todo!() }
-    fn volume(&self, s: &Self::Solid) -> Result<f64, Refusal> { todo!() }
-    fn area(&self, s: &Self::Solid) -> Result<f64, Refusal> { todo!() }
-    fn check(&self, s: &Self::Solid) -> Result<Vec<String>, Refusal> { todo!() }
+    fn make(&mut self, p: &Primitive) -> Result<Self::Solid, Refusal> { todo!() }
+    fn union(&mut self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal> { todo!() }
+    fn intersection(&mut self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal> { todo!() }
+    fn difference(&mut self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal> { todo!() }
+    fn volume(&mut self, s: &Self::Solid) -> Result<f64, Refusal> { todo!() }
+    fn area(&mut self, s: &Self::Solid) -> Result<f64, Refusal> { todo!() }
+    fn check(&mut self, s: &Self::Solid) -> Result<Vec<String>, Refusal> { todo!() }
 }
 
 fn main() -> std::io::Result<()> {
-    serve(&Adapter)
+    serve(&mut Adapter)
 }
 ```
 
@@ -100,7 +104,7 @@ A client drives an adapter through `Remote`:
 use std::time::Duration;
 use brep_protocol::Remote;
 
-let kernel = Remote::new(vec!["path/to/adapter".into()], 4, Duration::from_secs(60))?;
+let kernel = Remote::new(vec!["path/to/adapter".into()], Duration::from_secs(60))?;
 ```
 
 ## Licence

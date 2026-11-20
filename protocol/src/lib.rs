@@ -1,7 +1,7 @@
 //! The operations of [doc/api.md](../../doc/api.md) as a Rust API and as a protocol:
 //! the shapes a kernel is asked to make ([`model`], [`profile`]), the [`Kernel`] trait a kernel
 //! implements, [`serve`] to answer the protocol over stdin and stdout with any implementation, and
-//! [`Remote`], an implementation that forwards each call to worker processes speaking it.
+//! [`Remote`], an implementation that forwards each call to a worker process speaking it.
 
 pub mod model;
 pub mod path;
@@ -318,7 +318,7 @@ impl Measure {
 ///
 /// A function added to the protocol comes with a default body, refusing it as unsupported, so an
 /// adapter written before it still builds; it is offered only once the adapter lists it.
-pub trait Kernel: Sync {
+pub trait Kernel {
     type Solid;
     fn name(&self) -> String;
     fn version(&self) -> String;
@@ -333,41 +333,41 @@ pub trait Kernel: Sync {
         String::new()
     }
     /// Every constructor, each a variant of [`Primitive`].
-    fn make(&self, p: &Primitive) -> Result<Self::Solid, Refusal>;
-    fn union(&self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal>;
-    fn intersection(&self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal>;
-    fn difference(&self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal>;
+    fn make(&mut self, p: &Primitive) -> Result<Self::Solid, Refusal>;
+    fn union(&mut self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal>;
+    fn intersection(&mut self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal>;
+    fn difference(&mut self, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal>;
     /// The solid's volume, mm³: an error where the kernel could not measure it.
-    fn volume(&self, s: &Self::Solid) -> Result<f64, Refusal>;
+    fn volume(&mut self, s: &Self::Solid) -> Result<f64, Refusal>;
     /// The area of the solid's boundary, mm²: an error where the kernel could not measure it.
-    fn area(&self, s: &Self::Solid) -> Result<f64, Refusal>;
+    fn area(&mut self, s: &Self::Solid) -> Result<f64, Refusal>;
     /// Validity problems the kernel's own checker finds; empty when valid. An error where the
     /// checker declined the solid, which is not a finding that it is valid.
-    fn check(&self, s: &Self::Solid) -> Result<Vec<String>, Refusal>;
+    fn check(&mut self, s: &Self::Solid) -> Result<Vec<String>, Refusal>;
     /// Where each point lies against the solid, by the kernel's own classifier: inside it, on its
     /// boundary or outside it.
-    fn classify(&self, _s: &Self::Solid, _points: &[Vec3]) -> Result<Vec<Side>, Refusal> {
+    fn classify(&mut self, _s: &Self::Solid, _points: &[Vec3]) -> Result<Vec<Side>, Refusal> {
         Err(Refusal::unsupported("classify is not supported"))
     }
     /// Whether the solid holds each point, its boundary counted in: [`Kernel::classify`] read as
     /// yes or no.
-    fn holds(&self, s: &Self::Solid, points: &[Vec3]) -> Result<Vec<bool>, Refusal> {
+    fn holds(&mut self, s: &Self::Solid, points: &[Vec3]) -> Result<Vec<bool>, Refusal> {
         let sides = self.classify(s, points)?;
         Ok(sides.into_iter().map(|side| side != Side::Out).collect())
     }
     /// The point of the solid nearest each point: the point itself where the solid holds it.
-    fn closest(&self, _s: &Self::Solid, _points: &[Vec3]) -> Result<Vec<Vec3>, Refusal> {
+    fn closest(&mut self, _s: &Self::Solid, _points: &[Vec3]) -> Result<Vec<Vec3>, Refusal> {
         Err(Refusal::unsupported("closest is not supported"))
     }
     /// The outward unit normal at each point of the solid's boundary, where the boundary has a
     /// tangent plane there; `None` at a crease, where faces meet at an angle, or off the boundary.
-    fn normal(&self, _s: &Self::Solid, _points: &[Vec3]) -> Result<Vec<Option<Vec3>>, Refusal> {
+    fn normal(&mut self, _s: &Self::Solid, _points: &[Vec3]) -> Result<Vec<Option<Vec3>>, Refusal> {
         Err(Refusal::unsupported("normal is not supported"))
     }
     /// Rounds the edges of `s` that the points lie on, each by a ball of `radius` rolling along it
     /// while touching both faces that meet there.
     fn fillet(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _edges: &[Vec3],
         _radius: f64,
@@ -377,7 +377,7 @@ pub trait Kernel: Sync {
     /// [`Kernel::fillet`] with each point's edge chain at its own radius, in one call, so that
     /// unequal radii meet at shared corners.
     fn fillet_radii(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _edges: &[Vec3],
         _radii: &[f64],
@@ -387,7 +387,7 @@ pub trait Kernel: Sync {
     /// [`Kernel::chamfer`] with each point's edge chain at its own distance, in one call, so that
     /// unequal chamfers meet at shared corners.
     fn chamfer_distances(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _edges: &[Vec3],
         _distances: &[f64],
@@ -397,7 +397,7 @@ pub trait Kernel: Sync {
     /// Bevels the edge `edge` lies on by a cut `d1` back along the face `face` lies on and `d2` back
     /// along the other face there. A chamfer by a distance and an angle is this, `d2 = d1·tan(angle)`.
     fn chamfer_two(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _edge: Vec3,
         _face: Vec3,
@@ -409,7 +409,7 @@ pub trait Kernel: Sync {
     /// Rounds the edge `edge` lies on by a ball whose radius runs evenly with length along the edge
     /// from `r_from` at its end nearest `from` to `r_to` at its other end.
     fn fillet_variable(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _edge: Vec3,
         _from: Vec3,
@@ -422,7 +422,7 @@ pub trait Kernel: Sync {
     /// each face where a ball of radius `offset` would (its tangent offset), with the face's
     /// curvature as well as its tangent plane, and bends with radius `center` at its middle.
     fn fillet_g2(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _edges: &[Vec3],
         _offset: f64,
@@ -434,7 +434,7 @@ pub trait Kernel: Sync {
     /// its section the conic tangent to both faces there whose shoulder lies `rho` of the way from
     /// the chord's middle to the edge.
     fn fillet_conic(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _edges: &[Vec3],
         _setback: f64,
@@ -445,7 +445,7 @@ pub trait Kernel: Sync {
     /// [`Kernel::fillet`] of `radius` whose fillets stop `setback` short of each corner where three
     /// of the edges meet, the corner closed by one smooth patch meeting the three fillets and faces.
     fn fillet_setback(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _edges: &[Vec3],
         _radius: f64,
@@ -458,7 +458,7 @@ pub trait Kernel: Sync {
     /// the corner patch meeting the fillets and faces with their curvature as well as their
     /// tangent planes.
     fn fillet_setback_g2(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _edges: &[Vec3],
         _radius: f64,
@@ -470,7 +470,7 @@ pub trait Kernel: Sync {
     /// of `radius` rolling while touching both: what lies outside the ball's path between its
     /// contacts goes, faces between them included.
     fn fillet_faces(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _face_a: Vec3,
         _face_b: Vec3,
@@ -481,7 +481,7 @@ pub trait Kernel: Sync {
     /// Replaces the face `middle` lies on by a round tangent to it and to the faces `side_a` and
     /// `side_b` lie on, which stay where they are.
     fn full_round(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _side_a: Vec3,
         _middle: Vec3,
@@ -493,7 +493,7 @@ pub trait Kernel: Sync {
     /// point: positive where the boundary bends away from its outward normal, as on a ball; `None`
     /// where that point lies on a crease.
     fn curvature(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _points: &[Vec3],
     ) -> Result<Vec<Option<[f64; 2]>>, Refusal> {
@@ -502,7 +502,7 @@ pub trait Kernel: Sync {
     /// The solid's edges and outlines seen looking along `direction`, each chord within `tolerance`
     /// of its curve: a hidden-line drawing.
     fn project(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _direction: Vec3,
         _tolerance: f64,
@@ -511,7 +511,7 @@ pub trait Kernel: Sync {
     }
     /// Bevels the edges of `s` that the points lie on, cutting `distance` back along both faces.
     fn chamfer(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _edges: &[Vec3],
         _distance: f64,
@@ -519,52 +519,57 @@ pub trait Kernel: Sync {
         Err(Refusal::unsupported("chamfer is not supported"))
     }
     /// The solid as the text of a STEP file (ISO 10303-21).
-    fn write_step(&self, _s: &Self::Solid) -> Result<String, Refusal> {
+    fn write_step(&mut self, _s: &Self::Solid) -> Result<String, Refusal> {
         Err(Refusal::unsupported("write_step is not supported"))
     }
     /// The solids a STEP file's text holds, as one solid set.
-    fn read_step(&self, _text: &str) -> Result<Self::Solid, Refusal> {
+    fn read_step(&mut self, _text: &str) -> Result<Self::Solid, Refusal> {
         Err(Refusal::unsupported("read_step is not supported"))
     }
     /// The centre of mass at unit density, mm; `None` for an empty solid.
-    fn centroid(&self, _s: &Self::Solid) -> Result<Option<Vec3>, Refusal> {
+    fn centroid(&mut self, _s: &Self::Solid) -> Result<Option<Vec3>, Refusal> {
         Err(Refusal::unsupported("centroid is not supported"))
     }
     /// `∭ (|r|²·I − r rᵀ) dV` about the centroid at unit density, mm⁵.
-    fn inertia(&self, _s: &Self::Solid) -> Result<[[f64; 3]; 3], Refusal> {
+    fn inertia(&mut self, _s: &Self::Solid) -> Result<[[f64; 3]; 3], Refusal> {
         Err(Refusal::unsupported("inertia is not supported"))
     }
     /// The least distance between a point of `a` and a point of `b`, insides included: zero where
     /// they touch or overlap.
-    fn distance(&self, _a: &Self::Solid, _b: &Self::Solid) -> Result<f64, Refusal> {
+    fn distance(&mut self, _a: &Self::Solid, _b: &Self::Solid) -> Result<f64, Refusal> {
         Err(Refusal::unsupported("distance is not supported"))
     }
     /// The Betti numbers of the solid set: its separate pieces, its tunnels and its voids.
-    fn betti(&self, _s: &Self::Solid) -> Result<[u64; 3], Refusal> {
+    fn betti(&mut self, _s: &Self::Solid) -> Result<[u64; 3], Refusal> {
         Err(Refusal::unsupported("betti is not supported"))
     }
     /// The area of the solid's cut by the plane through `origin` square to `normal`, mm².
-    fn section_area(&self, _s: &Self::Solid, _origin: Vec3, _normal: Vec3) -> Result<f64, Refusal> {
+    fn section_area(
+        &mut self,
+        _s: &Self::Solid,
+        _origin: Vec3,
+        _normal: Vec3,
+    ) -> Result<f64, Refusal> {
         Err(Refusal::unsupported("section_area is not supported"))
     }
     /// A triangle mesh of the solid's boundary within `tolerance` of it: positions, and triangles
     /// of three indices each, counter-clockwise seen from outside.
-    fn mesh(&self, _s: &Self::Solid, _tolerance: f64) -> Result<Mesh, Refusal> {
+    fn mesh(&mut self, _s: &Self::Solid, _tolerance: f64) -> Result<Mesh, Refusal> {
         Err(Refusal::unsupported("mesh is not supported"))
     }
     /// The solid as a viewer draws it, within `tolerance`: each face's triangles with the exact
     /// normal at every vertex, and its creases as polylines.
-    fn display(&self, _s: &Self::Solid, _tolerance: f64) -> Result<Display, Refusal> {
+    fn display(&mut self, _s: &Self::Solid, _tolerance: f64) -> Result<Display, Refusal> {
         Err(Refusal::unsupported("display is not supported"))
     }
     /// The points within `distance` of the solid: its outward offset.
-    fn offset(&self, _s: &Self::Solid, _distance: f64) -> Result<Self::Solid, Refusal> {
+    fn offset(&mut self, _s: &Self::Solid, _distance: f64) -> Result<Self::Solid, Refusal> {
         Err(Refusal::unsupported("offset is not supported"))
     }
     /// The solid hollowed to walls `thickness` thick inside it, open through the faces the points
     /// lie on.
     fn shell(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _open: &[Vec3],
         _thickness: f64,
@@ -574,7 +579,7 @@ pub trait Kernel: Sync {
     /// The faces the points lie on, tilted by `angle` about where they meet the plane through
     /// `origin` square to `pull`, narrowing the part along `pull`.
     fn draft(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _faces: &[Vec3],
         _origin: Vec3,
@@ -585,18 +590,22 @@ pub trait Kernel: Sync {
     }
     /// The solid moved by `p ↦ M·p + t`, the rows of `matrix` being `[M | t]`, `M` a rotation or
     /// mirror times a nonzero scale.
-    fn transform(&self, _s: &Self::Solid, _matrix: [[f64; 4]; 3]) -> Result<Self::Solid, Refusal> {
+    fn transform(
+        &mut self,
+        _s: &Self::Solid,
+        _matrix: [[f64; 4]; 3],
+    ) -> Result<Self::Solid, Refusal> {
         Err(Refusal::unsupported("transform is not supported"))
     }
     /// The solid mapped by `p ↦ M·p + t` for any invertible `M`: stretches and shears included.
-    fn affine(&self, _s: &Self::Solid, _matrix: [[f64; 4]; 3]) -> Result<Self::Solid, Refusal> {
+    fn affine(&mut self, _s: &Self::Solid, _matrix: [[f64; 4]; 3]) -> Result<Self::Solid, Refusal> {
         Err(Refusal::unsupported("affine is not supported"))
     }
     /// Where the ray from `origin` along `direction` meets the solid's faces: the distance from
     /// `origin` to each meeting, mm, in any order. A ray through an edge may list the point once
     /// for each face there: the caller reads meetings closer than its tolerance as one.
     fn raycast(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _origin: Vec3,
         _direction: Vec3,
@@ -606,21 +615,25 @@ pub trait Kernel: Sync {
     /// [`Kernel::raycast`] for many rays, each an origin and a direction: every ray's meetings,
     /// in the rays' order. A kernel that prepares a solid for casting overrides it to prepare
     /// once.
-    fn raycasts(&self, s: &Self::Solid, rays: &[(Vec3, Vec3)]) -> Result<Vec<Vec<f64>>, Refusal> {
+    fn raycasts(
+        &mut self,
+        s: &Self::Solid,
+        rays: &[(Vec3, Vec3)],
+    ) -> Result<Vec<Vec<f64>>, Refusal> {
         rays.iter().map(|&(o, d)| self.raycast(s, o, d)).collect()
     }
     /// How two solids meet: the volume they share and the gap between them.
-    fn interference(&self, _a: &Self::Solid, _b: &Self::Solid) -> Result<Meeting, Refusal> {
+    fn interference(&mut self, _a: &Self::Solid, _b: &Self::Solid) -> Result<Meeting, Refusal> {
         Err(Refusal::unsupported("interference is not supported"))
     }
     /// The union of all the solids, two or more, in one call. The kernel's own, or not offered: a
     /// run of pairwise unions in its place would be the suite's work under the kernel's name.
-    fn union_all(&self, _solids: &[&Self::Solid]) -> Result<Self::Solid, Refusal> {
+    fn union_all(&mut self, _solids: &[&Self::Solid]) -> Result<Self::Solid, Refusal> {
         Err(Refusal::unsupported("union_all is not supported"))
     }
     /// `target` less every tool, one or more, in one call.
     fn difference_all(
-        &self,
+        &mut self,
         _target: &Self::Solid,
         _tools: &[&Self::Solid],
     ) -> Result<Self::Solid, Refusal> {
@@ -629,7 +642,7 @@ pub trait Kernel: Sync {
     /// The faces the points lie on, each moved `distance` along its outward normal onto its offset
     /// surface, the faces round them extended or trimmed to meet them.
     fn offset_faces(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _faces: &[Vec3],
         _distance: f64,
@@ -639,7 +652,7 @@ pub trait Kernel: Sync {
     /// The smooth solid through the sections: profile `k` drawn in the frame's xy plane moved
     /// `heights[k]` up its z, the heights rising.
     fn loft_through(
-        &self,
+        &mut self,
         _frame: &Frame,
         _profiles: &[profile::Profile],
         _heights: &[f64],
@@ -648,13 +661,13 @@ pub trait Kernel: Sync {
     }
     /// The solid with the faces the points lie on taken out, the faces round them extended or
     /// trimmed to close the gap.
-    fn delete_faces(&self, _s: &Self::Solid, _faces: &[Vec3]) -> Result<Self::Solid, Refusal> {
+    fn delete_faces(&mut self, _s: &Self::Solid, _faces: &[Vec3]) -> Result<Self::Solid, Refusal> {
         Err(Refusal::unsupported("delete_faces is not supported"))
     }
     /// The faces the points lie on moved rigidly by the rows `[R | t]`, the faces round them
     /// extended or trimmed to meet them.
     fn move_faces(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _faces: &[Vec3],
         _matrix: [[f64; 4]; 3],
@@ -664,7 +677,7 @@ pub trait Kernel: Sync {
     /// The solid the faces the points lie on sweep moving from 0 to `thickness` along their
     /// outward normals, inward where it is negative; the input is not part of it.
     fn thicken(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _faces: &[Vec3],
         _thickness: f64,
@@ -674,7 +687,7 @@ pub trait Kernel: Sync {
     /// The solid cut by the plane through `origin` square to `normal`: the part on the normal's
     /// side, then the part on the other, either of which may be empty.
     fn split(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _origin: Vec3,
         _normal: Vec3,
@@ -683,7 +696,7 @@ pub trait Kernel: Sync {
     }
     /// The least box with sides square to the axes that holds the solid, as its low and high
     /// corners.
-    fn bounding_box(&self, _s: &Self::Solid) -> Result<[Vec3; 2], Refusal> {
+    fn bounding_box(&mut self, _s: &Self::Solid) -> Result<[Vec3; 2], Refusal> {
         Err(Refusal::unsupported("bounding_box is not supported"))
     }
     /// Where the plane through `origin` square to `normal` cuts the solid's boundary, in pieces
@@ -691,7 +704,7 @@ pub trait Kernel: Sync {
     /// within `tolerance` of the curve. The pieces join end to end into closed curves, and a
     /// piece that is a whole closed curve ends on its first point.
     fn section(
-        &self,
+        &mut self,
         _s: &Self::Solid,
         _origin: Vec3,
         _normal: Vec3,
@@ -701,13 +714,18 @@ pub trait Kernel: Sync {
     }
     /// The faces of a STEP file, each its own, sewn into a solid where their edges lie within
     /// `tolerance` of each other.
-    fn sew(&self, _text: &str, _tolerance: f64) -> Result<Self::Solid, Refusal> {
+    fn sew(&mut self, _text: &str, _tolerance: f64) -> Result<Self::Solid, Refusal> {
         Err(Refusal::unsupported("sew is not supported"))
     }
     /// Releases every solid this caller made, once it is done with them.
-    fn reset(&self) {}
+    fn reset(&mut self) {}
 
-    fn boolean(&self, op: Op, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal> {
+    fn boolean(
+        &mut self,
+        op: Op,
+        a: &Self::Solid,
+        b: &Self::Solid,
+    ) -> Result<Self::Solid, Refusal> {
         match op {
             Op::Union => self.union(a, b),
             Op::Intersection => self.intersection(a, b),
@@ -715,7 +733,7 @@ pub trait Kernel: Sync {
         }
     }
 
-    fn measure(&self, s: &Self::Solid) -> Measure {
+    fn measure(&mut self, s: &Self::Solid) -> Measure {
         // A checker that declines a solid has not found it valid: its reason is an issue, unless
         // the kernel has no checker to ask. A measure the kernel could not take is no number, and
         // its reason an issue.
