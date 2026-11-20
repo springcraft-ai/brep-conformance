@@ -45,7 +45,7 @@ adapter's CMake build fetches it by URL and pins it by the hash the release's no
 include(FetchContent)
 FetchContent_Declare(
     brep_protocol
-    URL https://github.com/springcraft-ai/brep-conformance/releases/download/brep-protocol-v1.0.0/brep_protocol-1.0.0.tar.xz
+    URL https://github.com/springcraft-ai/brep-conformance/releases/download/brep-protocol-cpp-v2.0.0/brep_protocol-2.0.0.tar.xz
     URL_HASH SHA256=<the release's hash>
 )
 FetchContent_MakeAvailable(brep_protocol)
