@@ -310,13 +310,6 @@ void hello_claims_only_the_functions_a_kernel_lists() {
     detail::Store<int> solids;
     const Json hello = ask(k, solids, R"({"cmd": "hello"})")["ok"];
     expect(hello["supports"] == Json::array({"box", "volume"}), "hello claims what is listed");
-    const std::vector<std::string> lacks = k.unsupported();
-    expect(lacks.size() == FUNCTIONS.size() - 2, "the rest is unsupported");
-    const auto has = [&](const char* f) {
-        return std::find(lacks.begin(), lacks.end(), f) != lacks.end();
-    };
-    expect(has("union") && !has("box") && !has("volume") && !has("fillit"),
-           "unsupported is every function not listed");
 }
 
 int main() {

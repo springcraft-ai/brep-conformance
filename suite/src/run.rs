@@ -297,10 +297,20 @@ fn makes_all(unsupported: &[String], s: &Shape) -> bool {
     }
 }
 
+/// The functions of the protocol the kernel does not offer: every one its `supports` leaves out.
+fn lacks<K: Kernel + ?Sized>(k: &K) -> Vec<String> {
+    let offered = k.supports();
+    brep_protocol::FUNCTIONS
+        .iter()
+        .filter(|&&f| !offered.iter().any(|s| s == f))
+        .map(|&f| f.to_string())
+        .collect()
+}
+
 /// Makes a primitive as an operand: a case about a boolean or a fillet does not turn on whether the
 /// kernel has a constructor for the solid it starts from.
 fn construct<K: Kernel>(k: &K, p: &Primitive) -> Result<K::Solid, Refusal> {
-    match stand_in(&k.unsupported(), p) {
+    match stand_in(&lacks(k), p) {
         Some(q) => k.make(&q),
         None => k.make(p),
     }
@@ -395,10 +405,7 @@ fn got<K: Kernel>(k: &K, s: &K::Solid) -> Got {
         let (c, j) = (k.centroid(s)?, k.inertia(s)?);
         Ok(mass::Moments::from_mass(m.volume, c, j))
     })();
-    let offered = !k
-        .unsupported()
-        .iter()
-        .any(|u| u == "centroid" || u == "inertia");
+    let offered = !lacks(k).iter().any(|u| u == "centroid" || u == "inertia");
     Got {
         m,
         mass_refused: offered && mass.is_err(),
@@ -769,7 +776,7 @@ fn run_sound<K: Kernel<Solid: Clone + 'static>>(
     let Shape::Prim(base) = &c.a else {
         return header(Outcome::Crash, ops, vec![]);
     };
-    if k.unsupported().iter().any(|u| u == f.act.word()) {
+    if lacks(k).iter().any(|u| u == f.act.word()) {
         return header(Outcome::Unsupported, ops, vec![]);
     }
     let mut checks: Vec<Value> = Vec::new();
@@ -805,7 +812,7 @@ fn run_sound<K: Kernel<Solid: Clone + 'static>>(
     // Q2: its own checker finds the result valid.
     check("Q2", valid(&m.issues), m.issues.join("; "));
     // Q3: the result has the pieces, tunnels and voids it must.
-    if !k.unsupported().iter().any(|u| u == "betti") {
+    if !lacks(k).iter().any(|u| u == "betti") {
         match attempt(|| k.betti(&s)) {
             Ok(b) => check("Q3", betti_same(b, sound.betti), String::new()),
             // A query the kernel has not built for these points leaves its check out.
@@ -831,7 +838,7 @@ fn run_sound<K: Kernel<Solid: Clone + 'static>>(
         }
     }
     // Q6: the blend meets its faces tangentially where it must touch them.
-    if !sound.contacts.is_empty() && !k.unsupported().iter().any(|u| u == "normal") {
+    if !sound.contacts.is_empty() && !lacks(k).iter().any(|u| u == "normal") {
         let pts: Vec<Vec3> = sound.contacts.iter().map(|c| c.0).collect();
         let want: Vec<(Vec3, Option<Vec3>)> =
             sound.contacts.iter().map(|&(p, n)| (p, Some(n))).collect();
@@ -1062,7 +1069,7 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
     let Shape::Prim(base) = &c.a else {
         return header(Outcome::Crash, ops, vec![]);
     };
-    if k.unsupported().iter().any(|u| u == f.act.word()) {
+    if lacks(k).iter().any(|u| u == f.act.word()) {
         return header(Outcome::Unsupported, ops, vec![]);
     }
     let a = match attempt(|| construct(k, base)) {
@@ -1145,8 +1152,7 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
         apply(&moved, &f.moved(&c.motion)).map(|s| got(k, &s))
     });
     let moved = record("moved", r, t.elapsed().as_secs_f64() * 1e3);
-    let step = !k
-        .unsupported()
+    let step = !lacks(k)
         .iter()
         .any(|u| u == "write_step" || u == "read_step");
     let through = step
@@ -1259,7 +1265,7 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, f: &Feature) 
                 | Act::FullRound
         );
     let joints = want_prim.map(oracle::joints).unwrap_or_default();
-    if blend && !joints.is_empty() && !k.unsupported().iter().any(|u| u == "normal") {
+    if blend && !joints.is_empty() && !lacks(k).iter().any(|u| u == "normal") {
         let pts: Vec<Vec3> = joints.iter().map(|j| j.0).collect();
         match attempt(|| k.normal(&apply(&a, f)?, &pts)) {
             Ok(got) => {
@@ -1329,7 +1335,7 @@ fn run_step<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case) -> Value {
         json!({"id": c.id, "family": c.family, "outcome": outcome.word(), "a": c.a.to_json(),
                "b": c.b.to_json(), "checks": checks, "ops": ops, "schema": schema})
     };
-    if k.unsupported().iter().any(|u| u == "read_step") {
+    if lacks(k).iter().any(|u| u == "read_step") {
         return header(Outcome::Unsupported, vec![], vec![]);
     }
     let text = match c.exact.step_as {
@@ -1403,7 +1409,7 @@ fn run_transform<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: [[f64; 4
     let Shape::Prim(p) = &c.a else {
         return header(Outcome::Crash, vec![], vec![]);
     };
-    if k.unsupported().iter().any(|u| u == "transform") {
+    if lacks(k).iter().any(|u| u == "transform") {
         return header(Outcome::Unsupported, vec![], vec![]);
     }
     let factor = (m[0][0] * m[0][0] + m[1][0] * m[1][0] + m[2][0] * m[2][0]).sqrt();
@@ -1523,7 +1529,7 @@ fn run_affine<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: [[f64; 4]; 
     let Shape::Prim(p) = &c.a else {
         return header(Outcome::Crash, vec![], vec![]);
     };
-    if k.unsupported().iter().any(|u| u == "affine") {
+    if lacks(k).iter().any(|u| u == "affine") {
         return header(Outcome::Unsupported, vec![], vec![]);
     }
     let [s1, s2, s3] = singular_values(&m);
@@ -1621,7 +1627,7 @@ fn run_affine<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, m: [[f64; 4]; 
 
 /// Makes `c.a`, or reports why it could not, after checking the kernel offers `function`.
 fn made<K: Kernel>(k: &K, c: &Case, function: &str) -> Result<K::Solid, Value> {
-    if k.unsupported().iter().any(|u| u == function) {
+    if lacks(k).iter().any(|u| u == function) {
         return Err(finish(c, Outcome::Unsupported, vec![], vec![]));
     }
     attempt(|| build(k, &c.a)).map_err(|e| {
@@ -2069,7 +2075,7 @@ fn run_chain<K: Kernel<Solid: Clone + 'static>>(
     c: &Case,
     steps: &[crate::generate::Step],
 ) -> Value {
-    let unsupported = k.unsupported();
+    let unsupported = lacks(k);
     if step_words(steps)
         .iter()
         .any(|w| unsupported.iter().any(|u| u == w))
@@ -2381,7 +2387,7 @@ fn run_sew<K: Kernel<Solid: Clone + 'static>>(
     let Shape::Prim(p) = &c.a else {
         return finish(c, Outcome::Crash, vec![], vec![]);
     };
-    if k.unsupported().iter().any(|u| u == "sew") {
+    if lacks(k).iter().any(|u| u == "sew") {
         return finish(c, Outcome::Unsupported, vec![], vec![]);
     }
     let Some(text) = crate::step::loose(p, &sew.gaps, &sew.flipped) else {
@@ -2469,7 +2475,7 @@ fn finish(c: &Case, outcome: Outcome, ops: Vec<Value>, checks: Vec<Value>) -> Va
 
 /// Whether the kernel offers every function named, and every constructor the primitives call.
 fn offers<K: Kernel>(k: &K, functions: &[&str], prims: &[&Primitive]) -> bool {
-    let unsupported = k.unsupported();
+    let unsupported = lacks(k);
     !functions.iter().any(|f| unsupported.iter().any(|u| u == f))
         && prims.iter().all(|p| makes(&unsupported, p))
 }
@@ -2993,7 +2999,7 @@ fn run_case<K: Kernel<Solid: Clone + 'static>>(k: &K, c: &Case, peer: Option<&Re
         }
         return run_transform(k, c, m);
     }
-    let unsupported = k.unsupported();
+    let unsupported = lacks(k);
     let short = |outcome: Outcome, checks: Vec<Value>| {
         json!({"id": c.id, "family": c.family, "outcome": outcome.word(),
                "a": c.a.to_json(), "b": c.b.to_json(), "checks": checks, "ops": []})
@@ -3645,7 +3651,7 @@ fn run_nist<K: Kernel<Solid: Clone + 'static>>(
         json!({"id": c.id, "family": c.family, "outcome": outcome.word(), "file": f.name,
                "checks": checks, "ops": ops})
     };
-    if k.unsupported().iter().any(|u| u == "read_step") {
+    if lacks(k).iter().any(|u| u == "read_step") {
         return header(Outcome::Unsupported, vec![], vec![]);
     }
     let text = match std::fs::read_to_string(&f.path) {
@@ -3754,8 +3760,8 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
         "tolerance": TOLERANCE,
         "kernel": {"name": k.name(), "version": k.version(), "tolerance": k.tolerance(),
                    "configuration": k.configuration()},
-        "unsupported": k.unsupported(),
-        "stand_ins": stand_ins(&k.unsupported()),
+        "unsupported": lacks(k),
+        "stand_ins": stand_ins(&lacks(k)),
         "environment": {
             "os": std::env::consts::OS,
             "arch": std::env::consts::ARCH,

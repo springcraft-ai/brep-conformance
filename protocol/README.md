@@ -15,9 +15,8 @@ This crate is the Rust binding of that protocol:
 - `model`, `profile` and `path` hold the values a request carries: frames, primitives,
   profiles and paths.
 - `Kernel` is the trait an adapter implements, with one method per function of the protocol, and
-  `supports`, which lists the functions the kernel offers. Eleven methods are required. Every other
-  method has a default that refuses the call as `unsupported`, and a function is offered only when
-  `supports` lists it.
+  `supports`, which lists the functions the kernel offers. A method with a default refuses the call
+  as `unsupported`, and a function is offered only when `supports` lists it.
 - `serve` answers the protocol on stdin and stdout with any implementation of `Kernel`. It holds the
   solids by handle, and it replies `crash` when a method panics.
 - `Remote` is an implementation of `Kernel` that sends each call to worker processes that speak the

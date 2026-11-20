@@ -90,16 +90,18 @@ fn answer<K: Kernel>(
     };
     let made = match req["cmd"].as_str().unwrap_or("") {
         "hello" => {
-            let offered = k.supports();
-            for name in &offered {
-                if !FUNCTIONS.contains(&name.as_str()) {
-                    eprintln!("`supports` lists {name:?}, which is no function of the protocol");
-                }
-            }
-            let supports: Vec<&str> = FUNCTIONS
-                .iter()
-                .copied()
-                .filter(|f| offered.iter().any(|s| s == f))
+            let supports: Vec<String> = k
+                .supports()
+                .into_iter()
+                .filter(|name| {
+                    let known = FUNCTIONS.contains(&name.as_str());
+                    if !known {
+                        eprintln!(
+                            "`supports` lists {name:?}, which is no function of the protocol"
+                        );
+                    }
+                    known
+                })
                 .collect();
             return Ok(json!({
                 "name": k.name(), "version": k.version(), "tolerance": k.tolerance(),
@@ -576,14 +578,6 @@ mod tests {
         );
         let hello = hello.unwrap_or_else(|e| panic!("{}", e.reason));
         assert_eq!(hello["supports"], json!(["box", "volume"]));
-        let lacks = Listed.unsupported();
-        assert_eq!(lacks.len(), FUNCTIONS.len() - 2);
-        assert!(lacks.iter().any(|f| f == "union"));
-        assert!(
-            !lacks
-                .iter()
-                .any(|f| f == "box" || f == "volume" || f == "fillit")
-        );
     }
 
     /// A kernel that offers nothing beyond what the trait makes it answer.

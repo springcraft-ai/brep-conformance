@@ -690,16 +690,6 @@ pub trait Kernel: Sync {
     }
     /// Releases every solid this caller made, once it is done with them.
     fn reset(&self) {}
-    /// The functions of [`FUNCTIONS`] this kernel does not offer: every one [`Kernel::supports`]
-    /// leaves out.
-    fn unsupported(&self) -> Vec<String> {
-        let offered = self.supports();
-        FUNCTIONS
-            .iter()
-            .filter(|&&f| !offered.iter().any(|s| s == f))
-            .map(|&f| f.to_string())
-            .collect()
-    }
 
     fn boolean(&self, op: Op, a: &Self::Solid, b: &Self::Solid) -> Result<Self::Solid, Refusal> {
         match op {

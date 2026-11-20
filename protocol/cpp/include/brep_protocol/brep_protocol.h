@@ -380,17 +380,6 @@ class Kernel {
     // runs no case that needs another. A function not listed is not offered, whatever its method
     // does, and a name that is no function is left out.
     virtual std::vector<std::string> supports() const = 0;
-    // The functions of `FUNCTIONS` this kernel does not offer: every one `supports` leaves out.
-    std::vector<std::string> unsupported() const {
-        const std::vector<std::string> offered = supports();
-        std::vector<std::string> out;
-        for (const char* f : FUNCTIONS) {
-            if (std::find(offered.begin(), offered.end(), f) == offered.end()) {
-                out.emplace_back(f);
-            }
-        }
-        return out;
-    }
     // The refusal an exception other than `Refusal` stands for, such as a kernel's own error
     // class; none makes it a crash.
     virtual std::optional<Refusal> refusal_for(std::exception_ptr) const {
@@ -981,17 +970,13 @@ Json answer(Kernel<S>& k, const Json& req, Store<S>& solids) {
     const std::string c = at(req, "cmd").is_string() ? req["cmd"].get<std::string>() : "";
 
     if (c == "hello") {
-        const std::vector<std::string> offered = k.supports();
-        for (const std::string& name : offered) {
-            if (std::find(FUNCTIONS.begin(), FUNCTIONS.end(), name) == FUNCTIONS.end()) {
+        Json supports = Json::array();
+        for (const std::string& name : k.supports()) {
+            if (std::find(FUNCTIONS.begin(), FUNCTIONS.end(), name) != FUNCTIONS.end()) {
+                supports.push_back(name);
+            } else {
                 std::cerr << "`supports` lists \"" << name
                           << "\", which is no function of the protocol\n";
-            }
-        }
-        Json supports = Json::array();
-        for (const char* f : FUNCTIONS) {
-            if (std::find(offered.begin(), offered.end(), f) != offered.end()) {
-                supports.push_back(f);
             }
         }
         return Json{{"name", k.name()},

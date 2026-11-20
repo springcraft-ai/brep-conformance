@@ -758,7 +758,6 @@ impl Remote {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use crate::FUNCTIONS;
 
     #[test]
     fn a_worker_of_another_protocol_version_is_turned_away() {
@@ -770,10 +769,8 @@ mod tests {
         let ours =
             format!(r#"{{"protocol": "{PROTOCOL_VERSION}", "supports": ["box", "volume"]}}"#);
         let k = worker(&ours).unwrap_or_else(|e| panic!("{e}"));
-        // What the worker does not list, of this version's functions, is what it lacks.
-        let lacks = k.unsupported();
-        assert_eq!(lacks.len(), FUNCTIONS.len() - 2);
-        assert!(!lacks.iter().any(|f| f == "box" || f == "volume"));
+        // What the worker lists is what it offers.
+        assert_eq!(k.supports(), ["box", "volume"]);
         for other in [r#"{"protocol": "0.10"}"#, r#"{"protocol": "7.0.0"}"#, "{}"] {
             let refused = worker(other).err().unwrap_or_default();
             assert!(refused.contains("speaks protocol"), "{other}: {refused}");
