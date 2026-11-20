@@ -26,21 +26,23 @@ export type Result = Grade
 // report names that folder as `assets`; this is for a report written before it did.
 export const ASSET_BASE = 'https://cdn.springcraft.ai/brep-conformance'
 
-// The folder a report's files are in, without its closing slash: null where the run wrote none.
-// A report is its kernel's own word, so `assets` must be the report's own folder on the suite's
-// CDN: no other host, and no other kernel's folder.
+// The folder a report's files are loaded from, without its closing slash: null where the run wrote
+// none. A report is its kernel's own word, so `assets` must be the report's own folder on the
+// suite's CDN: no other host, and no other kernel's folder. `local` replaces the CDN's address with
+// a local copy of that folder, for a run not yet published.
 function assetFolder(
   assets: unknown,
   suite: string,
   kernel: string,
   version: string,
   at: string,
+  local: string | null,
 ): string | null {
   if (assets === null) return null
   const own = `${ASSET_BASE}/${suite}/${kernel}/${version}/`
   if (assets !== undefined && assets !== own)
     throw new Error(`${at}.assets: ${String(assets)} is not ${own}`)
-  return own.slice(0, -1)
+  return local ?? own.slice(0, -1)
 }
 
 export interface FailPoint {
@@ -225,7 +227,11 @@ function adapterOf(v: unknown, at: string): Adapter | null {
   return { repo: str(o, 'repo', at), commit: str(o, 'commit', at) }
 }
 
-export function parseReport(raw: unknown, at = 'report'): Report {
+export function parseReport(
+  raw: unknown,
+  at = 'report',
+  localAssets: string | null = null,
+): Report {
   const o = obj(raw, at)
   const k = obj(o.kernel, `${at}.kernel`)
   const suite = obj(o.suite, `${at}.suite`)
@@ -236,7 +242,7 @@ export function parseReport(raw: unknown, at = 'report'): Report {
   const name = str(k, 'name', `${at}.kernel`)
   const version = str(k, 'version', `${at}.kernel`)
   const suiteVersion = str(suite, 'version', `${at}.suite`)
-  const assetBase = assetFolder(o.assets, suiteVersion, name, version, at)
+  const assetBase = assetFolder(o.assets, suiteVersion, name, version, at, localAssets)
   return {
     identity: {
       kernel: name,

@@ -72,6 +72,11 @@ when it is unset. The tests read two reports for invented kernels in
 under, such as `/brep-conformance/`. The dev server reads the reports once, so restart it after they
 change.
 
+A report shows its shape files from the CDN. For a run not yet published, set `BREP_ASSETS_DIR` to a
+folder laid out as the CDN is, `<suite>/<kernel>/<version>/<key>`, with each folder filled by
+`brep-conformance --glb DIR --step DIR`. A report whose own folder is there then loads its files
+from it: the dev and preview servers serve it under `local-assets/`. A deployed build never sets it.
+
 The operations pages and each test's definition read [api.md](../doc/api.md) at build time;
 `BREP_API_MD` names another copy.
 

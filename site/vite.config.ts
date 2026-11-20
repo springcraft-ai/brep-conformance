@@ -1,7 +1,37 @@
-import { readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { createReadStream, readdirSync, statSync } from 'node:fs'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import { extname, join, resolve, sep } from 'node:path'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
+import { LOCAL_ASSETS_PATH } from './src/data/local-assets'
+
+const TYPES: Record<string, string> = {
+  '.glb': 'model/gltf-binary',
+  '.step': 'model/step',
+}
+
+// Serves BREP_ASSETS_DIR under <base>local-assets/ on the dev and preview servers, so a report's
+// files load from a local run before they are published (src/data/local-assets.ts).
+function localAssets(): Plugin {
+  const dir = process.env.BREP_ASSETS_DIR ? resolve(process.env.BREP_ASSETS_DIR) : null
+  const serve =
+    (base: string) =>
+    (req: IncomingMessage, res: ServerResponse, next: () => void): void => {
+      const prefix = `${base}${LOCAL_ASSETS_PATH}/`
+      const path = new URL(req.url ?? '/', 'http://x').pathname
+      if (!dir || !path.startsWith(prefix)) return next()
+      const file = resolve(dir, decodeURIComponent(path.slice(prefix.length)))
+      if (!file.startsWith(dir + sep) || !statSync(file, { throwIfNoEntry: false })?.isFile())
+        return next()
+      res.setHeader('Content-Type', TYPES[extname(file)] ?? 'application/octet-stream')
+      createReadStream(file).pipe(res)
+    }
+  return {
+    name: 'local-assets',
+    configureServer: server => void server.middlewares.use(serve(server.config.base)),
+    configurePreviewServer: server => void server.middlewares.use(serve(server.config.base)),
+  }
+}
 
 // Renders each request with the same server entry the static build uses.
 function devPages(): Plugin {
@@ -41,7 +71,7 @@ function pageModules(): string[] {
 export default defineConfig(({ isSsrBuild }) => ({
   base: process.env.SITE_BASE ?? '/',
   appType: 'mpa',
-  plugins: [react(), devPages()],
+  plugins: [react(), localAssets(), devPages()],
   // src/data/kernels.ts imports the registry from the repository's root.
   server: { fs: { allow: [resolve(__dirname, '..')] } },
   resolve: {

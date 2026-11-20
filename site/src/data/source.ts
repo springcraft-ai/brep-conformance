@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { kernelInfo, KERNELS } from './kernels'
+import { localAssetUrl } from './local-assets'
 import { buildSite, parseReport, type Report, type Site } from './results'
 
 // Build-time only: a page's *.data.ts may import this, a *.page.tsx never does.
@@ -9,6 +10,14 @@ import { buildSite, parseReport, type Report, type Site } from './results'
 export const REPORTS_DIR = process.env.BREP_REPORTS_DIR
   ? resolve(process.env.BREP_REPORTS_DIR)
   : null
+
+export const ASSETS_DIR = process.env.BREP_ASSETS_DIR ? resolve(process.env.BREP_ASSETS_DIR) : null
+
+// Where a report's files load from when BREP_ASSETS_DIR holds its folder; else null, the CDN.
+function localFolder(suite: string, kernel: string, version: string): string | null {
+  if (!ASSETS_DIR || !existsSync(join(ASSETS_DIR, suite, kernel, version))) return null
+  return localAssetUrl(process.env.SITE_BASE ?? '/', suite, kernel, version)
+}
 
 function subdirs(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true })
@@ -44,7 +53,8 @@ export function readReports(dir = REPORTS_DIR, anyKernel = ANY_KERNEL): Report[]
       for (const version of subdirs(join(dir, suite, kernel))) {
         const file = join(dir, suite, kernel, version, 'report.json')
         if (!existsSync(file)) continue
-        const report = parseReport(JSON.parse(readFileSync(file, 'utf8')), file)
+        const raw = JSON.parse(readFileSync(file, 'utf8'))
+        const report = parseReport(raw, file, localFolder(suite, kernel, version))
         const id = report.identity
         const on = report.methodology.suite
         if (on !== suite || id.kernel !== kernel || id.version !== version)
