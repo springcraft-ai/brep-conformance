@@ -7,8 +7,8 @@ suite calls, as Rust types, a `Kernel` trait, and a binding to the suite's line 
 
 The suite does not link a kernel. It starts the kernel's adapter as a separate process and sends it
 one JSON request per line on stdin. The adapter writes one JSON reply per line on stdout.
-[doc/api.md](https://github.com/springcraft-ai/brep-conformance/blob/main/doc/api.md) defines every
-function, value and message of the protocol.
+[The protocol's API](https://springcraft-ai.github.io/brep-conformance/docs/#part-api) defines
+every function, value and message of the protocol.
 
 This crate is the Rust binding of that protocol:
 
@@ -54,7 +54,7 @@ brep-protocol = "2"
 ```
 
 To add a kernel to the suite, follow
-[Add your kernel](https://github.com/springcraft-ai/brep-conformance/blob/main/doc/overview.md#add-your-kernel).
+[Add your kernel](https://springcraft-ai.github.io/brep-conformance/docs/#introduction-add-your-kernel).
 It is built around
 [`examples/box_kernel.rs`](https://github.com/springcraft-ai/brep-conformance/blob/main/protocol/examples/box_kernel.rs),
 a complete adapter for a kernel that makes only boxes, which the suite runs and scores end to end.
@@ -96,7 +96,7 @@ A method returns `Refusal::unsupported` when the kernel has no call for the func
 arguments. It returns `Refusal::invalid` when the request is at fault, for example when it names an
 edge that is not there. It returns `Refusal::failed` when the request is valid and the kernel could
 not carry it out.
-[What an adapter may do](https://github.com/springcraft-ai/brep-conformance/blob/main/doc/contract.md#what-an-adapter-may-do)
+[What an adapter may do](https://springcraft-ai.github.io/brep-conformance/docs/#the-contract-what-an-adapter-may-do)
 gives the rule that an adapter in an official run must follow.
 
 A client drives an adapter through `Remote`:
