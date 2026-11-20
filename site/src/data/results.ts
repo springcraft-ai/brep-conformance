@@ -30,31 +30,21 @@ export const ASSET_BASE = 'https://cdn.springcraft.ai/brep-conformance'
 // the site's base (vite.config.ts).
 export const LOCAL_ASSETS = 'local-assets'
 
-// Where a report's shape files are served from: its folder on the CDN, or a local copy of that folder
-// at `url`, for a run not yet published.
-export type AssetSource = { kind: 'cdn' } | { kind: 'local'; url: string }
-
-// The folder a report's files load from, without its closing slash: null where the run wrote none.
+// The report's folder on the suite's CDN, without its closing slash: null where the run wrote none.
 // A report is its kernel's own word, so `assets` must be the report's own folder on the suite's
-// CDN: no other host, and no other kernel's folder. A local `source` serves a copy of that folder.
-function assetFolder(
+// CDN: no other host, and no other kernel's folder.
+function cdnFolder(
   assets: unknown,
   suite: string,
   kernel: string,
   version: string,
   at: string,
-  source: AssetSource,
 ): string | null {
   if (assets === null) return null
   const own = `${ASSET_BASE}/${suite}/${kernel}/${version}/`
   if (assets !== undefined && assets !== own)
     throw new Error(`${at}.assets: ${String(assets)} is not ${own}`)
-  switch (source.kind) {
-    case 'cdn':
-      return own.slice(0, -1)
-    case 'local':
-      return source.url
-  }
+  return own.slice(0, -1)
 }
 
 export interface FailPoint {
@@ -239,11 +229,8 @@ function adapterOf(v: unknown, at: string): Adapter | null {
   return { repo: str(o, 'repo', at), commit: str(o, 'commit', at) }
 }
 
-export function parseReport(
-  raw: unknown,
-  at = 'report',
-  source: AssetSource = { kind: 'cdn' },
-): Report {
+// `folder` is where the report's files load from in place of its CDN folder, such as a local copy.
+export function parseReport(raw: unknown, at = 'report', folder?: string): Report {
   const o = obj(raw, at)
   const k = obj(o.kernel, `${at}.kernel`)
   const suite = obj(o.suite, `${at}.suite`)
@@ -254,7 +241,8 @@ export function parseReport(
   const name = str(k, 'name', `${at}.kernel`)
   const version = str(k, 'version', `${at}.kernel`)
   const suiteVersion = str(suite, 'version', `${at}.suite`)
-  const assetBase = assetFolder(o.assets, suiteVersion, name, version, at, source)
+  const cdn = cdnFolder(o.assets, suiteVersion, name, version, at)
+  const assetBase = cdn === null ? null : (folder ?? cdn)
   return {
     identity: {
       kernel: name,

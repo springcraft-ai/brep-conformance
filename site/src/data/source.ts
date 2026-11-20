@@ -1,14 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { kernelInfo, KERNELS } from './kernels'
-import {
-  type AssetSource,
-  buildSite,
-  LOCAL_ASSETS,
-  parseReport,
-  type Report,
-  type Site,
-} from './results'
+import { ASSET_BASE, buildSite, LOCAL_ASSETS, parseReport, type Report, type Site } from './results'
 
 // Build-time only: a page's *.data.ts may import this, a *.page.tsx never does.
 
@@ -19,12 +12,14 @@ export const REPORTS_DIR = process.env.BREP_REPORTS_DIR
 
 const ASSETS_DIR = process.env.BREP_ASSETS_DIR ? resolve(process.env.BREP_ASSETS_DIR) : null
 
-// A report's files are served locally when BREP_ASSETS_DIR holds its folder, and from the CDN when
-// it does not.
-function assetSource(suite: string, kernel: string, version: string): AssetSource {
-  if (!ASSETS_DIR || !existsSync(join(ASSETS_DIR, suite, kernel, version))) return { kind: 'cdn' }
-  const base = (process.env.SITE_BASE ?? '/').replace(/\/*$/, '/')
-  return { kind: 'local', url: `${base}${LOCAL_ASSETS}/${suite}/${kernel}/${version}` }
+// The folder a report's files load from: its copy in BREP_ASSETS_DIR, which the dev and preview
+// servers serve, where there is one, and its folder on the CDN where there is not.
+function assetFolder(suite: string, kernel: string, version: string): string {
+  if (ASSETS_DIR && existsSync(join(ASSETS_DIR, suite, kernel, version))) {
+    const base = (process.env.SITE_BASE ?? '/').replace(/\/*$/, '/')
+    return `${base}${LOCAL_ASSETS}/${suite}/${kernel}/${version}`
+  }
+  return `${ASSET_BASE}/${suite}/${kernel}/${version}`
 }
 
 function subdirs(dir: string): string[] {
@@ -62,7 +57,7 @@ export function readReports(dir = REPORTS_DIR, anyKernel = ANY_KERNEL): Report[]
         const file = join(dir, suite, kernel, version, 'report.json')
         if (!existsSync(file)) continue
         const raw = JSON.parse(readFileSync(file, 'utf8'))
-        const report = parseReport(raw, file, assetSource(suite, kernel, version))
+        const report = parseReport(raw, file, assetFolder(suite, kernel, version))
         const id = report.identity
         const on = report.methodology.suite
         if (on !== suite || id.kernel !== kernel || id.version !== version)

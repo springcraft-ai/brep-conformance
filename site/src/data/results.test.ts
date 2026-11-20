@@ -102,9 +102,9 @@ describe('parseReport', () => {
       { ...row('a', 't/x', 'pass', '1e-7'), exports: { glb: 't/x/a.abc.glb', step: [] } },
     ]
     const named = { ...raw('k', '2.1', cases), assets: `${ASSET_BASE}/0.9.0/k/2.1/` }
-    const local = { kind: 'local', url: '/site/local-assets/0.9.0/k/2.1' } as const
+    const local = '/site/local-assets/0.9.0/k/2.1'
     expect(parseReport(named).cases[0]!.glb).toBe(`${ASSET_BASE}/0.9.0/k/2.1/t/x/a.abc.glb`)
-    expect(parseReport(named, 'report', local).cases[0]!.glb).toBe(`${local.url}/t/x/a.abc.glb`)
+    expect(parseReport(named, 'report', local).cases[0]!.glb).toBe(`${local}/t/x/a.abc.glb`)
     const elsewhere = { ...named, assets: 'https://example.com/k/' }
     expect(() => parseReport(elsewhere, 'report', local)).toThrow(/report\.assets/)
   })
