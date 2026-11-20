@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: MIT
+name: C++ binding release
+
+# A tag cpp-v<version> publishes the C++ binding at that version: protocol/cpp packed into
+# brep_protocol-<version>.tar.xz, attached to the tag's release with its SHA-256, which adapters
+# fetch by URL and pin by hash. The version is protocol/cpp/CMakeLists.txt's, whose major number is
+# the protocol's.
+on:
+  push:
+    tags: ['cpp-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: The binding builds without a warning and its tests pass
+        run: |
+          cmake -S protocol/cpp -B protocol/cpp/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build protocol/cpp/build
+          ctest --test-dir protocol/cpp/build --output-on-failure
+      - name: Pack the binding, at the version the tag names
+        run: |
+          out=$(python3 -I protocol/cpp/pack.py dist)
+          archive=$(echo "$out" | sed -n 1p)
+          hash=$(echo "$out" | sed -n 2p)
+          version=${archive##*/brep_protocol-}
+          version=${version%.tar.xz}
+          if [ "$GITHUB_REF_NAME" != "cpp-v$version" ]; then
+              echo "The tag is $GITHUB_REF_NAME, but protocol/cpp is at version $version."
+              exit 1
+          fi
+          protocol/cpp/check-package.sh "$archive" "$hash"
+          {
+              echo "ARCHIVE=$archive"
+              echo "HASH=$hash"
+              echo "VERSION=$version"
+          } >> "$GITHUB_ENV"
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          releases="https://github.com/$GITHUB_REPOSITORY/releases/download"
+          url="$releases/$GITHUB_REF_NAME/${ARCHIVE##*/}"
+          cat > notes.md <<EOF
+          The C++ binding of the protocol, version $VERSION. An adapter's CMake build fetches it:
+
+          \`\`\`cmake
+          include(FetchContent)
+          FetchContent_Declare(
+              brep_protocol
+              URL $url
+              URL_HASH SHA256=$HASH
+          )
+          FetchContent_MakeAvailable(brep_protocol)
+          \`\`\`
+
+          SHA-256 of \`${ARCHIVE##*/}\`: \`$HASH\`
+          EOF
+          gh release create "$GITHUB_REF_NAME" "$ARCHIVE" --title "C++ binding $VERSION" \
+              --notes-file notes.md

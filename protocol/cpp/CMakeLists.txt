@@ -30,10 +30,13 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     add_executable(box_kernel examples/box_kernel.cpp)
     target_link_libraries(box_kernel PRIVATE brep_protocol)
 
-    enable_testing()
-    add_executable(serve_test tests/serve_test.cpp)
-    target_link_libraries(serve_test PRIVATE brep_protocol)
-    target_compile_definitions(serve_test PRIVATE
-                               API_MD="${CMAKE_CURRENT_SOURCE_DIR}/../../doc/api.md")
-    add_test(NAME serve_test COMMAND serve_test)
+    # The tests read doc/api.md, so they build in the repository and not from a release's archive.
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/serve_test.cpp)
+        enable_testing()
+        add_executable(serve_test tests/serve_test.cpp)
+        target_link_libraries(serve_test PRIVATE brep_protocol)
+        target_compile_definitions(serve_test PRIVATE
+                                   API_MD="${CMAKE_CURRENT_SOURCE_DIR}/../../doc/api.md")
+        add_test(NAME serve_test COMMAND serve_test)
+    endif()
 endif()

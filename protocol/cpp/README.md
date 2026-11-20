@@ -20,8 +20,8 @@ function, value and message.
   adapter overrides it. `Solid` must be movable: `serve` moves each solid a method returns into its
   store. The methods that describe the kernel, such as `name` and `tolerance`, are `const`; the
   operations are not, so a kernel may keep state of its own between calls.
-- `serve` answers the protocol on stdin and stdout with a `Kernel`. It holds the solids by handle.
-  A kernel that prints to the standard output corrupts the replies: its adapter sends that output
+- `serve` answers the protocol on stdin and stdout with a `Kernel`. It holds the solids by handle. A
+  kernel that prints to the standard output corrupts the replies: its adapter sends that output
   elsewhere, or passes `serve` a stream of its own for the replies.
 
 A method declines a request by throwing a `Refusal`: `Refusal::unsupported` where the kernel has no
@@ -36,23 +36,26 @@ adapter drives.
 
 ## Usage
 
-An adapter's CMake build fetches the binding at a commit of this repository:
+Each release of the binding is an archive attached to this repository's release `cpp-v<version>`:
+the header, its CMake file, the licence and the example, and nothing else from the repository. An
+adapter's CMake build fetches it by URL and pins it by the hash the release's notes give:
 
 ```cmake
 include(FetchContent)
 FetchContent_Declare(
     brep_protocol
-    GIT_REPOSITORY https://github.com/springcraft-ai/brep-conformance.git
-    GIT_TAG <commit>
-    SOURCE_SUBDIR protocol/cpp
+    URL https://github.com/springcraft-ai/brep-conformance/releases/download/cpp-v1.0.0/brep_protocol-1.0.0.tar.xz
+    URL_HASH SHA256=<the release's hash>
 )
 FetchContent_MakeAvailable(brep_protocol)
 target_link_libraries(my-adapter PRIVATE brep_protocol::brep_protocol)
 ```
 
+A build with another tool downloads the same archive.
+
 It uses an installed nlohmann/json 3.11 or later where CMake finds one, and otherwise fetches the
-release by its hash. A build without CMake needs `protocol/cpp/include` and nlohmann/json 3.11 or
-later on the include path, and C++17.
+release by its hash. A build without CMake needs the archive's `include` folder and nlohmann/json
+3.11 or later on the include path, and C++17.
 
 An adapter derives from `Kernel` with one call of its kernel per method, and calls `serve` from
 `main`:
@@ -96,3 +99,15 @@ cd ../.. && cargo run --release -p brep-conformance -- --adapter protocol/cpp/bu
 ```
 
 The suite gives it the same outcome on every case as the Rust example.
+
+## Releases
+
+The binding's version is the `VERSION` in [`CMakeLists.txt`](CMakeLists.txt). Its major number is
+the protocol's, as the Rust crate's is, and [`pack.py`](pack.py) refuses to pack a version whose
+major number differs from `PROTOCOL_VERSION`.
+
+To release, push a tag `cpp-v<version>` at a commit of `main` where `CMakeLists.txt` has that
+version. The [release workflow](../../.github/workflows/cpp-release.yml) builds and tests the
+binding, packs it, checks that the archive builds on its own and as a dependency pinned by its hash,
+and attaches it to the tag's release with that hash. Every pull request packs and checks the archive
+the same way, in the `cpp-binding` job.
