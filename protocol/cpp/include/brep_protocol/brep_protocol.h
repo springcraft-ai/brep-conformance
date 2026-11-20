@@ -784,48 +784,14 @@ inline Segment segment(const Json& v) {
     return Arc{vec2(at(a, "center"), "center"), num(a, "radius"), num(a, "start"), num(a, "sweep")};
 }
 
-inline Profile profile(const Json& v) {
+inline Profile profile(const Json& v, const char* what = "profile") {
     Profile out;
-    for (const Json& loop : list(v, "profile")) {
+    for (const Json& loop : list(v, what)) {
         Loop segments;
         for (const Json& s : list(loop, "loop")) {
             segments.push_back(segment(s));
         }
         out.loops.push_back(std::move(segments));
-    }
-    return out;
-}
-
-inline Vec2 scaled(const Vec2& p, double s) {
-    return {p[0] * s, p[1] * s};
-}
-
-// The profile scaled by `s` about the origin: a loft's `top` where a request leaves it out.
-inline Profile scaled(const Profile& p, double s) {
-    Profile out = p;
-    for (Loop& loop : out.loops) {
-        for (Segment& seg : loop) {
-            std::visit(
-                [s](auto& g) {
-                    using T = std::decay_t<decltype(g)>;
-                    if constexpr (std::is_same_v<T, Line>) {
-                        g.a = scaled(g.a, s);
-                        g.b = scaled(g.b, s);
-                    } else if constexpr (std::is_same_v<T, Arc>) {
-                        g.center = scaled(g.center, s);
-                        g.radius *= s;
-                    } else if constexpr (std::is_same_v<T, Spline>) {
-                        for (Vec2& c : g.ctrl) {
-                            c = scaled(c, s);
-                        }
-                    } else {
-                        g.a = scaled(g.a, s);
-                        g.apex = scaled(g.apex, s);
-                        g.b = scaled(g.b, s);
-                    }
-                },
-                seg);
-        }
     }
     return out;
 }
@@ -882,10 +848,7 @@ inline Primitive primitive(const Json& v) {
         return Screw{f, prof(), num(v, "rise"), num(v, "angle")};
     }
     if (kind == "loft") {
-        const Profile p = prof();
-        const double scale = num(v, "scale");
-        const Json& top = at(v, "top");
-        return Loft{f, p, scale, num(v, "height"), top.is_null() ? scaled(p, scale) : profile(top)};
+        return Loft{f, prof(), num(v, "scale"), num(v, "height"), profile(at(v, "top"), "top")};
     }
     if (kind == "sweep") {
         return Sweep{f, prof(), path(at(v, "path"))};

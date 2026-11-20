@@ -86,6 +86,8 @@ const std::string FRAME =
 const std::string SQUARE =
     R"([[{"line": [[0, 0], [2, 0]]}, {"line": [[2, 0], [2, 2]]}, {"line": [[2, 2], [0, 2]]},)"
     R"( {"line": [[0, 2], [0, 0]]}]])";
+const std::string TRIANGLE =
+    R"([[{"line": [[0, 0], [1, 0]]}, {"line": [[1, 0], [0, 1]]}, {"line": [[0, 1], [0, 0]]}]])";
 
 void every_listed_function_is_a_command_serve_knows() {
     Bare k;
@@ -152,10 +154,20 @@ void every_constructor_reads_its_fields() {
     expect(std::get<Box>(box).frame.origin == Vec3{1, 2, 3}, "frame");
     const Primitive cone = read(R"("cmd": "cone", "bottom": 2, "top": 0, "height": 5)");
     expect(std::get<Cone>(cone).height == 5, "cone");
-    const Primitive loft =
-        read(R"("cmd": "loft", "profile": )" + SQUARE + R"(, "scale": 0.5, "height": 4)");
+    // A top that is not the profile scaled, so a reader that scales the profile itself is caught.
+    const Primitive loft = read(R"("cmd": "loft", "profile": )" + SQUARE +
+                                R"(, "scale": 0.5, "height": 4, "top": )" + TRIANGLE);
     const auto& top = std::get<Loft>(loft).top.loops.at(0);
-    expect(std::get<Line>(top.at(1)).a == Vec2{1, 0}, "a loft's top is its profile scaled");
+    expect(top.size() == 3 && std::get<Line>(top.at(1)).a == Vec2{1, 0} &&
+               std::get<Line>(top.at(1)).b == Vec2{0, 1},
+           "a loft reads the top it is sent");
+    bool refused = false;
+    try {
+        read(R"("cmd": "loft", "profile": )" + SQUARE + R"(, "scale": 0.5, "height": 4)");
+    } catch (const Refusal& r) {
+        refused = r.kind == Kind::Failed && r.reason.find("top") != std::string::npos;
+    }
+    expect(refused, "a loft without its top is malformed");
     const Primitive sweep = read(R"("cmd": "sweep", "profile": )" + SQUARE +
                                  R"(, "path": [{"line": 3}, {"arc": {"radius": 2, "angle": 1}}])");
     expect(std::get<PathArc>(std::get<Sweep>(sweep).path.at(1)).radius == 2, "sweep");
