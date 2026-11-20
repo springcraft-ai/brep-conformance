@@ -3745,12 +3745,21 @@ fn run_nist<K: Kernel<Solid: Clone + 'static>>(
 /// each case. `peer`, when given, makes each thread a second kernel, which reads the STEP files the
 /// first writes.
 pub fn run<K: Kernel<Solid: Clone + 'static>>(
-    make: impl Fn() -> K + Sync,
+    make: impl Fn() -> Result<K, String> + Sync,
     cases: &[Case],
     threads: usize,
-    peer: Option<&(dyn Fn() -> Remote + Sync)>,
+    peer: Option<&(dyn Fn() -> Result<Remote, String> + Sync)>,
     exports: &Exports,
-) -> Value {
+) -> Result<Value, String> {
+    // The header's kernel first, gone before the threads start theirs, so a run never holds more
+    // kernels than threads.
+    let (kernel, unsupported, calibration) = {
+        let mut k = make()?;
+        let kernel = json!({"name": k.name(), "version": k.version(), "tolerance": k.tolerance(),
+                            "configuration": k.configuration()});
+        let unsupported = lacks(&k);
+        (kernel, unsupported, calibrate(&mut k))
+    };
     let next = Mutex::new(0usize);
     let out: Mutex<Vec<(usize, Value)>> = Mutex::new(Vec::new());
     let quiet = std::panic::take_hook();
@@ -3758,8 +3767,7 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
     std::thread::scope(|s| {
         for _ in 0..threads.max(1) {
             s.spawn(|| {
-                let mut k = make();
-                let mut p = peer.map(|make| make());
+                let (mut k, mut p): (Option<K>, Option<Remote>) = (None, None);
                 loop {
                     let i = {
                         let mut n = next.lock().unwrap();
@@ -3771,12 +3779,34 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
                     if exports.any() {
                         export::begin();
                     }
-                    let mut v = run_case(&mut k, c, p.as_mut());
+                    // A kernel that cannot start refuses the case it was to run, and the next case
+                    // starts another. A peer that cannot start leaves the case without interop.
+                    let mut made = match k.take() {
+                        Some(k) => Ok(k),
+                        None => make(),
+                    };
+                    if p.is_none() {
+                        p = peer.and_then(|make| {
+                            make()
+                                .map_err(|e| eprintln!("the peer did not start: {e}"))
+                                .ok()
+                        });
+                    }
+                    let mut v = match &mut made {
+                        Ok(k) => run_case(k, c, p.as_mut()),
+                        Err(e) => {
+                            let mut v = finish(c, Outcome::Refused, vec![], vec![]);
+                            v["error"] = json!(format!("starting the kernel: {e}"));
+                            v
+                        }
+                    };
                     v["test"] = json!(c.test);
                     judge(&mut v, c);
                     v["asset_step"] = json!(!crate::assets::of_case(c).step.is_empty());
-                    if exports.any() {
-                        export::export_case(&mut k, c, exports, &mut v);
+                    if exports.any()
+                        && let Ok(k) = &mut made
+                    {
+                        export::export_case(k, c, exports, &mut v);
                     }
                     // How far over the suite's tolerance its worst measure went, for a case that failed.
                     let worst = WORST.with(|w| w.get());
@@ -3785,11 +3815,14 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
                     }
                     // A run keeps no solid past its case.
                     let _ = catch_unwind(AssertUnwindSafe(|| {
-                        k.reset();
+                        if let Ok(k) = &mut made {
+                            k.reset();
+                        }
                         if let Some(p) = &mut p {
                             p.reset();
                         }
                     }));
+                    k = made.ok();
                     out.lock().unwrap().push((i, v));
                 }
             });
@@ -3798,17 +3831,14 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
     std::panic::set_hook(quiet);
     let mut out = out.into_inner().unwrap();
     out.sort_by_key(|x| x.0);
-    // After the threads' kernels have gone, so a run never holds more than `threads` at once.
-    let mut k = make();
-    json!({
+    Ok(json!({
         "format": RESULTS_FORMAT,
         "suite": SUITE_VERSION,
         "contract": CONTRACT_VERSION,
         "tolerance": TOLERANCE,
-        "kernel": {"name": k.name(), "version": k.version(), "tolerance": k.tolerance(),
-                   "configuration": k.configuration()},
-        "unsupported": lacks(&k),
-        "stand_ins": stand_ins(&lacks(&k)),
+        "kernel": kernel,
+        "stand_ins": stand_ins(&unsupported),
+        "unsupported": unsupported,
         "environment": {
             "os": std::env::consts::OS,
             "arch": std::env::consts::ARCH,
@@ -3818,9 +3848,9 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
         "unix": std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs()),
-        "calibration_ms": calibrate(&mut k),
+        "calibration_ms": calibration,
         "cases": out.into_iter().map(|x| x.1).collect::<Vec<_>>(),
-    })
+    }))
 }
 
 /// The words a check's or a case's tier takes, tightest first.
@@ -4195,6 +4225,27 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_kernel_that_cannot_start_refuses_its_case_and_the_next_case_starts_another() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let starts = AtomicUsize::new(0);
+        // The header's kernel starts, the first case's does not, and the second case's does.
+        let make = || match starts.fetch_add(1, Ordering::SeqCst) {
+            1 => Err("no free core".to_string()),
+            _ => Ok(Sticky(Default::default())),
+        };
+        let cases: Vec<Case> = crate::generate::cases(1)
+            .into_iter()
+            .filter(|c| c.test.starts_with("booleans/overlap/boxes"))
+            .take(2)
+            .collect();
+        let r = run(make, &cases, 1, None, &Exports::default()).unwrap();
+        assert_eq!(r["cases"][0]["outcome"], "refused");
+        assert_eq!(r["cases"][0]["error"], "starting the kernel: no free core");
+        assert_ne!(r["cases"][1]["outcome"], "refused", "{}", r["cases"][1]);
+        assert_eq!(starts.load(Ordering::SeqCst), 3);
+    }
+
     /// Two NIST files in a folder of their own, the first one the test kernel hangs on.
     fn nist_folder(tag: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("nist-{tag}-{}", std::process::id()));
@@ -4214,12 +4265,13 @@ mod tests {
         let dir = nist_folder("read");
         let cases = crate::generate::nist_cases(&dir).unwrap();
         let r = run(
-            || Sticky(Default::default()),
+            || Ok::<_, String>(Sticky(Default::default())),
             &cases,
             1,
             None,
             &Exports::default(),
-        );
+        )
+        .unwrap();
         let _ = std::fs::remove_dir_all(&dir);
         let read = &r["cases"][1];
         assert_eq!(read["test"], "step/read-nist");
@@ -4252,7 +4304,14 @@ mod tests {
             glb: Some(out.clone()),
             step: None,
         };
-        let r = run(|| Sticky(Default::default()), &cases, 1, None, &ex);
+        let r = run(
+            || Ok::<_, String>(Sticky(Default::default())),
+            &cases,
+            1,
+            None,
+            &ex,
+        )
+        .unwrap();
         let read = &r["cases"][1]["exports"];
         let key = read["glb"].as_str().unwrap_or_default().to_string();
         let bytes = std::fs::read(out.join(&key)).unwrap_or_default();
@@ -4287,12 +4346,13 @@ mod tests {
         let dir = nist_folder("slow");
         let cases = crate::generate::nist_cases(&dir).unwrap();
         let r = run(
-            || Sticky(Default::default()),
+            || Ok::<_, String>(Sticky(Default::default())),
             &cases,
             1,
             None,
             &Exports::default(),
-        );
+        )
+        .unwrap();
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(r["cases"][0]["result"], "timeout");
         assert_eq!(r["cases"][1]["result"], "1e-7", "{}", r["cases"][1]);

@@ -717,7 +717,7 @@ pub trait Kernel {
     fn sew(&mut self, _text: &str, _tolerance: f64) -> Result<Self::Solid, Refusal> {
         Err(Refusal::unsupported("sew is not supported"))
     }
-    /// Releases every solid this caller made, once it is done with them.
+    /// Releases every solid this kernel made, once its caller is done with them.
     fn reset(&mut self) {}
 
     fn boolean(

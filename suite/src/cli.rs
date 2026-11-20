@@ -135,19 +135,24 @@ pub fn main() -> ExitCode {
         step: value("--step").map(PathBuf::from),
     };
     drop(kernel);
-    let start = |cmd: &[String]| {
-        Remote::new(cmd.to_vec(), limit).unwrap_or_else(|e| panic!("starting a worker: {e}"))
-    };
+    let start = |cmd: &[String]| Remote::new(cmd.to_vec(), limit);
     let make_peer = peer.as_deref().map(|cmd| move || start(cmd));
-    let mut results = run::run(
+    let run = run::run(
         || start(&adapter),
         &cases,
         threads,
         make_peer
             .as_ref()
-            .map(|f| f as &(dyn Fn() -> Remote + Sync)),
+            .map(|f| f as &(dyn Fn() -> Result<Remote, String> + Sync)),
         &exports,
     );
+    let mut results = match run {
+        Ok(results) => results,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::from(2);
+        }
+    };
     if let Some(e) = &official {
         results["adapter"] = e.stamp();
     }
