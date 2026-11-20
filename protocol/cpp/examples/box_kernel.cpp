@@ -38,15 +38,9 @@ class BoxKernel : public Kernel<Block> {
         return TOLERANCE;
     }
 
-    // The functions `hello` leaves out; the suite runs no case that needs one.
-    std::vector<std::string> unsupported() const override {
-        std::vector<std::string> out;
-        for (const char* f : FUNCTIONS) {
-            if (std::find(SUPPORTED.begin(), SUPPORTED.end(), f) == SUPPORTED.end()) {
-                out.emplace_back(f);
-            }
-        }
-        return out;
+    // The functions `hello` lists; the suite runs no case that needs another.
+    std::vector<std::string> supports() const override {
+        return {SUPPORTED.begin(), SUPPORTED.end()};
     }
 
     Block make(const Primitive& p) override {

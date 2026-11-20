@@ -16,10 +16,12 @@ function, value and message.
 
 - `Primitive`, `Profile`, `Frame` and the other types hold the values a request carries.
 - `Kernel<Solid>` is the class an adapter derives from, with one virtual method per function of the
-  protocol. Ten are pure virtual. Every other method refuses the call as `unsupported` unless the
-  adapter overrides it. `Solid` must be movable: `serve` moves each solid a method returns into its
-  store. The methods that describe the kernel, such as `name` and `tolerance`, are `const`; the
-  operations are not, so a kernel may keep state of its own between calls.
+  protocol, and `supports`, which lists the functions the kernel offers. Eleven are pure virtual.
+  Every other method refuses the call as `unsupported` unless the adapter overrides it, and a
+  function is offered only when `supports` lists it. `Solid` must be movable: `serve` moves each
+  solid a method returns into its store. The methods that describe the kernel, such as `name` and
+  `tolerance`, are `const`; the operations are not, so a kernel may keep state of its own between
+  calls.
 - `serve` answers the protocol on stdin and stdout with a `Kernel`. It holds the solids by handle. A
   kernel that prints to the standard output corrupts the replies: its adapter sends that output
   elsewhere, or passes `serve` a stream of its own for the replies.

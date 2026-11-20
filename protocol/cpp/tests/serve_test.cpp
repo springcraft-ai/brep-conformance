@@ -39,8 +39,14 @@ class Bare : public Kernel<int> {
     double tolerance() const override {
         return 1e-7;
     }
-    std::vector<std::string> unsupported() const override {
-        return {"slab", "sew"};
+    std::vector<std::string> supports() const override {
+        std::vector<std::string> out;
+        for (const char* f : FUNCTIONS) {
+            if (std::string(f) != "slab" && std::string(f) != "sew") {
+                out.emplace_back(f);
+            }
+        }
+        return out;
     }
     int make(const Primitive& p) override {
         return static_cast<int>(p.index());
@@ -207,6 +213,9 @@ class Unchecked : public Kernel<int> {
     std::string name() const override {
         return "unchecked";
     }
+    std::vector<std::string> supports() const override {
+        return {FUNCTIONS.begin(), FUNCTIONS.end()};
+    }
     std::string version() const override {
         return "0";
     }
@@ -285,8 +294,34 @@ void the_function_list_is_the_reference_s_tables() {
 
 } // namespace
 
+// A kernel that answers every method `Bare` does but lists two functions, and a name that is no
+// function.
+class Listed : public Bare {
+  public:
+    std::vector<std::string> supports() const override {
+        return {"box", "volume", "fillit"};
+    }
+};
+
+void hello_claims_only_the_functions_a_kernel_lists() {
+    // `unite`, `area` and the rest have bodies here, but are not listed: they are not offered. A
+    // name that is no function is never claimed.
+    Listed k;
+    detail::Store<int> solids;
+    const Json hello = ask(k, solids, R"({"cmd": "hello"})")["ok"];
+    expect(hello["supports"] == Json::array({"box", "volume"}), "hello claims what is listed");
+    const std::vector<std::string> lacks = k.unsupported();
+    expect(lacks.size() == FUNCTIONS.size() - 2, "the rest is unsupported");
+    const auto has = [&](const char* f) {
+        return std::find(lacks.begin(), lacks.end(), f) != lacks.end();
+    };
+    expect(has("union") && !has("box") && !has("volume") && !has("fillit"),
+           "unsupported is every function not listed");
+}
+
 int main() {
     the_function_list_is_the_reference_s_tables();
+    hello_claims_only_the_functions_a_kernel_lists();
     a_checker_that_declines_is_an_issue_and_a_kernel_without_one_is_not_judged();
     every_listed_function_is_a_command_serve_knows();
     hello_lists_what_the_kernel_offers_and_classify_refuses_where_it_has_none();
