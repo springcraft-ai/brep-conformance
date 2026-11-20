@@ -5,7 +5,9 @@ Usage: compare.py RUST_ADAPTER CPP_ADAPTER
 
 Each line goes to both adapters as it is written. After every reply that issues a handle, both are
 asked to `write_step` that solid, so the arguments each binding read are compared in full. Replies
-are compared as parsed JSON, so the two JSON libraries may write a number differently. Every
+are compared as parsed JSON, so the two JSON libraries may write a number differently. Every field
+of a request that makes a solid, at any depth, must come back in that solid, so an argument that
+both echo kernels take and drop fails the test. Every
 function in doc/api.md's tables must be answered `ok` at least once, so a function that one binding
 lacks, or that the corpus does not call, fails the test.
 """
@@ -68,6 +70,23 @@ def readable(cmd, reply):
     return reply
 
 
+def dropped(sent, echoed, path=""):
+    """The fields of a request, at any depth, that the solid it made does not echo back."""
+    out = []
+    if isinstance(sent, dict) and isinstance(echoed, dict):
+        for key, value in sent.items():
+            if not path and key == "cmd":
+                continue
+            if key not in echoed:
+                out.append(path + key)
+            else:
+                out += dropped(value, echoed[key], f"{path}{key}.")
+    elif isinstance(sent, list) and isinstance(echoed, list) and len(sent) == len(echoed):
+        for i, (s, e) in enumerate(zip(sent, echoed)):
+            out += dropped(s, e, f"{path}{i}.")
+    return out
+
+
 def main():
     if len(sys.argv) != 3:
         sys.exit(__doc__)
@@ -94,7 +113,11 @@ def main():
         if "ok" in a and "ok" in b:
             answered.add(cmd)
         for h in handles(cmd, a):
-            both(json.dumps({"cmd": "write_step", "s": h}), "write_step")
+            written, _ = both(json.dumps({"cmd": "write_step", "s": h}), "write_step")
+            lost = dropped(json.loads(line), json.loads(written.get("ok", "{}")))
+            if lost:
+                differences += 1
+                print(f"request: {line}\n  the solid does not echo {', '.join(lost)}")
 
     rust_err, cpp_err = rust.close(), cpp.close()
     if rust_err != cpp_err:
