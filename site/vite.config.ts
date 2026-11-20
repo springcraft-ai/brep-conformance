@@ -1,30 +1,26 @@
 import { createReadStream, readdirSync, statSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { extname, join, resolve, sep } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
-import { LOCAL_ASSETS_PATH } from './src/data/local-assets'
+import { ASSET_BASE, LOCAL_ASSETS } from './src/data/results'
 
-const TYPES: Record<string, string> = {
-  '.glb': 'model/gltf-binary',
-  '.step': 'model/step',
-}
-
-// Serves BREP_ASSETS_DIR under <base>local-assets/ on the dev and preview servers, so a report's
-// files load from a local run before they are published (src/data/local-assets.ts).
+// With BREP_ASSETS_DIR, the dev and preview servers answer <base>local-assets/<path> with that
+// folder's file, or send the request on to the CDN's <path>: a local run's files load before they
+// are published, and the published reports' as before.
 function localAssets(): Plugin {
   const dir = process.env.BREP_ASSETS_DIR ? resolve(process.env.BREP_ASSETS_DIR) : null
   const serve =
     (base: string) =>
     (req: IncomingMessage, res: ServerResponse, next: () => void): void => {
-      const prefix = `${base}${LOCAL_ASSETS_PATH}/`
+      const prefix = `${base}${LOCAL_ASSETS}/`
       const path = new URL(req.url ?? '/', 'http://x').pathname
       if (!dir || !path.startsWith(prefix)) return next()
-      const file = resolve(dir, decodeURIComponent(path.slice(prefix.length)))
-      if (!file.startsWith(dir + sep) || !statSync(file, { throwIfNoEntry: false })?.isFile())
-        return next()
-      res.setHeader('Content-Type', TYPES[extname(file)] ?? 'application/octet-stream')
-      createReadStream(file).pipe(res)
+      const rest = path.slice(prefix.length)
+      const file = resolve(dir, decodeURIComponent(rest))
+      if (file.startsWith(dir + sep) && statSync(file, { throwIfNoEntry: false })?.isFile())
+        return void createReadStream(file).pipe(res)
+      res.writeHead(302, { Location: `${ASSET_BASE}/${rest}` }).end()
     }
   return {
     name: 'local-assets',

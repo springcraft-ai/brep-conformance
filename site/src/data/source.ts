@@ -1,8 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { kernelInfo, KERNELS } from './kernels'
-import { localAssetUrl } from './local-assets'
-import { buildSite, parseReport, type Report, type Site } from './results'
+import { ASSET_BASE, buildSite, LOCAL_ASSETS, parseReport, type Report, type Site } from './results'
 
 // Build-time only: a page's *.data.ts may import this, a *.page.tsx never does.
 
@@ -11,13 +10,11 @@ export const REPORTS_DIR = process.env.BREP_REPORTS_DIR
   ? resolve(process.env.BREP_REPORTS_DIR)
   : null
 
-export const ASSETS_DIR = process.env.BREP_ASSETS_DIR ? resolve(process.env.BREP_ASSETS_DIR) : null
-
-// Where a report's files load from when BREP_ASSETS_DIR holds its folder; else null, the CDN.
-function localFolder(suite: string, kernel: string, version: string): string | null {
-  if (!ASSETS_DIR || !existsSync(join(ASSETS_DIR, suite, kernel, version))) return null
-  return localAssetUrl(process.env.SITE_BASE ?? '/', suite, kernel, version)
-}
+// With BREP_ASSETS_DIR, every report's files load through the dev or preview server, which serves
+// the local copy and sends the rest on to the CDN.
+const ASSETS_FROM = process.env.BREP_ASSETS_DIR
+  ? `${(process.env.SITE_BASE ?? '/').replace(/\/*$/, '')}/${LOCAL_ASSETS}`
+  : ASSET_BASE
 
 function subdirs(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true })
@@ -53,8 +50,7 @@ export function readReports(dir = REPORTS_DIR, anyKernel = ANY_KERNEL): Report[]
       for (const version of subdirs(join(dir, suite, kernel))) {
         const file = join(dir, suite, kernel, version, 'report.json')
         if (!existsSync(file)) continue
-        const raw = JSON.parse(readFileSync(file, 'utf8'))
-        const report = parseReport(raw, file, localFolder(suite, kernel, version))
+        const report = parseReport(JSON.parse(readFileSync(file, 'utf8')), file, ASSETS_FROM)
         const id = report.identity
         const on = report.methodology.suite
         if (on !== suite || id.kernel !== kernel || id.version !== version)

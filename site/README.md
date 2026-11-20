@@ -74,8 +74,9 @@ change.
 
 A report shows its shape files from the CDN. For a run not yet published, set `BREP_ASSETS_DIR` to a
 folder laid out as the CDN is, `<suite>/<kernel>/<version>/<key>`, with each folder filled by
-`brep-conformance --glb DIR --step DIR`. A report whose own folder is there then loads its files
-from it: the dev and preview servers serve it under `local-assets/`. A deployed build never sets it.
+`brep-conformance --glb DIR --step DIR`. Every report then loads its files through the dev or
+preview server, which sends a file from that folder where there is one, and redirects to the CDN
+where there is not. A deployed build never sets it.
 
 The operations pages and each test's definition read [api.md](../doc/api.md) at build time;
 `BREP_API_MD` names another copy.

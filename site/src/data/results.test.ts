@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { localAssetUrl } from './local-assets'
 import {
   ASSET_BASE,
   caseTimes,
@@ -98,14 +97,14 @@ describe('parseReport', () => {
     expect([none.methodology.assetBase, none.cases[0]!.glb]).toEqual([null, null])
   })
 
-  it('loads a report’s files from a local copy of its folder, still checking `assets`', () => {
+  it('loads a report’s files from a local copy of the CDN, still checking `assets`', () => {
     const cases = [
       { ...row('a', 't/x', 'pass', '1e-7'), exports: { glb: 't/x/a.abc.glb', step: [] } },
     ]
-    const local = localAssetUrl('/site/', '0.9.0-main', 'k', '2.1 (abc)')
-    expect(local).toBe('/site/local-assets/0.9.0-main/k/2.1%20(abc)')
     const named = { ...raw('k', '2.1', cases), assets: `${ASSET_BASE}/0.9.0/k/2.1/` }
-    expect(parseReport(named, 'report', local).cases[0]!.glb).toBe(`${local}/t/x/a.abc.glb`)
+    const local = '/site/local-assets'
+    const glb = parseReport(named, 'report', local).cases[0]!.glb
+    expect(glb).toBe('/site/local-assets/0.9.0/k/2.1/t/x/a.abc.glb')
     const elsewhere = { ...named, assets: 'https://example.com/k/' }
     expect(() => parseReport(elsewhere, 'report', local)).toThrow(/report\.assets/)
   })
