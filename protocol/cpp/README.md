@@ -109,9 +109,13 @@ C++ binding's version is the `VERSION` in [`CMakeLists.txt`](CMakeLists.txt), an
 [`pack.py`](pack.py) refuses to pack it unless it is the crate's version in
 [`../Cargo.toml`](../Cargo.toml).
 
-Publishing a `brep-protocol-v<version>` release runs the
-[release workflow](../../.github/workflows/cpp-release.yml) on its tag: it builds and tests the
-binding, packs it, checks that the archive builds on its own and as a dependency pinned by its hash,
-attaches it to the release, and adds the hash to the release's notes. Run by hand with a release's
-tag, the workflow does the same for a release published without the archive. Every pull request
+To attach the C++ binding to a release, from the release's commit:
+
+```bash
+python3 pack.py dist                     # prints the archive's path and its SHA-256
+./check-package.sh dist/brep_protocol-<version>.tar.xz <sha-256>
+gh release upload brep-protocol-v<version> dist/brep_protocol-<version>.tar.xz
+```
+
+Then add the hash to the release's notes, with the `FetchContent_Declare` above. Every pull request
 packs and checks the archive the same way, in the `cpp-binding` job.

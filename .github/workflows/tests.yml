@@ -32,7 +32,7 @@ jobs:
           cmake -S protocol/cpp -B protocol/cpp/build -DCMAKE_BUILD_TYPE=Release
           cmake --build protocol/cpp/build
           ctest --test-dir protocol/cpp/build --output-on-failure
-      # What a release attaches, checked on every change so that a tag never meets a broken one.
+      # What a protocol release carries, checked on every change so no release gets a broken one.
       - name: The packed binding builds on its own and as a dependency pinned by its hash
         run: |
           out=$(python3 -I protocol/cpp/pack.py dist)
