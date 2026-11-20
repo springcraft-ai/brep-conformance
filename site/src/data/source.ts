@@ -56,8 +56,11 @@ export function readReports(dir = REPORTS_DIR, anyKernel = ANY_KERNEL): Report[]
       for (const version of subdirs(join(dir, suite, kernel))) {
         const file = join(dir, suite, kernel, version, 'report.json')
         if (!existsSync(file)) continue
-        const raw = JSON.parse(readFileSync(file, 'utf8'))
-        const report = parseReport(raw, file, assetFolder(suite, kernel, version))
+        const report = parseReport(
+          JSON.parse(readFileSync(file, 'utf8')),
+          file,
+          assetFolder(suite, kernel, version),
+        )
         const id = report.identity
         const on = report.methodology.suite
         if (on !== suite || id.kernel !== kernel || id.version !== version)
