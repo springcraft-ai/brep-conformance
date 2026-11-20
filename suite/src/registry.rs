@@ -209,7 +209,10 @@ mod tests {
     fn the_registry_lists_each_kernel_at_a_full_commit_from_its_own_repository() {
         let all = entries();
         let names: Vec<_> = all.iter().map(|e| e.kernel.as_str()).collect();
-        assert_eq!(names, ["arris", "cadrs", "opencascade", "solidcore", "springrep"]);
+        assert_eq!(
+            names,
+            ["arris", "cadrs", "opencascade", "solidcore", "springrep"]
+        );
         for e in &all {
             assert!(e.repo.starts_with("https://github.com/"), "{}", e.repo);
             assert!(
