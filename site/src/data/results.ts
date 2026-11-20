@@ -34,6 +34,29 @@ export const LOCAL_ASSETS = 'local-assets'
 // at `url`, for a run not yet published.
 export type AssetSource = { kind: 'cdn' } | { kind: 'local'; url: string }
 
+// The folder a report's files load from, without its closing slash: null where the run wrote none.
+// A report is its kernel's own word, so `assets` must be the report's own folder on the suite's
+// CDN: no other host, and no other kernel's folder. A local `source` serves a copy of that folder.
+function assetFolder(
+  assets: unknown,
+  suite: string,
+  kernel: string,
+  version: string,
+  at: string,
+  source: AssetSource,
+): string | null {
+  if (assets === null) return null
+  const own = `${ASSET_BASE}/${suite}/${kernel}/${version}/`
+  if (assets !== undefined && assets !== own)
+    throw new Error(`${at}.assets: ${String(assets)} is not ${own}`)
+  switch (source.kind) {
+    case 'cdn':
+      return own.slice(0, -1)
+    case 'local':
+      return source.url
+  }
+}
+
 export interface FailPoint {
   p: [number, number, number]
   got: boolean
@@ -231,13 +254,7 @@ export function parseReport(
   const name = str(k, 'name', `${at}.kernel`)
   const version = str(k, 'version', `${at}.kernel`)
   const suiteVersion = str(suite, 'version', `${at}.suite`)
-  // A report is its kernel's own word, so `assets` must name the report's own folder on the suite's
-  // CDN: no other host, and no other kernel's folder. A report from before reports named the folder
-  // has no `assets`, and one whose run wrote no files has null.
-  const cdn = `${ASSET_BASE}/${suiteVersion}/${name}/${version}`
-  if (o.assets !== undefined && o.assets !== null && o.assets !== `${cdn}/`)
-    throw new Error(`${at}.assets: ${String(o.assets)} is not ${cdn}/`)
-  const assetBase = o.assets === null ? null : source.kind === 'local' ? source.url : cdn
+  const assetBase = assetFolder(o.assets, suiteVersion, name, version, at, source)
   return {
     identity: {
       kernel: name,
