@@ -222,12 +222,14 @@ pub enum Primitive {
         twist: f64,
     },
     /// A ruled loft from the profile in the frame's xy plane to its copy scaled by `scale` about
-    /// the origin, `height` up z.
+    /// the origin, `height` up z. `top` is that copy, sent so that a kernel lofting between two
+    /// sections is given both and scales nothing.
     Loft {
         frame: Frame,
         profile: Profile,
         scale: f64,
         height: f64,
+        top: Profile,
     },
 }
 
@@ -1006,10 +1008,11 @@ impl Primitive {
                 profile,
                 scale,
                 height,
+                top,
                 ..
             } => serde_json::json!({
                 "kind": "loft", "frame": frame, "profile": profile.to_json(), "scale": scale,
-                "height": height, "top": profile.scaled(*scale).to_json()
+                "height": height, "top": top.to_json()
             }),
         }
     }

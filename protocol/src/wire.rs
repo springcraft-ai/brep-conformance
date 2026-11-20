@@ -166,6 +166,7 @@ impl Primitive {
                     profile: profile()?,
                     scale: num(v, "scale")?,
                     height: num(v, "height")?,
+                    top: Profile::from_json(&v["top"])?,
                 },
                 "sweep" => Primitive::Sweep {
                     frame,
@@ -268,6 +269,7 @@ mod tests {
             },
             Primitive::Loft {
                 frame: f,
+                top: profile.scaled(0.5),
                 profile,
                 scale: 0.5,
                 height: 4.0,
@@ -277,5 +279,29 @@ mod tests {
             assert_eq!(Primitive::from_json(&p.to_json()), Ok(p.clone()));
             assert_eq!(Primitive::from_json(&p.to_call()), Ok(p));
         }
+    }
+
+    #[test]
+    fn a_loft_reads_the_top_profile_it_is_sent() {
+        // A top that is not the profile scaled by `scale`, so a reader that scales the profile
+        // itself, instead of reading `top`, is caught.
+        let square = |s: f64| Profile {
+            loops: vec![rounded(
+                &[[0.0, 0.0], [s, 0.0], [s, s], [0.0, s]],
+                &[0.0; 4],
+            )],
+        };
+        let mut call = serde_json::json!({
+            "cmd": "loft",
+            "frame": {"origin": [0, 0, 0], "x": [1, 0, 0], "y": [0, 1, 0], "z": [0, 0, 1]},
+            "profile": square(4.0).to_json(),
+            "scale": 0.5,
+            "height": 3.0,
+        });
+        call["top"] = square(1.0).to_json();
+        let Ok(Primitive::Loft { top, .. }) = Primitive::from_json(&call) else {
+            panic!("the loft did not read");
+        };
+        assert_eq!(top, square(1.0));
     }
 }

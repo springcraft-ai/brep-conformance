@@ -3659,10 +3659,12 @@ fn scaled_prim(p: &Primitive, s: f64) -> Primitive {
             frame: fr,
             profile,
             height,
+            top,
             ..
         } => {
             *fr = frame;
             *profile = profile.scaled(s);
+            *top = top.scaled(s);
             *height *= s;
         }
     }
@@ -3968,6 +3970,7 @@ fn lofts(r: &mut Rng) -> (Primitive, Primitive, Exact) {
     let height = r.range(3.0, 12.0);
     let a = Primitive::Loft {
         frame: Frame::at([0.0; 3]),
+        top: profile.scaled(scale),
         profile,
         scale,
         height,
@@ -7899,6 +7902,36 @@ fn invalid_point(r: &mut Rng) -> FeatureDraw {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_loft_stretched_by_scaled_prim_stretches_its_top_with_its_profile() {
+        // A loft's top is its profile scaled by `scale`; stretching the case's lengths by 10
+        // must keep that so, or a kernel lofting to `top` builds another solid.
+        let profile = Profile {
+            loops: vec![circle([1.0, 0.5], 2.0, true)],
+        };
+        let loft = Primitive::Loft {
+            frame: Frame::at([0.0; 3]),
+            top: profile.scaled(0.4),
+            profile,
+            scale: 0.4,
+            height: 3.0,
+        };
+        let Primitive::Loft {
+            profile,
+            scale,
+            top,
+            ..
+        } = scaled_prim(&loft, 10.0)
+        else {
+            panic!("a loft stretched is a loft");
+        };
+        let (want, got) = (profile.scaled(scale).numbers(), top.numbers());
+        assert_eq!(want.len(), got.len());
+        for (w, g) in want.iter().zip(&got) {
+            assert!((w - g).abs() <= 1e-12 * (1.0 + w.abs()), "{w} against {g}");
+        }
+    }
 
     #[test]
     fn each_nist_file_listed_is_a_read_nist_case_with_what_its_exporter_states() {

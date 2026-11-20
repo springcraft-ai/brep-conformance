@@ -38,7 +38,7 @@ The crate's own version is separate from the protocol's version.
 
 ```toml
 [dependencies]
-brep-protocol = "1"
+brep-protocol = "2"
 ```
 
 To add a kernel to the suite, follow
