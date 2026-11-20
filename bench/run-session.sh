@@ -84,9 +84,8 @@ one() {
     tail -4 "results/$name.log"
 }
 
-# One pass per kernel. Each adapter is the one kernels.json pins; OpenCascade's starts the
-# environment's own Python, not `uv run`, so the adapter is the suite's child and lets go of its core
-# when the suite replaces it.
+# One pass per kernel. Each adapter is the one kernels.json pins, started as its own program, so it
+# is the suite's child and lets go of its core when the suite replaces it.
 kernels=(springrep arris solidcore opencascade)
 for kernel in "${kernels[@]}"; do
     one "$kernel" "$@"

@@ -20,7 +20,7 @@ per contract clause. It is not run on every pull request: it runs in release, by
   adapter. Neither crate depends on a kernel.
 - The suite's adapters each have their own repository, and [`kernels.json`](kernels.json), the
   registry, pins each to a reviewed commit and one release of its kernel:
-  [OpenCascade](https://github.com/springcraft-ai/brep-conformance-occt), in Python, and three Rust
+  [OpenCascade](https://github.com/springcraft-ai/brep-conformance-occt), in C++, and three Rust
   kernels, [arris](https://github.com/springcraft-ai/brep-conformance-arris),
   [solidcore](https://github.com/springcraft-ai/brep-conformance-solidcore) and
   [springrep](https://github.com/springcraft-ai/brep-conformance-springrep).
@@ -57,8 +57,7 @@ says.
 cargo build --release -p brep-conformance
 target/release/brep-conformance --kernel arris --out arris.json  # official: the registry's adapter
 target/release/brep-conformance --adapter path/to/arris-adapter --out arris.json --html arris.html
-target/release/brep-conformance --adapter "uv run -q --project path/to/occt \
-    python -I path/to/occt/adapter.py" --out occt.json
+target/release/brep-conformance --adapter path/to/occt/build/occt-adapter --out occt.json
 cargo build --release --target wasm32-unknown-unknown -p brep-conformance-viewer
 target/release/brep-conformance-report arris.json occt.json \
     --viewer target/wasm32-unknown-unknown/release/brep_conformance_viewer.wasm --out report.html

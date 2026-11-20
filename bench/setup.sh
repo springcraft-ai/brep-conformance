@@ -6,10 +6,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 root=$PWD
 
-# libgl1 is for OpenCascade's Python package, which fails to import without it.
+# libgl1 is for the graphics toolkits OpenCascade's libraries load; curl and bzip2 are for the
+# OpenCascade adapter's build, which fetches micromamba.
 sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential pkg-config util-linux \
-    libgl1 git python3 unzip
+    libgl1 git python3 unzip curl bzip2
 
 # The session's shape files leave the machine through the staging bucket.
 if ! command -v aws >/dev/null; then
@@ -56,7 +57,6 @@ fi
     echo "cargo=$(cargo --version)"
     echo "uv=$(uv --version)"
     echo "aws=$(aws --version | cut -d' ' -f1)"
-    echo "python=$(adapters/opencascade/.venv/bin/python -I --version)"
     echo "cc=$(cc --version | head -1)"
     echo "rustflags=${RUSTFLAGS:-}"
     echo "release_profile=each repository's own, no LTO, default target-cpu"
