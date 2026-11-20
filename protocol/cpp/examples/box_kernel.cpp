@@ -49,7 +49,7 @@ class BoxKernel : public Kernel<Block> {
         return out;
     }
 
-    Block make(const Primitive& p) const override {
+    Block make(const Primitive& p) override {
         const auto* box = std::get_if<Box>(&p);
         if (box == nullptr) {
             throw Refusal::unsupported("this kernel makes only boxes");
@@ -60,32 +60,32 @@ class BoxKernel : public Kernel<Block> {
         return Block{box->frame, box->size};
     }
 
-    Block unite(const Block&, const Block&) const override {
+    Block unite(const Block&, const Block&) override {
         throw Refusal::unsupported("no booleans");
     }
-    Block intersection(const Block&, const Block&) const override {
+    Block intersection(const Block&, const Block&) override {
         throw Refusal::unsupported("no booleans");
     }
-    Block difference(const Block&, const Block&) const override {
+    Block difference(const Block&, const Block&) override {
         throw Refusal::unsupported("no booleans");
     }
 
-    double volume(const Block& s) const override {
+    double volume(const Block& s) override {
         return s.size[0] * s.size[1] * s.size[2];
     }
 
-    double area(const Block& s) const override {
+    double area(const Block& s) override {
         const auto [a, b, c] = s.size;
         return 2.0 * (a * b + b * c + c * a);
     }
 
-    std::vector<std::string> check(const Block&) const override {
+    std::vector<std::string> check(const Block&) override {
         return {};
     }
 
     // A point is placed by its coordinates along the box's axes: inside each span by more than the
     // tolerance is in, outside any span by more than it is out, and anything else is on.
-    std::vector<Side> classify(const Block& s, const std::vector<Vec3>& points) const override {
+    std::vector<Side> classify(const Block& s, const std::vector<Vec3>& points) override {
         std::vector<Side> out;
         const Frame& f = s.frame;
         for (const Vec3& p : points) {
@@ -106,5 +106,6 @@ class BoxKernel : public Kernel<Block> {
 } // namespace
 
 int main() {
-    return serve(BoxKernel{});
+    BoxKernel kernel;
+    return serve(kernel);
 }

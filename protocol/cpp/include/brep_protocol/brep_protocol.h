@@ -14,6 +14,7 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -259,9 +260,10 @@ inline const char* word(Side side) {
         return "in";
     case Side::On:
         return "on";
-    default:
+    case Side::Out:
         return "out";
     }
+    throw std::logic_error("unknown Side");
 }
 
 // A triangle mesh: positions, and triangles as three indices each.
@@ -306,9 +308,10 @@ inline const char* word(Op op) {
         return "union";
     case Op::Intersection:
         return "intersection";
-    default:
+    case Op::Difference:
         return "difference";
     }
+    throw std::logic_error("unknown Op");
 }
 
 // A solid's volume, area and validity problems, gathered by `Kernel::measure`.
@@ -328,9 +331,10 @@ inline const char* word(Kind kind) {
         return "unsupported";
     case Kind::Invalid:
         return "invalid";
-    default:
+    case Kind::Failed:
         return "failed";
     }
+    throw std::logic_error("unknown Kind");
 }
 
 // A request declined: of which kind, and the kernel's reason in its own words. A method throws it.
@@ -383,151 +387,139 @@ class Kernel {
     }
 
     // Every constructor, each an alternative of `Primitive`.
-    virtual Solid make(const Primitive& p) const = 0;
-    virtual Solid unite(const Solid& a, const Solid& b) const = 0;
-    virtual Solid intersection(const Solid& a, const Solid& b) const = 0;
-    virtual Solid difference(const Solid& a, const Solid& b) const = 0;
-    virtual double volume(const Solid& s) const = 0;
-    virtual double area(const Solid& s) const = 0;
+    virtual Solid make(const Primitive& p) = 0;
+    virtual Solid unite(const Solid& a, const Solid& b) = 0;
+    virtual Solid intersection(const Solid& a, const Solid& b) = 0;
+    virtual Solid difference(const Solid& a, const Solid& b) = 0;
+    virtual double volume(const Solid& s) = 0;
+    virtual double area(const Solid& s) = 0;
     // Validity problems the kernel's own checker finds; empty when valid.
-    virtual std::vector<std::string> check(const Solid& s) const = 0;
+    virtual std::vector<std::string> check(const Solid& s) = 0;
 
-    virtual std::vector<Side> classify(const Solid&, const std::vector<Vec3>&) const {
+    virtual std::vector<Side> classify(const Solid&, const std::vector<Vec3>&) {
         throw Refusal::unsupported("classify is not supported");
     }
-    virtual std::vector<Vec3> closest(const Solid&, const std::vector<Vec3>&) const {
+    virtual std::vector<Vec3> closest(const Solid&, const std::vector<Vec3>&) {
         throw Refusal::unsupported("closest is not supported");
     }
     // `nullopt` at a crease, or off the boundary.
-    virtual std::vector<std::optional<Vec3>> normal(const Solid&, const std::vector<Vec3>&) const {
+    virtual std::vector<std::optional<Vec3>> normal(const Solid&, const std::vector<Vec3>&) {
         throw Refusal::unsupported("normal is not supported");
     }
-    virtual Solid fillet(const Solid&, const std::vector<Vec3>&, double) const {
+    virtual Solid fillet(const Solid&, const std::vector<Vec3>&, double) {
         throw Refusal::unsupported("fillet is not supported");
     }
-    virtual Solid
-    fillet_radii(const Solid&, const std::vector<Vec3>&, const std::vector<double>&) const {
+    virtual Solid fillet_radii(const Solid&, const std::vector<Vec3>&, const std::vector<double>&) {
         throw Refusal::unsupported("fillet_radii is not supported");
     }
     virtual Solid
-    chamfer_distances(const Solid&, const std::vector<Vec3>&, const std::vector<double>&) const {
+    chamfer_distances(const Solid&, const std::vector<Vec3>&, const std::vector<double>&) {
         throw Refusal::unsupported("chamfer_distances is not supported");
     }
-    virtual Solid chamfer_two(const Solid&,
-                              const Vec3& /*edge*/,
-                              const Vec3& /*face*/,
-                              double /*d1*/,
-                              double /*d2*/) const {
+    virtual Solid chamfer_two(
+        const Solid&, const Vec3& /*edge*/, const Vec3& /*face*/, double /*d1*/, double /*d2*/) {
         throw Refusal::unsupported("chamfer_two is not supported");
     }
     virtual Solid fillet_variable(const Solid&,
                                   const Vec3& /*edge*/,
                                   const Vec3& /*from*/,
                                   double /*r_from*/,
-                                  double /*r_to*/) const {
+                                  double /*r_to*/) {
         throw Refusal::unsupported("fillet_variable is not supported");
     }
     virtual Solid
-    fillet_g2(const Solid&, const std::vector<Vec3>&, double /*offset*/, double /*center*/) const {
+    fillet_g2(const Solid&, const std::vector<Vec3>&, double /*offset*/, double /*center*/) {
         throw Refusal::unsupported("fillet_g2 is not supported");
     }
     virtual Solid
-    fillet_conic(const Solid&, const std::vector<Vec3>&, double /*setback*/, double /*rho*/) const {
+    fillet_conic(const Solid&, const std::vector<Vec3>&, double /*setback*/, double /*rho*/) {
         throw Refusal::unsupported("fillet_conic is not supported");
     }
-    virtual Solid fillet_setback(const Solid&,
-                                 const std::vector<Vec3>&,
-                                 double /*radius*/,
-                                 double /*setback*/) const {
+    virtual Solid
+    fillet_setback(const Solid&, const std::vector<Vec3>&, double /*radius*/, double /*setback*/) {
         throw Refusal::unsupported("fillet_setback is not supported");
     }
     virtual Solid fillet_setback_g2(const Solid&,
                                     const std::vector<Vec3>&,
                                     double /*radius*/,
-                                    double /*setback*/) const {
+                                    double /*setback*/) {
         throw Refusal::unsupported("fillet_setback_g2 is not supported");
     }
-    virtual Solid fillet_faces(const Solid&,
-                               const Vec3& /*face_a*/,
-                               const Vec3& /*face_b*/,
-                               double /*radius*/) const {
+    virtual Solid
+    fillet_faces(const Solid&, const Vec3& /*face_a*/, const Vec3& /*face_b*/, double /*radius*/) {
         throw Refusal::unsupported("fillet_faces is not supported");
     }
     virtual Solid full_round(const Solid&,
                              const Vec3& /*side_a*/,
                              const Vec3& /*middle*/,
-                             const Vec3& /*side_b*/) const {
+                             const Vec3& /*side_b*/) {
         throw Refusal::unsupported("full_round is not supported");
     }
     // `[k1, k2]`, `k1 ≥ k2`; `nullopt` where the nearest point lies on a crease.
-    virtual std::vector<std::optional<Vec2>> curvature(const Solid&,
-                                                       const std::vector<Vec3>&) const {
+    virtual std::vector<std::optional<Vec2>> curvature(const Solid&, const std::vector<Vec3>&) {
         throw Refusal::unsupported("curvature is not supported");
     }
-    virtual Projection
-    project(const Solid&, const Vec3& /*direction*/, double /*tolerance*/) const {
+    virtual Projection project(const Solid&, const Vec3& /*direction*/, double /*tolerance*/) {
         throw Refusal::unsupported("project is not supported");
     }
-    virtual Solid chamfer(const Solid&, const std::vector<Vec3>&, double) const {
+    virtual Solid chamfer(const Solid&, const std::vector<Vec3>&, double) {
         throw Refusal::unsupported("chamfer is not supported");
     }
-    virtual std::string write_step(const Solid&) const {
+    virtual std::string write_step(const Solid&) {
         throw Refusal::unsupported("write_step is not supported");
     }
-    virtual Solid read_step(const std::string&) const {
+    virtual Solid read_step(const std::string&) {
         throw Refusal::unsupported("read_step is not supported");
     }
     // `nullopt` for an empty solid.
-    virtual std::optional<Vec3> centroid(const Solid&) const {
+    virtual std::optional<Vec3> centroid(const Solid&) {
         throw Refusal::unsupported("centroid is not supported");
     }
-    virtual std::array<Vec3, 3> inertia(const Solid&) const {
+    virtual std::array<Vec3, 3> inertia(const Solid&) {
         throw Refusal::unsupported("inertia is not supported");
     }
-    virtual double distance(const Solid&, const Solid&) const {
+    virtual double distance(const Solid&, const Solid&) {
         throw Refusal::unsupported("distance is not supported");
     }
-    virtual std::array<std::uint64_t, 3> betti(const Solid&) const {
+    virtual std::array<std::uint64_t, 3> betti(const Solid&) {
         throw Refusal::unsupported("betti is not supported");
     }
-    virtual double
-    section_area(const Solid&, const Vec3& /*origin*/, const Vec3& /*normal*/) const {
+    virtual double section_area(const Solid&, const Vec3& /*origin*/, const Vec3& /*normal*/) {
         throw Refusal::unsupported("section_area is not supported");
     }
-    virtual Mesh mesh(const Solid&, double /*tolerance*/) const {
+    virtual Mesh mesh(const Solid&, double /*tolerance*/) {
         throw Refusal::unsupported("mesh is not supported");
     }
-    virtual Display display(const Solid&, double /*tolerance*/) const {
+    virtual Display display(const Solid&, double /*tolerance*/) {
         throw Refusal::unsupported("display is not supported");
     }
-    virtual Solid offset(const Solid&, double /*distance*/) const {
+    virtual Solid offset(const Solid&, double /*distance*/) {
         throw Refusal::unsupported("offset is not supported");
     }
-    virtual Solid
-    shell(const Solid&, const std::vector<Vec3>& /*open*/, double /*thickness*/) const {
+    virtual Solid shell(const Solid&, const std::vector<Vec3>& /*open*/, double /*thickness*/) {
         throw Refusal::unsupported("shell is not supported");
     }
     virtual Solid draft(const Solid&,
                         const std::vector<Vec3>& /*faces*/,
                         const Vec3& /*origin*/,
                         const Vec3& /*pull*/,
-                        double /*angle*/) const {
+                        double /*angle*/) {
         throw Refusal::unsupported("draft is not supported");
     }
-    virtual Solid transform(const Solid&, const Matrix&) const {
+    virtual Solid transform(const Solid&, const Matrix&) {
         throw Refusal::unsupported("transform is not supported");
     }
-    virtual Solid affine(const Solid&, const Matrix&) const {
+    virtual Solid affine(const Solid&, const Matrix&) {
         throw Refusal::unsupported("affine is not supported");
     }
     virtual std::vector<double>
-    raycast(const Solid&, const Vec3& /*origin*/, const Vec3& /*direction*/) const {
+    raycast(const Solid&, const Vec3& /*origin*/, const Vec3& /*direction*/) {
         throw Refusal::unsupported("raycast is not supported");
     }
     // `raycast` for many rays, each an origin and a direction. A kernel that prepares a solid for
     // casting overrides it to prepare once.
     virtual std::vector<std::vector<double>>
-    raycasts(const Solid& s, const std::vector<std::pair<Vec3, Vec3>>& rays) const {
+    raycasts(const Solid& s, const std::vector<std::pair<Vec3, Vec3>>& rays) {
         std::vector<std::vector<double>> out;
         out.reserve(rays.size());
         for (const auto& [origin, direction] : rays) {
@@ -535,59 +527,55 @@ class Kernel {
         }
         return out;
     }
-    virtual Meeting interference(const Solid&, const Solid&) const {
+    virtual Meeting interference(const Solid&, const Solid&) {
         throw Refusal::unsupported("interference is not supported");
     }
     // The kernel's own union of many solids in one call; never a run of pairwise unions.
-    virtual Solid union_all(const Solids&) const {
+    virtual Solid union_all(const Solids&) {
         throw Refusal::unsupported("union_all is not supported");
     }
-    virtual Solid difference_all(const Solid& /*target*/, const Solids& /*tools*/) const {
+    virtual Solid difference_all(const Solid& /*target*/, const Solids& /*tools*/) {
         throw Refusal::unsupported("difference_all is not supported");
     }
     virtual Solid
-    offset_faces(const Solid&, const std::vector<Vec3>& /*faces*/, double /*distance*/) const {
+    offset_faces(const Solid&, const std::vector<Vec3>& /*faces*/, double /*distance*/) {
         throw Refusal::unsupported("offset_faces is not supported");
     }
     virtual Solid loft_through(const Frame&,
                                const std::vector<Profile>&,
-                               const std::vector<double>& /*heights*/) const {
+                               const std::vector<double>& /*heights*/) {
         throw Refusal::unsupported("loft_through is not supported");
     }
-    virtual Solid delete_faces(const Solid&, const std::vector<Vec3>& /*faces*/) const {
+    virtual Solid delete_faces(const Solid&, const std::vector<Vec3>& /*faces*/) {
         throw Refusal::unsupported("delete_faces is not supported");
     }
-    virtual Solid
-    move_faces(const Solid&, const std::vector<Vec3>& /*faces*/, const Matrix&) const {
+    virtual Solid move_faces(const Solid&, const std::vector<Vec3>& /*faces*/, const Matrix&) {
         throw Refusal::unsupported("move_faces is not supported");
     }
-    virtual Solid
-    thicken(const Solid&, const std::vector<Vec3>& /*faces*/, double /*thickness*/) const {
+    virtual Solid thicken(const Solid&, const std::vector<Vec3>& /*faces*/, double /*thickness*/) {
         throw Refusal::unsupported("thicken is not supported");
     }
     // The part on the normal's side, then the part on the other.
     virtual std::pair<Solid, Solid>
-    split(const Solid&, const Vec3& /*origin*/, const Vec3& /*normal*/) const {
+    split(const Solid&, const Vec3& /*origin*/, const Vec3& /*normal*/) {
         throw Refusal::unsupported("split is not supported");
     }
     // The low and high corners.
-    virtual std::array<Vec3, 2> bounding_box(const Solid&) const {
+    virtual std::array<Vec3, 2> bounding_box(const Solid&) {
         throw Refusal::unsupported("bounding_box is not supported");
     }
-    virtual std::vector<std::vector<Vec3>> section(const Solid&,
-                                                   const Vec3& /*origin*/,
-                                                   const Vec3& /*normal*/,
-                                                   double /*tolerance*/) const {
+    virtual std::vector<std::vector<Vec3>>
+    section(const Solid&, const Vec3& /*origin*/, const Vec3& /*normal*/, double /*tolerance*/) {
         throw Refusal::unsupported("section is not supported");
     }
-    virtual Solid sew(const std::string& /*text*/, double /*tolerance*/) const {
+    virtual Solid sew(const std::string& /*text*/, double /*tolerance*/) {
         throw Refusal::unsupported("sew is not supported");
     }
     // Releases every solid this caller made, once it is done with them.
-    virtual void reset() const {}
+    virtual void reset() {}
 
     // Whether the solid holds each point, its boundary counted in: `classify` read as yes or no.
-    virtual std::vector<bool> holds(const Solid& s, const std::vector<Vec3>& points) const {
+    virtual std::vector<bool> holds(const Solid& s, const std::vector<Vec3>& points) {
         std::vector<bool> out;
         for (Side side : classify(s, points)) {
             out.push_back(side != Side::Out);
@@ -595,21 +583,22 @@ class Kernel {
         return out;
     }
 
-    virtual Solid boolean(Op op, const Solid& a, const Solid& b) const {
+    virtual Solid boolean(Op op, const Solid& a, const Solid& b) {
         switch (op) {
         case Op::Union:
             return unite(a, b);
         case Op::Intersection:
             return intersection(a, b);
-        default:
+        case Op::Difference:
             return difference(a, b);
         }
+        throw std::logic_error("unknown Op");
     }
 
     // A checker that declines a solid has not found it valid: its reason is an issue, unless the
     // kernel has no checker to ask. A measure the kernel could not take is no number, and its
     // reason an issue.
-    virtual Measure measure(const Solid& s) const {
+    virtual Measure measure(const Solid& s) {
         Measure out{std::nan(""), std::nan(""), {}};
         try {
             out.issues = check(s);
@@ -619,7 +608,7 @@ class Kernel {
                                      word(e.kind) + ": " + e.reason);
             }
         }
-        const auto taken = [&](const char* name, double (Kernel::*method)(const Solid&) const) {
+        const auto taken = [&](const char* name, double (Kernel::*method)(const Solid&)) {
             try {
                 return (this->*method)(s);
             } catch (const Refusal& e) {
@@ -1008,7 +997,7 @@ class Store {
 
 // The value one request returns, or the refusal it throws.
 template <class S>
-Json answer(const Kernel<S>& k, const Json& req, Store<S>& solids) {
+Json answer(Kernel<S>& k, const Json& req, Store<S>& solids) {
     using wire::at;
     const auto solid = [&](const char* key) -> const S& { return solids.get(at(req, key)); };
     const auto num = [&](const char* key) { return wire::num(req, key); };
@@ -1272,7 +1261,7 @@ Json answer(const Kernel<S>& k, const Json& req, Store<S>& solids) {
 // One request line's reply: `ok`, `err` for a refusal, or `crash` for any other exception, after
 // which the worker carries on.
 template <class S>
-Json reply(const Kernel<S>& k, const std::string& line, Store<S>& solids) {
+Json reply(Kernel<S>& k, const std::string& line, Store<S>& solids) {
     Json req;
     try {
         req = Json::parse(line);
@@ -1303,7 +1292,7 @@ Json reply(const Kernel<S>& k, const std::string& line, Store<S>& solids) {
 
 // Answers requests from `in` until it closes, each reply one line on `out`.
 template <class S>
-void serve(const Kernel<S>& k, std::istream& in, std::FILE* out) {
+void serve(Kernel<S>& k, std::istream& in, std::FILE* out) {
     detail::Store<S> solids;
     std::string line;
     while (std::getline(in, line)) {
@@ -1317,7 +1306,7 @@ void serve(const Kernel<S>& k, std::istream& in, std::FILE* out) {
 
 // Answers the protocol on stdin and stdout until stdin closes.
 template <class S>
-int serve(const Kernel<S>& k) {
+int serve(Kernel<S>& k) {
     std::ios::sync_with_stdio(false);
     serve(k, std::cin, stdout);
     return 0;

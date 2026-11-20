@@ -17,7 +17,9 @@ function, value and message.
 - `Primitive`, `Profile`, `Frame` and the other types hold the values a request carries.
 - `Kernel<Solid>` is the class an adapter derives from, with one virtual method per function of the
   protocol. Ten are pure virtual. Every other method refuses the call as `unsupported` unless the
-  adapter overrides it.
+  adapter overrides it. `Solid` must be movable: `serve` moves each solid a method returns into its
+  store. The methods that describe the kernel, such as `name` and `tolerance`, are `const`; the
+  operations are not, so a kernel may keep state of its own between calls.
 - `serve` answers the protocol on stdin and stdout with a `Kernel`. It holds the solids by handle.
   A kernel that prints to the standard output corrupts the replies: its adapter sends that output
   elsewhere, or passes `serve` a stream of its own for the replies.
@@ -49,7 +51,8 @@ target_link_libraries(my-adapter PRIVATE brep_protocol::brep_protocol)
 ```
 
 It uses an installed nlohmann/json 3.11 or later where CMake finds one, and otherwise fetches the
-release by its hash.
+release by its hash. A build without CMake needs `protocol/cpp/include` and nlohmann/json 3.11 or
+later on the include path, and C++17.
 
 An adapter derives from `Kernel` with one call of its kernel per method, and calls `serve` from
 `main`:
@@ -64,16 +67,19 @@ class Adapter : public Kernel<my_kernel::Solid> {
     std::string name() const override { return "my-kernel"; }
     std::string version() const override { return my_kernel::VERSION; }
     double tolerance() const override { return 1e-7; }
-    Solid make(const Primitive& p) const override;
-    Solid unite(const Solid& a, const Solid& b) const override;
-    Solid intersection(const Solid& a, const Solid& b) const override;
-    Solid difference(const Solid& a, const Solid& b) const override;
-    double volume(const Solid& s) const override;
-    double area(const Solid& s) const override;
-    std::vector<std::string> check(const Solid& s) const override;
+    Solid make(const Primitive& p) override;
+    Solid unite(const Solid& a, const Solid& b) override;
+    Solid intersection(const Solid& a, const Solid& b) override;
+    Solid difference(const Solid& a, const Solid& b) override;
+    double volume(const Solid& s) override;
+    double area(const Solid& s) override;
+    std::vector<std::string> check(const Solid& s) override;
 };
 
-int main() { return serve(Adapter{}); }
+int main() {
+    Adapter adapter;
+    return serve(adapter);
+}
 ```
 
 `union` is a keyword in C++, so the protocol's `union` is the method `unite`.

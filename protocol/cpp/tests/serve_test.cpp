@@ -42,25 +42,25 @@ class Bare : public Kernel<int> {
     std::vector<std::string> unsupported() const override {
         return {"slab", "sew"};
     }
-    int make(const Primitive& p) const override {
+    int make(const Primitive& p) override {
         return static_cast<int>(p.index());
     }
-    int unite(const int&, const int&) const override {
+    int unite(const int&, const int&) override {
         return 0;
     }
-    int intersection(const int&, const int&) const override {
+    int intersection(const int&, const int&) override {
         return 0;
     }
-    int difference(const int&, const int&) const override {
+    int difference(const int&, const int&) override {
         return 0;
     }
-    double volume(const int&) const override {
+    double volume(const int&) override {
         throw std::runtime_error("lost");
     }
-    double area(const int&) const override {
+    double area(const int&) override {
         throw std::logic_error("mine");
     }
-    std::vector<std::string> check(const int&) const override {
+    std::vector<std::string> check(const int&) override {
         throw Refusal(declines_, "no verdict");
     }
     std::optional<Refusal> refusal_for(std::exception_ptr e) const override {
@@ -77,7 +77,7 @@ class Bare : public Kernel<int> {
     Kind declines_;
 };
 
-Json ask(const Kernel<int>& k, detail::Store<int>& solids, const std::string& line) {
+Json ask(Kernel<int>& k, detail::Store<int>& solids, const std::string& line) {
     return detail::reply(k, line, solids);
 }
 
@@ -88,7 +88,7 @@ const std::string SQUARE =
     R"( {"line": [[0, 2], [0, 0]]}]])";
 
 void every_listed_function_is_a_command_serve_knows() {
-    const Bare k;
+    Bare k;
     for (const char* f : FUNCTIONS) {
         detail::Store<int> solids;
         const Json r = ask(k, solids, std::string(R"({"cmd": ")") + f + "\"}");
@@ -102,7 +102,7 @@ void every_listed_function_is_a_command_serve_knows() {
 }
 
 void hello_lists_what_the_kernel_offers_and_classify_refuses_where_it_has_none() {
-    const Bare k;
+    Bare k;
     detail::Store<int> solids;
     const Json hello = ask(k, solids, R"({"cmd": "hello"})")["ok"];
     const auto supports = hello["supports"].get<std::vector<std::string>>();
@@ -117,7 +117,7 @@ void hello_lists_what_the_kernel_offers_and_classify_refuses_where_it_has_none()
 }
 
 void refusals_crashes_and_handles() {
-    const Bare k(Kind::Invalid);
+    Bare k(Kind::Invalid);
     detail::Store<int> solids;
     ask(k, solids, R"({"cmd": "sphere", )" + FRAME + R"(, "radius": 1})");
     expect(ask(k, solids, R"({"cmd": "check", "s": 1})") ==
@@ -201,28 +201,28 @@ class Unchecked : public Kernel<int> {
     double tolerance() const override {
         return 1e-7;
     }
-    int make(const Primitive&) const override {
+    int make(const Primitive&) override {
         return 0;
     }
-    int unite(const int&, const int&) const override {
+    int unite(const int&, const int&) override {
         return 1;
     }
-    int intersection(const int&, const int&) const override {
+    int intersection(const int&, const int&) override {
         return 2;
     }
-    int difference(const int&, const int&) const override {
+    int difference(const int&, const int&) override {
         return 3;
     }
-    double volume(const int&) const override {
+    double volume(const int&) override {
         return 1.0;
     }
-    double area(const int&) const override {
+    double area(const int&) override {
         throw Refusal::failed("no area");
     }
-    std::vector<std::string> check(const int&) const override {
+    std::vector<std::string> check(const int&) override {
         throw Refusal(declines_, "no verdict");
     }
-    std::vector<Side> classify(const int&, const std::vector<Vec3>& points) const override {
+    std::vector<Side> classify(const int&, const std::vector<Vec3>& points) override {
         std::vector<Side> out;
         for (std::size_t i = 0; i < points.size(); i++) {
             out.push_back(i == 0 ? Side::In : i == 1 ? Side::On : Side::Out);
@@ -243,7 +243,7 @@ void a_checker_that_declines_is_an_issue_and_a_kernel_without_one_is_not_judged(
            "a declined check and a refused measure are issues");
     expect(Unchecked(Kind::Unsupported).measure(0).issues.size() == 1,
            "a kernel with no checker is not judged");
-    const Unchecked k(Kind::Failed);
+    Unchecked k(Kind::Failed);
     expect(k.boolean(Op::Union, 0, 0) == 1 && k.boolean(Op::Intersection, 0, 0) == 2 &&
                k.boolean(Op::Difference, 0, 0) == 3,
            "boolean calls the boolean it names");
