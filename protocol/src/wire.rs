@@ -2,7 +2,10 @@
 
 use serde_json::Value;
 
+use crate::Refusal;
 use crate::model::{Frame, PathSeg, Primitive, Spline, Vec3};
+use crate::motion::Motion;
+use crate::path::PathCurve;
 use crate::profile::{Profile, Seg};
 
 fn num(v: &Value, key: &str) -> Result<f64, String> {
@@ -46,6 +49,67 @@ pub(crate) fn frame(v: &Value) -> Result<Frame, String> {
         y: vec3(&v["y"])?,
         z: vec3(&v["z"])?,
     })
+}
+
+fn spline3(v: &Value) -> Result<PathCurve, String> {
+    Ok(PathCurve {
+        degree: integer(&v["degree"]).ok_or("`degree` is not a whole number")? as usize,
+        knots: nums(&v["knots"])?,
+        ctrl: v["ctrl"]
+            .as_array()
+            .ok_or("`ctrl` is not an array")?
+            .iter()
+            .map(vec3)
+            .collect::<Result<_, _>>()?,
+    })
+}
+
+/// A motion of a kind this version does not know is one the adapter cannot do, and any other
+/// misreading a request at fault.
+pub(crate) fn motion(v: &Value) -> Result<Motion, Refusal> {
+    let failed = |e: String| Refusal::failed(format!("motion: {e}"));
+    if let Some(d) = v.get("slide") {
+        return Ok(Motion::Slide {
+            vector: vec3(d).map_err(failed)?,
+        });
+    }
+    if let Some(t) = v.get("turn") {
+        return Ok(Motion::Turn {
+            origin: vec3(&t["origin"]).map_err(failed)?,
+            axis: vec3(&t["axis"]).map_err(failed)?,
+            angle: num(t, "angle").map_err(failed)?,
+        });
+    }
+    if let Some(s) = v.get("screw") {
+        return Ok(Motion::Screw {
+            origin: vec3(&s["origin"]).map_err(failed)?,
+            axis: vec3(&s["axis"]).map_err(failed)?,
+            rise: num(s, "rise").map_err(failed)?,
+            angle: num(s, "angle").map_err(failed)?,
+        });
+    }
+    let Some(pair) = v.get("then") else {
+        return Err(match v.as_object() {
+            Some(o) if !o.is_empty() => Refusal::unsupported(format!(
+                "unknown motion `{}`",
+                o.keys().next().map_or("", String::as_str)
+            )),
+            _ => failed("a motion is a `slide`, a `turn`, a `screw` or a `then`".into()),
+        });
+    };
+    let [first, second] = pair.as_array().map_or(&[][..], Vec::as_slice) else {
+        return Err(failed("a `then` is two motions".into()));
+    };
+    Ok(Motion::Then(
+        Box::new(motion(first)?),
+        Box::new(motion(second)?),
+    ))
+}
+
+impl Motion {
+    pub fn from_json(v: &Value) -> Result<Motion, String> {
+        motion(v).map_err(|e| e.reason)
+    }
 }
 
 fn seg(v: &Value) -> Result<Seg, String> {
@@ -201,26 +265,12 @@ impl Primitive {
                         })
                         .collect::<Result<_, String>>()?,
                 },
-                "sweep_path" => {
-                    let path = &v["path"];
-                    Primitive::SweepPath {
-                        frame,
-                        profile: profile()?,
-                        path: crate::path::PathCurve {
-                            degree: integer(&path["degree"])
-                                .ok_or("`degree` is not a whole number")?
-                                as usize,
-                            knots: nums(&path["knots"])?,
-                            ctrl: path["ctrl"]
-                                .as_array()
-                                .ok_or("`ctrl` is not an array")?
-                                .iter()
-                                .map(vec3)
-                                .collect::<Result<_, _>>()?,
-                        },
-                        twist: v["twist"].as_f64().ok_or("`twist` is not a number")?,
-                    }
-                }
+                "sweep_path" => Primitive::SweepPath {
+                    frame,
+                    profile: profile()?,
+                    path: spline3(&v["path"])?,
+                    twist: v["twist"].as_f64().ok_or("`twist` is not a number")?,
+                },
                 "slab" => Primitive::Slab {
                     frame,
                     size: vec2(&v["size"])?,

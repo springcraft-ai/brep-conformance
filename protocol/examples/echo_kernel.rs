@@ -10,7 +10,7 @@
 use brep_protocol::model::{Frame, Primitive, Side, Vec3};
 use brep_protocol::profile::Profile;
 use brep_protocol::{Display, DisplayFace, Mesh, Projection};
-use brep_protocol::{FUNCTIONS, Kernel, Kind, Meeting, Refusal};
+use brep_protocol::{FUNCTIONS, Kernel, Kind, Meeting, Motion, Refusal};
 use serde_json::{Value, json};
 
 struct Echo;
@@ -355,6 +355,9 @@ impl Kernel for Echo {
     }
     fn thicken(&mut self, s: &Value, faces: &[Vec3], thickness: f64) -> Result<Value, Refusal> {
         Ok(json!({"op": "thicken", "s": s, "faces": faces, "thickness": thickness}))
+    }
+    fn sweep_solid(&mut self, s: &Value, motion: &Motion) -> Result<Value, Refusal> {
+        Ok(json!({"op": "sweep_solid", "s": s, "motion": motion.to_json()}))
     }
     fn split(&mut self, s: &Value, origin: Vec3, normal: Vec3) -> Result<(Value, Value), Refusal> {
         let part = |side: &str| json!({"op": "split", "side": side, "s": s, "origin": origin, "normal": normal});

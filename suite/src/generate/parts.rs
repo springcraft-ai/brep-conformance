@@ -57,6 +57,7 @@ impl Part {
             pull: None,
             radii: Vec::new(),
             matrix: None,
+            motion: None,
         }));
         let op = if add { Op::Union } else { Op::Difference };
         self.want = Shape::bool(op, self.want, region);
@@ -1675,6 +1676,7 @@ pub(super) fn enclosure(r: &mut Rng) -> Drawn {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let mut part = Part::new(ext(Frame::at([0.0; 3]), vec![outer], h));
     part.steps.push(Step::Act(shell));

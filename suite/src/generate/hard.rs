@@ -359,6 +359,7 @@ fn fillet_of(points: Vec<Vec3>, size: f64) -> Feature {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     }
 }
 
@@ -471,6 +472,7 @@ pub(super) fn short_edges(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: chosen.iter().map(|&j| radii[j]).collect(),
         matrix: None,
+        motion: None,
     };
     (prism_of(&pts, h), f, want.into(), Exact::default())
 }
@@ -616,6 +618,7 @@ pub(super) fn offset_past_hole(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let exact = Exact {
         result_volume: Some(v),

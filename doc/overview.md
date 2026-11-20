@@ -34,7 +34,7 @@ A kernel's headline number is the share of all cases it passes at 1e-7 mm.
 | Constructors     | Boxes, cylinders, extrusions, revolutions, lofts and sweeps        |
 | Booleans         | Union, intersection and difference, of two solids or many          |
 | Blends           | Fillets and chamfers, of one size or several, and full rounds      |
-| Changing a solid | Offsets, shells, drafts, and moving, deleting and thickening faces |
+| Changing a solid | Offsets, shells, drafts, face edits and sweeps of a moving solid   |
 | Exchange         | Reading and writing STEP, and sewing loose faces                   |
 | Queries          | Volume, area, moments, distance, sections, meshes, rays and more   |
 

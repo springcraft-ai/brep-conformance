@@ -23,6 +23,7 @@ fn fillet(points: Vec<Vec3>, size: f64) -> Step {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     })
 }
 
@@ -34,6 +35,7 @@ fn act_of(act: Act, points: Vec<Vec3>, size: f64) -> Step {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     })
 }
 

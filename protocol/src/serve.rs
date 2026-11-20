@@ -170,6 +170,10 @@ fn answer<K: Kernel>(
                 v("direction")?
             )?));
         }
+        "sweep_solid" => {
+            let m = crate::wire::motion(&req["motion"])?;
+            k.sweep_solid(solid("s")?, &m)?
+        }
         "transform" => {
             let m: [[f64; 4]; 3] = serde_json::from_value(req["matrix"].clone())
                 .map_err(|e| format!("matrix: {e}"))?;

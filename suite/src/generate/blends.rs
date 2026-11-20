@@ -32,6 +32,7 @@ fn act(act: Act, points: Vec<Vec3>, size: f64, radii: Vec<f64>) -> Feature {
         pull: None,
         radii,
         matrix: None,
+        motion: None,
     }
 }
 

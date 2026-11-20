@@ -92,6 +92,25 @@ Json profile(const Profile& p) {
     return loops;
 }
 
+Json motion(const Motion& m) {
+    if (const auto* slide = std::get_if<SlideMotion>(&m.kind)) {
+        return Json{{"slide", slide->vector}};
+    }
+    if (const auto* turn = std::get_if<TurnMotion>(&m.kind)) {
+        return Json{
+            {"turn", {{"origin", turn->origin}, {"axis", turn->axis}, {"angle", turn->angle}}}};
+    }
+    if (const auto* screw = std::get_if<ScrewMotion>(&m.kind)) {
+        return Json{{"screw",
+                     {{"origin", screw->origin},
+                      {"axis", screw->axis},
+                      {"rise", screw->rise},
+                      {"angle", screw->angle}}}};
+    }
+    const auto& then = std::get<ThenMotion>(m.kind);
+    return Json{{"then", Json::array({motion(*then.first), motion(*then.second)})}};
+}
+
 Json path_piece(const PathPiece& piece) {
     if (const auto* line = std::get_if<PathLine>(&piece)) {
         return Json{{"line", line->length}};
@@ -452,6 +471,9 @@ class Echo : public Kernel<Json> {
     }
     Json thicken(const Json& s, const std::vector<Vec3>& faces, double thickness) override {
         return Json{{"op", "thicken"}, {"s", s}, {"faces", faces}, {"thickness", thickness}};
+    }
+    Json sweep_solid(const Json& s, const Motion& m) override {
+        return Json{{"op", "sweep_solid"}, {"s", s}, {"motion", motion(m)}};
     }
     std::pair<Json, Json> split(const Json& s, const Vec3& origin, const Vec3& normal) override {
         const auto part = [&](const char* side) {

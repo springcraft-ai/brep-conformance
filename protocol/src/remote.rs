@@ -10,7 +10,9 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use crate::model::{Op, Primitive, Side, Vec3};
-use crate::{Display, DisplayFace, Kernel, Mesh, PROTOCOL_VERSION, Refusal, TimedOut, speaks};
+use crate::{
+    Display, DisplayFace, Kernel, Mesh, Motion, PROTOCOL_VERSION, Refusal, TimedOut, speaks,
+};
 
 struct Worker {
     child: Child,
@@ -549,6 +551,10 @@ impl Kernel for Remote {
     fn thicken(&mut self, s: &Handle, faces: &[Vec3], thickness: f64) -> Result<Handle, Refusal> {
         self.solid(json!({"cmd": "thicken", "s": s.handle, "faces": faces,
                          "thickness": thickness}))
+    }
+
+    fn sweep_solid(&mut self, s: &Handle, motion: &Motion) -> Result<Handle, Refusal> {
+        self.solid(json!({"cmd": "sweep_solid", "s": s.handle, "motion": motion.to_json()}))
     }
 
     fn split(

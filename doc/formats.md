@@ -71,7 +71,8 @@ A case's fields:
 | `asset_step` | `true` when the case has STEP files ([Assets](#assets))                                                                                                                                                       |
 | `exports`    | With `--glb` or `--step`: the keys written as `glb` and `step`, what could not be drawn or written as `errors`, and as `skipped` a ghost the kernel could not cut or a refused case's input it would not make |
 
-In a feature, `b` is the shape the act must give, and a draft also has its `pull`. A case that must
+In a feature, `b` is the shape the act must give. A draft also has its `pull`, and a sweep of a
+solid its `motion`. A case that must
 be refused passes only when it is refused.
 
 A step is one entry of `ops`. Its fields:

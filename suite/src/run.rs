@@ -992,6 +992,10 @@ fn act<K: Kernel>(k: &mut K, s: &K::Solid, f: &Feature) -> Result<K::Solid, Refu
             k.move_faces(s, &f.points, m)
         }
         Act::Thicken => k.thicken(s, &f.points, f.size),
+        Act::SweepSolid => {
+            let m = f.motion.as_ref().ok_or("a sweep needs its motion")?;
+            k.sweep_solid(s, m)
+        }
         Act::FilletRadii => k.fillet_radii(s, &f.points, &f.radii),
         Act::ChamferDistances => k.chamfer_distances(s, &f.points, &f.radii),
         Act::FilletVariable => {

@@ -16,6 +16,7 @@ mod hard;
 mod parts;
 mod paths;
 mod robust;
+mod sweeps;
 
 pub use paths::{DIRS, test_path};
 
@@ -605,6 +606,7 @@ pub enum Act {
     FilletSetbackG2,
     FilletFaces,
     FullRound,
+    SweepSolid,
 }
 
 impl Act {
@@ -629,6 +631,7 @@ impl Act {
             Act::FilletSetbackG2 => "fillet_setback_g2",
             Act::FilletFaces => "fillet_faces",
             Act::FullRound => "full_round",
+            Act::SweepSolid => "sweep_solid",
         }
     }
 }
@@ -646,6 +649,8 @@ pub struct Feature {
     pub radii: Vec<f64>,
     /// The rigid motion a face move gives the faces, as rows `[R | t]`.
     pub matrix: Option<[[f64; 4]; 3]>,
+    /// What a sweep carries the solid by.
+    pub motion: Option<brep_protocol::Motion>,
 }
 
 impl Feature {
@@ -654,6 +659,7 @@ impl Feature {
             points: self.points.iter().map(|&e| m.point(e)).collect(),
             pull: self.pull.map(|(o, d)| (m.point(o), m.rotate(d))),
             matrix: self.matrix.map(|a| conjugate(&a, m)),
+            motion: self.motion.as_ref().map(|motion| motion.moved(m)),
             ..self.clone()
         }
     }
@@ -669,6 +675,9 @@ impl Feature {
         }
         if let Some(m) = self.matrix {
             v["matrix"] = serde_json::json!(m);
+        }
+        if let Some(m) = &self.motion {
+            v["motion"] = m.to_json();
         }
         v
     }
@@ -1136,6 +1145,30 @@ pub const FEATURE_FAMILIES: &[FeatureFamily] = &[
         version: 1,
         count: 24,
         draw: thicken_face,
+    },
+    FeatureFamily {
+        name: "swept-slides",
+        version: 1,
+        count: 24,
+        draw: sweeps::slides,
+    },
+    FeatureFamily {
+        name: "swept-turns",
+        version: 1,
+        count: 28,
+        draw: sweeps::turns,
+    },
+    FeatureFamily {
+        name: "swept-screws",
+        version: 1,
+        count: 16,
+        draw: sweeps::screws,
+    },
+    FeatureFamily {
+        name: "swept-composed",
+        version: 1,
+        count: 20,
+        draw: sweeps::composed,
     },
     FeatureFamily {
         name: "chamfer-uneven-corners",
@@ -2405,7 +2438,10 @@ pub fn cases(seed: u64) -> Vec<Case> {
                 .chain(&feature.radii)
                 .map(|v| format!("{v:.12e}"))
                 .collect();
-            let key = format!("{}@{}|{}|{}", f.name, f.version, base.key(), nums.join(","));
+            let mut key = format!("{}@{}|{}|{}", f.name, f.version, base.key(), nums.join(","));
+            if let Some(m) = &feature.motion {
+                key = format!("{key}|{}", m.key());
+            }
             out.push(Case {
                 id: format!("{}-{:016x}", f.name, fnv(&rounded_floats(&key))),
                 family: f.name,
@@ -3168,6 +3204,7 @@ fn blended_prism(r: &mut Rng, blend: Act) -> (Primitive, Feature, Primitive) {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     (base, feature, want)
 }
@@ -3225,6 +3262,7 @@ fn blended_rim(r: &mut Rng, blend: Act) -> (Primitive, Feature, Primitive) {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     (base, feature, want)
 }
@@ -4878,6 +4916,7 @@ fn rounded_box(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let exact = Exact {
         result_volume: Some(volume),
@@ -4974,6 +5013,7 @@ fn fillet_chain(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let base = Primitive::Extrude {
         frame: Frame::at([0.0; 3]),
@@ -5045,6 +5085,7 @@ fn rounded_prism(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let base = Primitive::Extrude {
         frame: Frame::at([0.0; 3]),
@@ -5117,6 +5158,7 @@ fn opened_l_prism(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let base = Primitive::Extrude {
         frame: Frame::at([0.0; 3]),
@@ -5256,6 +5298,7 @@ fn uneven_blend(r: &mut Rng, act: Act) -> FeatureDraw {
         pull: None,
         radii: radii.to_vec(),
         matrix: None,
+        motion: None,
     };
     let exact = Exact {
         sound: Some(Sound {
@@ -5288,6 +5331,7 @@ fn offsets(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     match r.next_u64() % 3 {
         0 => {
@@ -5385,6 +5429,7 @@ fn shells(r: &mut Rng) -> FeatureDraw {
             pull: None,
             radii: Vec::new(),
             matrix: None,
+            motion: None,
         };
         let want = Shape::bool(Op::Difference, base.clone(), inner);
         (base, feature, want, exact)
@@ -5421,6 +5466,7 @@ fn shells(r: &mut Rng) -> FeatureDraw {
             pull: None,
             radii: Vec::new(),
             matrix: None,
+            motion: None,
         };
         let want = Shape::bool(Op::Difference, base.clone(), inner);
         (base, feature, want, exact)
@@ -5529,6 +5575,7 @@ fn drafted_box(r: &mut Rng, closing: bool) -> FeatureDraw {
         pull: Some(([0.0; 3], [0.0, 0.0, 1.0])),
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let exact = Exact {
         result_volume: Some(volume),
@@ -5654,6 +5701,7 @@ fn hole_rim(r: &mut Rng) -> FeatureDraw {
             pull: None,
             radii: Vec::new(),
             matrix: None,
+            motion: None,
         };
         let exact = Exact {
             result_volume: Some(volume),
@@ -5708,6 +5756,7 @@ fn hole_rim(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let exact = Exact {
         result_volume: Some(volume),
@@ -5757,6 +5806,7 @@ fn shelled_round(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let exact = Exact {
         result_volume: Some(volume),
@@ -6053,6 +6103,7 @@ fn offset_face(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     match r.next_u64() % 3 {
         0 => {
@@ -6133,6 +6184,7 @@ fn face_act(act: Act, points: Vec<Vec3>, size: f64, matrix: Option<[[f64; 4]; 3]
         pull: None,
         radii: Vec::new(),
         matrix,
+        motion: None,
     }
 }
 
@@ -6996,6 +7048,7 @@ fn closing_offset(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let block = |h: f64| axis_box([0.0, -depth, 0.0], [w, 0.0, h]);
     let mid = -depth / 2.0;
@@ -7303,6 +7356,7 @@ fn uneven_chamfer(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: vec![d2],
         matrix: None,
+        motion: None,
     };
     (
         prism(polygon(&pts)),
@@ -7346,6 +7400,7 @@ fn variable_fillet(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: vec![r_to],
         matrix: None,
+        motion: None,
     };
     // Across the edge from outside it, clear of the block's top and bottom and of its far edges.
     // The edge's two faces are alike there, so the result is its own mirror in the plane between
@@ -7545,6 +7600,7 @@ fn offset_l_prism(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let exact = Exact {
         result_volume: Some(va + vb - vc - k * (h * d * d + 4.0 / 3.0 * d.ppowi(3))),
@@ -7639,6 +7695,7 @@ fn invalid_act(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     (base.clone(), feature, base.into(), Exact::default())
 }
@@ -7663,6 +7720,7 @@ fn invalid_new_act(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii,
         matrix: None,
+        motion: None,
     };
     let (base, feature) = match r.next_u64() % 6 {
         0 => {
@@ -7850,6 +7908,7 @@ fn invalid_blend_size(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let exact = Exact {
         variant: Some(test),
@@ -7881,6 +7940,7 @@ fn invalid_point(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let exact = Exact {
         variant: Some(test),
@@ -7955,13 +8015,13 @@ mod tests {
     fn the_default_seed_draws_the_same_ids_on_every_platform() {
         let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
         let got = format!("{:016x}", fnv(&ids.join("\n")));
-        if got != "855c148b0b9e2297" {
+        if got != "86138a1cd3d791f9" {
             // Every id, so a run elsewhere can be compared with this one case by case.
             for id in &ids {
                 eprintln!("id {id}");
             }
         }
-        assert_eq!(got, "855c148b0b9e2297");
+        assert_eq!(got, "86138a1cd3d791f9");
     }
 
     #[test]

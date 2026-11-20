@@ -148,11 +148,11 @@ fn prim_bounds(p: &Primitive) -> Bounds {
         } => {
             let (lo, hi) = profile.bounds();
             let r = hi[0];
-            let top = hi[1] + rise * angle;
+            let risen = rise * angle;
             bounds_of(corners(
                 &f,
-                [-r, -r, lo[1].min(top)],
-                [r, r, top.max(hi[1])],
+                [-r, -r, lo[1] + risen.min(0.0)],
+                [r, r, hi[1] + risen.max(0.0)],
             ))
         }
         Primitive::Loft {

@@ -36,6 +36,12 @@
 {"cmd":"thicken","s":1,"faces":[[0,0,3]],"thickness":0.2}
 {"cmd":"shell","s":1,"open":[[0,0,3]],"thickness":0.1}
 {"cmd":"draft","s":1,"faces":[[1,0,1]],"origin":[0,0,0],"pull":[0,0,1],"angle":0.05}
+{"cmd":"sweep_solid","s":1,"motion":{"slide":[0,0,3]}}
+{"cmd":"sweep_solid","s":1,"motion":{"then":[{"turn":{"origin":[1,0,0],"axis":[0,0,1],"angle":1.5}},{"screw":{"origin":[0,0,0],"axis":[0,1,0],"rise":0.25,"angle":-2}}]}}
+{"cmd":"sweep_solid","s":1,"motion":{"spin":{"angle":1}}}
+{"cmd":"sweep_solid","s":1,"motion":{"then":[{"slide":[0,0,3]},{"spin":{"angle":1}}]}}
+{"cmd":"sweep_solid","s":1,"motion":{"slide":[0,0]}}
+{"cmd":"sweep_solid","s":1,"motion":{}}
 {"cmd":"sew","text":"ISO-10303-21;\nEND-ISO-10303-21;\n","tolerance":1e-6}
 {"cmd":"read_step","text":"ISO-10303-21; \"quoted\" é ✓"}
 {"cmd":"transform","s":1,"matrix":[[0,-1,0,1],[1,0,0,2],[0,0,1,3]]}

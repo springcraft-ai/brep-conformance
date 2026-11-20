@@ -184,6 +184,7 @@ fn tight_parts(r: &mut Rng) -> (FeatureDraw, Shape) {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     let base = Primitive::Extrude {
         frame: Frame::at([0.0; 3]),
@@ -358,6 +359,7 @@ pub(super) fn mixed_corner(r: &mut Rng) -> FeatureDraw {
         pull: None,
         radii: Vec::new(),
         matrix: None,
+        motion: None,
     };
     // A blend changes nothing farther than 2r from its edge: the convex edges take from within
     // that of them, and the concave edge adds within that of it.

@@ -14,6 +14,7 @@
 #include <exception>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -27,11 +28,11 @@ namespace brep_protocol {
 using Json = nlohmann::json;
 
 // The protocol's version, which `hello` reports.
-inline constexpr const char* PROTOCOL_VERSION = "1.0.0";
+inline constexpr const char* PROTOCOL_VERSION = "1.1.0";
 
 // Every function of this version of the protocol, in the order of doc/api.md. `hello` lists the
 // ones a kernel offers out of these.
-inline const std::array<const char*, 62> FUNCTIONS = {
+inline const std::array<const char*, 63> FUNCTIONS = {
     "box",
     "cylinder",
     "sphere",
@@ -69,6 +70,7 @@ inline const std::array<const char*, 62> FUNCTIONS = {
     "thicken",
     "shell",
     "draft",
+    "sweep_solid",
     "write_step",
     "sew",
     "read_step",
@@ -251,6 +253,31 @@ using Primitive = std::variant<Box,
                                Sweep,
                                SweepPath,
                                Slab>;
+
+// How a solid moves as `τ` runs from 0 to 1, from where it is. doc/api.md defines each.
+struct Motion;
+struct SlideMotion {
+    Vec3 vector;
+};
+struct TurnMotion {
+    Vec3 origin;
+    Vec3 axis;
+    double angle;
+};
+struct ScrewMotion {
+    Vec3 origin;
+    Vec3 axis;
+    double rise;
+    double angle;
+};
+// At `τ` the solid is where `first` puts it, moved by `second`.
+struct ThenMotion {
+    std::shared_ptr<const Motion> first;
+    std::shared_ptr<const Motion> second;
+};
+struct Motion {
+    std::variant<SlideMotion, TurnMotion, ScrewMotion, ThenMotion> kind;
+};
 
 // Where a point lies against a solid: inside it, on its boundary, or outside it.
 enum class Side { In, On, Out };
@@ -555,6 +582,9 @@ class Kernel {
     virtual Solid thicken(const Solid&, const std::vector<Vec3>& /*faces*/, double /*thickness*/) {
         throw Refusal::unsupported("thicken is not supported");
     }
+    virtual Solid sweep_solid(const Solid&, const Motion&) {
+        throw Refusal::unsupported("sweep_solid is not supported");
+    }
     // The part on the normal's side, then the part on the other.
     virtual std::pair<Solid, Solid>
     split(const Solid&, const Vec3& /*origin*/, const Vec3& /*normal*/) {
@@ -822,6 +852,34 @@ inline Spline3 spline3(const Json& v) {
     return Spline3{static_cast<std::size_t>(count(at(v, "degree"), "degree")),
                    numbers(at(v, "knots"), "knots"),
                    points_at(v, "ctrl")};
+}
+
+inline Motion motion(const Json& v) {
+    if (v.is_object() && v.contains("slide")) {
+        return Motion{SlideMotion{vec3(v["slide"], "slide")}};
+    }
+    if (v.is_object() && v.contains("turn")) {
+        const Json& t = v["turn"];
+        return Motion{TurnMotion{vec3_at(t, "origin"), vec3_at(t, "axis"), num(t, "angle")}};
+    }
+    if (v.is_object() && v.contains("screw")) {
+        const Json& s = v["screw"];
+        return Motion{ScrewMotion{
+            vec3_at(s, "origin"), vec3_at(s, "axis"), num(s, "rise"), num(s, "angle")}};
+    }
+    if (!v.is_object() || !v.contains("then")) {
+        // A kind this version does not know is one the adapter cannot do.
+        if (v.is_object() && !v.empty()) {
+            throw Refusal::unsupported("unknown motion `" + v.begin().key() + "`");
+        }
+        throw Refusal::failed("a motion is a `slide`, a `turn`, a `screw` or a `then`");
+    }
+    const auto& pair = list(v["then"], "then");
+    if (pair.size() != 2) {
+        throw Refusal::failed("a `then` is two motions");
+    }
+    return Motion{ThenMotion{std::make_shared<const Motion>(motion(pair[0])),
+                             std::make_shared<const Motion>(motion(pair[1]))}};
 }
 
 // The primitive a shape's JSON or a constructor call describes.
@@ -1121,6 +1179,9 @@ Json answer(Kernel<S>& k, const Json& req, Store<S>& solids) {
     }
     if (c == "draft") {
         return made(k.draft(solid("s"), pts("faces"), vec("origin"), vec("pull"), num("angle")));
+    }
+    if (c == "sweep_solid") {
+        return made(k.sweep_solid(solid("s"), wire::motion(at(req, "motion"))));
     }
     if (c == "transform") {
         return made(k.transform(solid("s"), wire::matrix(at(req, "matrix"))));
