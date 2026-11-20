@@ -17,13 +17,13 @@
     },
     {
       "kernel": "cadrs",
-      "version": "0.2.8 (6cae1559)",
+      "version": "0.2.9 (bb09c367)",
       "license": "MIT OR Apache-2.0",
       "source": "https://github.com/rvdende/cadrs",
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-cadrs",
-        "commit": "f5120753973123e20d15bb31b1846114a0121cb9",
+        "commit": "863598a7ac88c5cb44b4e355abe47a9302f23aab",
         "license": "MIT",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/cadrs-adapter"
