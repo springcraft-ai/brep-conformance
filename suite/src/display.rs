@@ -248,10 +248,12 @@ mod tests {
         ];
         let faces = quads
             .iter()
-            .map(|(q, n)| DisplayFace {
-                positions: q.iter().map(|&i| corner(i)).collect(),
-                normals: vec![*n; 4],
-                triangles: vec![[0, 1, 2], [0, 2, 3]],
+            .map(|(q, n)| {
+                DisplayFace::new(
+                    q.iter().map(|&i| corner(i)).collect(),
+                    vec![*n; 4],
+                    vec![[0, 1, 2], [0, 2, 3]],
+                )
             })
             .collect();
         let mut creases = Vec::new();
@@ -290,7 +292,7 @@ mod tests {
             volume: 1.0,
             area: 6.0,
         };
-        (Display { faces, edges }, want)
+        (Display::new(faces, edges), want)
     }
 
     /// A cone 2 high on the unit disc about the origin, its apex up, in 64 slices, each slice's
@@ -303,16 +305,8 @@ mod tests {
             [a.cos(), a.sin()]
         };
         let ruling = |a: f64| [cos * a.cos(), cos * a.sin(), sin];
-        let mut base = DisplayFace {
-            positions: vec![[0.0; 3]],
-            normals: vec![[0.0, 0.0, -1.0]],
-            triangles: vec![],
-        };
-        let mut side = DisplayFace {
-            positions: vec![],
-            normals: vec![],
-            triangles: vec![],
-        };
+        let mut base = DisplayFace::new(vec![[0.0; 3]], vec![[0.0, 0.0, -1.0]], vec![]);
+        let mut side = DisplayFace::new(vec![], vec![], vec![]);
         for i in 0..n {
             let ([x0, y0], [x1, y1]) = (at(i), at(i + 1));
             base.positions.push([x0, y0, 0.0]);
@@ -350,13 +344,7 @@ mod tests {
             volume: std::f64::consts::PI * h / 3.0,
             area: std::f64::consts::PI * (1.0 + (1.0f64 + h * h).sqrt()),
         };
-        (
-            Display {
-                faces: vec![base, side],
-                edges: vec![rim],
-            },
-            want,
-        )
+        (Display::new(vec![base, side], vec![rim]), want)
     }
 
     #[test]

@@ -449,11 +449,11 @@ pub(crate) fn knurl_band(
         profile: Profile {
             loops: vec![outline, circle([0.0, 0.0], rv - 0.15, false)],
         },
-        path: PathCurve {
-            degree: 3,
-            knots: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
-            ctrl: (0..4).map(|i| [0.0, 0.0, h * i as f64 / 3.0]).collect(),
-        },
+        path: PathCurve::new(
+            3,
+            vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+            (0..4).map(|i| [0.0, 0.0, h * i as f64 / 3.0]).collect(),
+        ),
         twist,
     };
     (band, added)

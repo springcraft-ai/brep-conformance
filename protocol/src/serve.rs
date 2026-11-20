@@ -92,7 +92,8 @@ fn answer<K: Kernel>(
         "hello" => {
             let without = k.unsupported();
             let supports: Vec<&str> = FUNCTIONS
-                .into_iter()
+                .iter()
+                .copied()
                 .filter(|f| !without.iter().any(|u| u == f))
                 .collect();
             return Ok(json!({

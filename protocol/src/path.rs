@@ -36,10 +36,21 @@ fn unit(a: V) -> V {
 
 /// A clamped B-spline in space over `knots[degree] ..= knots[ctrl.len()]`.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct PathCurve {
     pub degree: usize,
     pub knots: Vec<f64>,
     pub ctrl: Vec<V>,
+}
+
+impl PathCurve {
+    pub fn new(degree: usize, knots: Vec<f64>, ctrl: Vec<V>) -> PathCurve {
+        PathCurve {
+            degree,
+            knots,
+            ctrl,
+        }
+    }
 }
 
 /// The derivative's degree, knots and control points.

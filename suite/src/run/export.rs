@@ -167,22 +167,20 @@ fn ghost<K: Kernel>(k: &K, a: &K::Solid, b: &K::Solid, tol: f64) -> Result<Displ
             .and_then(|s| s.get(i))
             .is_none_or(|s| *s != Side::On)
     };
-    Ok(Display {
-        faces: d
-            .faces
+    Ok(Display::new(
+        d.faces
             .into_iter()
             .enumerate()
             .filter(|(i, _)| keep(&on_faces, *i))
             .map(|(_, f)| f)
             .collect(),
-        edges: d
-            .edges
+        d.edges
             .into_iter()
             .enumerate()
             .filter(|(i, _)| keep(&on_edges, *i))
             .map(|(_, e)| e)
             .collect(),
-    })
+    ))
 }
 
 fn write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {

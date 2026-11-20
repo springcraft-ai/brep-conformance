@@ -163,10 +163,7 @@ fn welded(m: &brep_protocol::Mesh) -> brep_protocol::Mesh {
         .map(|t| t.map(|i| to[i as usize]))
         .filter(|t| t[0] != t[1] && t[1] != t[2] && t[2] != t[0])
         .collect();
-    brep_protocol::Mesh {
-        positions,
-        triangles,
-    }
+    brep_protocol::Mesh::new(positions, triangles)
 }
 
 /// Sample points a case's intersection is estimated and classified on.
@@ -4129,14 +4126,14 @@ mod tests {
             self.0.store(false, std::sync::atomic::Ordering::SeqCst);
         }
         fn display(&self, _s: &(), _tolerance: f64) -> Result<brep_protocol::Display, Refusal> {
-            Ok(brep_protocol::Display {
-                faces: vec![brep_protocol::DisplayFace {
-                    positions: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-                    normals: vec![[0.0, 0.0, 1.0]; 3],
-                    triangles: vec![[0, 1, 2]],
-                }],
-                edges: Vec::new(),
-            })
+            Ok(brep_protocol::Display::new(
+                vec![brep_protocol::DisplayFace::new(
+                    vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                    vec![[0.0, 0.0, 1.0]; 3],
+                    vec![[0, 1, 2]],
+                )],
+                Vec::new(),
+            ))
         }
     }
 
@@ -4282,10 +4279,7 @@ mod tests {
             Ok(())
         }
         fn classify(&self, _s: &(), _points: &[Vec3]) -> Result<Vec<crate::model::Side>, Refusal> {
-            Err(Refusal {
-                kind: self.0,
-                reason: "could not place the points".into(),
-            })
+            Err(Refusal::new(self.0, "could not place the points"))
         }
     }
 

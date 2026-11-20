@@ -2903,28 +2903,22 @@ fn blob(rng: &mut Rng, r: f64) -> Spline {
         })
         .collect();
     ctrl.extend_from_within(..3);
-    Spline {
-        degree: 3,
-        knots: (0..n + 7).map(|k| k as f64).collect(),
-        ctrl,
-    }
+    Spline::new(3, (0..n + 7).map(|k| k as f64).collect(), ctrl)
 }
 
 fn turned(s: &Spline, angle: f64, shift: [f64; 2]) -> Spline {
     let (c, si) = (angle.pcos(), angle.psin());
-    Spline {
-        ctrl: s
-            .ctrl
-            .iter()
-            .map(|p| {
-                [
-                    c * p[0] - si * p[1] + shift[0],
-                    si * p[0] + c * p[1] + shift[1],
-                ]
-            })
-            .collect(),
-        ..s.clone()
-    }
+    let ctrl = s
+        .ctrl
+        .iter()
+        .map(|p| {
+            [
+                c * p[0] - si * p[1] + shift[0],
+                si * p[0] + c * p[1] + shift[1],
+            ]
+        })
+        .collect();
+    Spline::new(s.degree, s.knots.clone(), ctrl)
 }
 
 /// Two prisms on spline outlines: crossing at any angle, or one outline and a copy of it shifted
@@ -4578,11 +4572,7 @@ fn path_sweeps(r: &mut Rng) -> (Primitive, Primitive, Exact) {
     let mut knots = vec![0.0; 4];
     knots.extend((1..=inner).map(|i| i as f64 / (inner + 1) as f64));
     knots.extend([1.0; 4]);
-    let path = PathCurve {
-        degree: 3,
-        knots,
-        ctrl,
-    };
+    let path = PathCurve::new(3, knots, ctrl);
     // The least radius of curvature, sampled finely.
     let rho_min = (0..=2000)
         .map(|i| {
@@ -8000,11 +7990,11 @@ mod tests {
 
     #[test]
     fn a_polygon_spline_round_a_unit_square_holds_one_and_runs_four() {
-        let sq = Spline {
-            degree: 1,
-            knots: vec![0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 4.0],
-            ctrl: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]],
-        };
+        let sq = Spline::new(
+            1,
+            vec![0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 4.0],
+            vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]],
+        );
         let (a, l) = sq.area_and_length();
         assert!(
             (a - 1.0).abs() < 1e-12 && (l - 4.0).abs() < 1e-12,

@@ -695,9 +695,9 @@ impl Kernel for Remote {
         let supports: Vec<String> =
             serde_json::from_value(self.hello["supports"].clone()).unwrap_or_default();
         FUNCTIONS
-            .into_iter()
-            .filter(|f| !supports.iter().any(|s| s == f))
-            .map(String::from)
+            .iter()
+            .filter(|&&f| !supports.iter().any(|s| s == f))
+            .map(|&f| String::from(f))
             .collect()
     }
 

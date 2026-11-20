@@ -642,11 +642,11 @@ pub(super) fn helical_gear(z: usize, m: f64, h: f64, beta: f64, hand: f64) -> Dr
         profile: Profile {
             loops: vec![g.outline()],
         },
-        path: PathCurve {
-            degree: 3,
-            knots: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
-            ctrl: (0..4).map(|i| [0.0, 0.0, h * i as f64 / 3.0]).collect(),
-        },
+        path: PathCurve::new(
+            3,
+            vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+            (0..4).map(|i| [0.0, 0.0, h * i as f64 / 3.0]).collect(),
+        ),
         twist: hand * h * beta.ptan() / g.rp,
     };
     let bore_r = g.rf * 0.35;
@@ -2278,11 +2278,11 @@ pub(super) fn plate_cam(r: &mut Rng) -> Drawn {
         })
         .collect();
     ctrl.extend_from_within(..3);
-    let outline = vec![Seg::Spline(Spline {
-        degree: 3,
-        knots: (0..n + 7).map(|k| k as f64).collect(),
+    let outline = vec![Seg::Spline(Spline::new(
+        3,
+        (0..n + 7).map(|k| k as f64).collect(),
         ctrl,
-    })];
+    ))];
     let t = r.range(5.0, 10.0);
     let hub_r = rb * r.range(0.4, 0.55);
     let hub_h = r.range(4.0, 8.0);

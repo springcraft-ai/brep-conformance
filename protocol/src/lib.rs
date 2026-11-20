@@ -24,7 +24,7 @@ pub const PROTOCOL_VERSION: &str = "1.0.0";
 
 /// Every function of this version of the protocol, in the order of
 /// [doc/api.md](../../doc/api.md). `hello` lists the ones a kernel offers out of these.
-pub const FUNCTIONS: [&str; 62] = [
+pub const FUNCTIONS: &[&str] = &[
     "box",
     "cylinder",
     "sphere",
@@ -103,6 +103,7 @@ pub struct TimedOut(pub String);
 
 /// A triangle mesh: positions, and triangles as three indices each.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct Mesh {
     pub positions: Vec<Vec3>,
     pub triangles: Vec<[u32; 3]>,
@@ -111,6 +112,7 @@ pub struct Mesh {
 /// One face of a [`Display`]: its own vertices, the exact surface's outward normal at each, and
 /// its triangles over them.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct DisplayFace {
     pub positions: Vec<Vec3>,
     pub normals: Vec<Vec3>,
@@ -120,9 +122,35 @@ pub struct DisplayFace {
 /// A solid as a viewer draws it: each face meshed on its own, and the edges that are creases as
 /// polylines.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct Display {
     pub faces: Vec<DisplayFace>,
     pub edges: Vec<Vec<Vec3>>,
+}
+
+impl Mesh {
+    pub fn new(positions: Vec<Vec3>, triangles: Vec<[u32; 3]>) -> Mesh {
+        Mesh {
+            positions,
+            triangles,
+        }
+    }
+}
+
+impl DisplayFace {
+    pub fn new(positions: Vec<Vec3>, normals: Vec<Vec3>, triangles: Vec<[u32; 3]>) -> DisplayFace {
+        DisplayFace {
+            positions,
+            normals,
+            triangles,
+        }
+    }
+}
+
+impl Display {
+    pub fn new(faces: Vec<DisplayFace>, edges: Vec<Vec<Vec3>>) -> Display {
+        Display { faces, edges }
+    }
 }
 
 /// A rigid motion placing a part: rows `[R | t]`, `R` a rotation.
@@ -130,6 +158,7 @@ pub type Placement = [[f64; 4]; 3];
 
 /// Why a kernel declined a request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Kind {
     /// The kernel has no way to do what is asked: not this function, or not with these arguments.
     Unsupported,
@@ -161,12 +190,20 @@ impl Kind {
 
 /// A request declined: of which kind, and the kernel's reason in its own words.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Refusal {
     pub kind: Kind,
     pub reason: String,
 }
 
 impl Refusal {
+    pub fn new(kind: Kind, reason: impl Into<String>) -> Refusal {
+        Refusal {
+            kind,
+            reason: reason.into(),
+        }
+    }
+
     pub fn unsupported(reason: impl Into<String>) -> Refusal {
         Refusal {
             kind: Kind::Unsupported,
@@ -221,6 +258,7 @@ pub struct Meeting {
 /// The plane's axes are `u`, `d × z` made unit (`d × x` when `d` runs along z), across, and
 /// `v = −d × u`, up; a point `p` draws at `(p·u, p·v)`.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct Projection {
     pub visible: Vec<Vec<[f64; 2]>>,
     pub hidden: Vec<Vec<[f64; 2]>>,
@@ -251,6 +289,7 @@ pub fn view_axes(d: Vec3) -> (Vec3, Vec3) {
 
 /// A solid's volume, area and validity problems, gathered by [`Kernel::measure`].
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Measure {
     pub volume: f64,
     pub area: f64,
@@ -260,6 +299,9 @@ pub struct Measure {
 
 /// One kernel: the functions of [doc/api.md](../../doc/api.md). Errors are refusals:
 /// the kernel declined, with a reason. A panic is a crash.
+///
+/// A function added to the protocol comes with a default body, refusing it as unsupported, so an
+/// adapter written before it still builds.
 pub trait Kernel: Sync {
     type Solid;
     fn name(&self) -> String;

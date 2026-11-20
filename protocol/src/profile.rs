@@ -9,6 +9,7 @@ use crate::portable::Portable;
 
 /// One segment of a loop, in sketch coordinates.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Seg {
     Line {
         a: [f64; 2],

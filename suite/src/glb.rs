@@ -357,17 +357,19 @@ mod tests {
         ];
         let faces = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]]
             .iter()
-            .map(|t: &[usize; 3]| DisplayFace {
-                positions: t.iter().map(|&i| p[i]).collect(),
-                normals: vec![[0.0, 0.0, 1.0]; 3],
-                triangles: vec![[0, 1, 2]],
+            .map(|t: &[usize; 3]| {
+                DisplayFace::new(
+                    t.iter().map(|&i| p[i]).collect(),
+                    vec![[0.0, 0.0, 1.0]; 3],
+                    vec![[0, 1, 2]],
+                )
             })
             .collect();
         let edges = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]
             .iter()
             .map(|e| vec![p[e[0]], p[e[1]]])
             .collect();
-        Display { faces, edges }
+        Display::new(faces, edges)
     }
 
     #[test]
@@ -376,14 +378,14 @@ mod tests {
         // about 0.45 degrees, wobbles; 16 bits does not.
         let l = 14f64.sqrt();
         let n = [1.0 / l, 2.0 / l, -3.0 / l];
-        let d = Display {
-            faces: vec![DisplayFace {
-                positions: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-                normals: vec![n; 3],
-                triangles: vec![[0, 1, 2]],
-            }],
-            edges: Vec::new(),
-        };
+        let d = Display::new(
+            vec![DisplayFace::new(
+                vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                vec![n; 3],
+                vec![[0, 1, 2]],
+            )],
+            Vec::new(),
+        );
         let views = [View {
             name: "a",
             note: None,

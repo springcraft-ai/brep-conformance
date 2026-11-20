@@ -475,10 +475,21 @@ impl Primitive {
 /// A B-spline in a plane over the parameters `knots[degree] ..= knots[ctrl.len()]`: clamped, or
 /// periodic with its knots running on past both ends and its first `degree` points repeated last.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Spline {
     pub degree: usize,
     pub knots: Vec<f64>,
     pub ctrl: Vec<[f64; 2]>,
+}
+
+impl Spline {
+    pub fn new(degree: usize, knots: Vec<f64>, ctrl: Vec<[f64; 2]>) -> Spline {
+        Spline {
+            degree,
+            knots,
+            ctrl,
+        }
+    }
 }
 
 /// The point at `t` of the degree-`p` B-spline over `knots` and `ctrl`, by de Boor's algorithm:
