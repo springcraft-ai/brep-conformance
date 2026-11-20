@@ -1,7 +1,14 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { kernelInfo, KERNELS } from './kernels'
-import { ASSET_BASE, buildSite, LOCAL_ASSETS, parseReport, type Report, type Site } from './results'
+import {
+  type AssetSource,
+  buildSite,
+  LOCAL_ASSETS,
+  parseReport,
+  type Report,
+  type Site,
+} from './results'
 
 // Build-time only: a page's *.data.ts may import this, a *.page.tsx never does.
 
@@ -10,11 +17,15 @@ export const REPORTS_DIR = process.env.BREP_REPORTS_DIR
   ? resolve(process.env.BREP_REPORTS_DIR)
   : null
 
-// With BREP_ASSETS_DIR, every report's files load through the dev or preview server, which serves
-// the local copy and sends the rest on to the CDN.
-const ASSETS_FROM = process.env.BREP_ASSETS_DIR
-  ? `${(process.env.SITE_BASE ?? '/').replace(/\/*$/, '')}/${LOCAL_ASSETS}`
-  : ASSET_BASE
+const ASSETS_DIR = process.env.BREP_ASSETS_DIR ? resolve(process.env.BREP_ASSETS_DIR) : null
+
+// A report's files are served locally when BREP_ASSETS_DIR holds its folder, and from the CDN when
+// it does not.
+function assetSource(suite: string, kernel: string, version: string): AssetSource {
+  if (!ASSETS_DIR || !existsSync(join(ASSETS_DIR, suite, kernel, version))) return { kind: 'cdn' }
+  const base = (process.env.SITE_BASE ?? '/').replace(/\/*$/, '/')
+  return { kind: 'local', url: `${base}${LOCAL_ASSETS}/${suite}/${kernel}/${version}` }
+}
 
 function subdirs(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true })
@@ -50,7 +61,8 @@ export function readReports(dir = REPORTS_DIR, anyKernel = ANY_KERNEL): Report[]
       for (const version of subdirs(join(dir, suite, kernel))) {
         const file = join(dir, suite, kernel, version, 'report.json')
         if (!existsSync(file)) continue
-        const report = parseReport(JSON.parse(readFileSync(file, 'utf8')), file, ASSETS_FROM)
+        const raw = JSON.parse(readFileSync(file, 'utf8'))
+        const report = parseReport(raw, file, assetSource(suite, kernel, version))
         const id = report.identity
         const on = report.methodology.suite
         if (on !== suite || id.kernel !== kernel || id.version !== version)

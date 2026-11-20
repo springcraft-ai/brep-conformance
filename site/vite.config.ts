@@ -3,11 +3,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join, resolve, sep } from 'node:path'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
-import { ASSET_BASE, LOCAL_ASSETS } from './src/data/results'
+import { LOCAL_ASSETS } from './src/data/results'
 
-// With BREP_ASSETS_DIR, the dev and preview servers answer <base>local-assets/<path> with that
-// folder's file, or send the request on to the CDN's <path>: a local run's files load before they
-// are published, and the published reports' as before.
+// With BREP_ASSETS_DIR, the dev and preview servers answer <base>local-assets/<path> with the file
+// at <path> in that folder: the files of a local run, before they are published.
 function localAssets(): Plugin {
   const dir = process.env.BREP_ASSETS_DIR ? resolve(process.env.BREP_ASSETS_DIR) : null
   const serve =
@@ -16,11 +15,10 @@ function localAssets(): Plugin {
       const prefix = `${base}${LOCAL_ASSETS}/`
       const path = new URL(req.url ?? '/', 'http://x').pathname
       if (!dir || !path.startsWith(prefix)) return next()
-      const rest = path.slice(prefix.length)
-      const file = resolve(dir, decodeURIComponent(rest))
-      if (file.startsWith(dir + sep) && statSync(file, { throwIfNoEntry: false })?.isFile())
-        return void createReadStream(file).pipe(res)
-      res.writeHead(302, { Location: `${ASSET_BASE}/${rest}` }).end()
+      const file = resolve(dir, decodeURIComponent(path.slice(prefix.length)))
+      if (!file.startsWith(dir + sep) || !statSync(file, { throwIfNoEntry: false })?.isFile())
+        return next()
+      createReadStream(file).pipe(res)
     }
   return {
     name: 'local-assets',

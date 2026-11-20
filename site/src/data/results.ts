@@ -30,22 +30,36 @@ export const ASSET_BASE = 'https://cdn.springcraft.ai/brep-conformance'
 // the site's base (vite.config.ts).
 export const LOCAL_ASSETS = 'local-assets'
 
-// The folder a report's files load from, under `from`, without its closing slash: null where the run
-// wrote none. A report is its kernel's own word, so `assets` must be the report's own folder on the
-// suite's CDN: no other host, and no other kernel's folder.
-function assetFolder(
-  assets: unknown,
+// Where a report's shape files are served from: its folder on the CDN, or a local copy of that folder
+// at `url`, for a run not yet published.
+export type AssetSource = { kind: 'cdn' } | { kind: 'local'; url: string }
+
+// The report's folder on the suite's CDN, without its closing slash, from its `assets` field: null
+// where the run wrote no files. A report written before reports named the folder has no `assets`.
+// A report is its kernel's own word, so `assets` must be the report's own folder on the suite's CDN:
+// no other host, and no other kernel's folder.
+function cdnFolder(
+  report: Obj,
   suite: string,
   kernel: string,
   version: string,
   at: string,
-  from: string,
 ): string | null {
-  if (assets === null) return null
-  const own = `${ASSET_BASE}/${suite}/${kernel}/${version}/`
-  if (assets !== undefined && assets !== own)
-    throw new Error(`${at}.assets: ${String(assets)} is not ${own}`)
-  return `${from}/${suite}/${kernel}/${version}`
+  if (report.assets === null) return null
+  const own = `${ASSET_BASE}/${suite}/${kernel}/${version}`
+  if (report.assets !== undefined && report.assets !== `${own}/`)
+    throw new Error(`${at}.assets: ${String(report.assets)} is not ${own}/`)
+  return own
+}
+
+// Where a report's files load from: `folder`, its folder on the CDN, or the local copy of that folder.
+function loadFrom(folder: string, source: AssetSource): string {
+  switch (source.kind) {
+    case 'cdn':
+      return folder
+    case 'local':
+      return source.url
+  }
 }
 
 export interface FailPoint {
@@ -230,8 +244,11 @@ function adapterOf(v: unknown, at: string): Adapter | null {
   return { repo: str(o, 'repo', at), commit: str(o, 'commit', at) }
 }
 
-// `assetsFrom` is where the CDN's folders load from: the CDN itself, or the local copy.
-export function parseReport(raw: unknown, at = 'report', assetsFrom = ASSET_BASE): Report {
+export function parseReport(
+  raw: unknown,
+  at = 'report',
+  source: AssetSource = { kind: 'cdn' },
+): Report {
   const o = obj(raw, at)
   const k = obj(o.kernel, `${at}.kernel`)
   const suite = obj(o.suite, `${at}.suite`)
@@ -242,7 +259,8 @@ export function parseReport(raw: unknown, at = 'report', assetsFrom = ASSET_BASE
   const name = str(k, 'name', `${at}.kernel`)
   const version = str(k, 'version', `${at}.kernel`)
   const suiteVersion = str(suite, 'version', `${at}.suite`)
-  const assetBase = assetFolder(o.assets, suiteVersion, name, version, at, assetsFrom)
+  const cdn = cdnFolder(o, suiteVersion, name, version, at)
+  const assetBase = cdn === null ? null : loadFrom(cdn, source)
   return {
     identity: {
       kernel: name,
