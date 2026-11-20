@@ -49,7 +49,7 @@ on crates.io. A release's notes give the crate's version and the protocol versio
 
 ```toml
 [dependencies]
-brep-protocol = "1"
+brep-protocol = "2"
 ```
 
 To add a kernel to the suite, follow
