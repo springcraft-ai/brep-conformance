@@ -17,6 +17,12 @@ clauses are added for new tests, and its patch number rises when its wording is 
 suite's, the contract's and the protocol's versions all start together at 1.0.0 and move apart from
 there. The suite version is the one that orders releases, and the only one a result is grouped by.
 
+The protocol's bindings, the Rust crate [`brep-protocol`](../protocol/README.md#versions) and the
+[C++ binding](../protocol/cpp/README.md#releases), each have a version and releases of their own.
+Each binding's version follows its own API. It is separate from the protocol's version, from the
+other binding's version and from the suite's version. A suite release names the protocol version,
+not a binding version.
+
 An adapter belongs to its kernel and has its kernel's version. A change that alters no case and no
 verdict, such as the report's layout, a document's wording or the runner's speed, needs no release
 of its own and ships with the next release.

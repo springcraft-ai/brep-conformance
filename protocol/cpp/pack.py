@@ -23,18 +23,12 @@ FILES = {
 }
 
 
-# A release of the protocol, brep-protocol@<version>, carries every binding at one version: the Rust
-# crate's, which the C++ binding's must be.
+# The C++ binding has its own version and its own releases, apart from the Rust crate's.
 def version():
     project = re.search(r"project\(brep_protocol VERSION (\d+\.\d+\.\d+)",
                         (HERE / "CMakeLists.txt").read_text())
-    crate = re.search(r'^version = "(\d+\.\d+\.\d+)"',
-                      (HERE.parent / "Cargo.toml").read_text(), re.MULTILINE)
-    if project is None or crate is None:
-        sys.exit("pack.py: no version in CMakeLists.txt or in ../Cargo.toml")
-    if project.group(1) != crate.group(1):
-        sys.exit(f"pack.py: the C++ binding is at {project.group(1)}, but the protocol's release, "
-                 f"the brep-protocol crate, is at {crate.group(1)}")
+    if project is None:
+        sys.exit("pack.py: no version in CMakeLists.txt")
     return project.group(1)
 
 

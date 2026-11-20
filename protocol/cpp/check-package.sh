@@ -11,10 +11,13 @@ trap 'rm -rf "$work"' EXIT
 
 tar -xJf "$archive" -C "$work"
 source=$(echo "$work"/brep_protocol-*)
+# The box kernel must answer with the protocol's major version that the header gives.
+major=$(sed -n 's/.*PROTOCOL_VERSION = "\([0-9]*\)\..*/\1/p' \
+    "$source/include/brep_protocol/brep_protocol.h")
 cmake -S "$source" -B "$work/alone" -DCMAKE_BUILD_TYPE=Release > "$work/alone.log" 2>&1 ||
     { cat "$work/alone.log"; exit 1; }
 cmake --build "$work/alone"
-echo '{"cmd": "hello"}' | "$work/alone/box_kernel" | grep -q '"protocol":"1\.' ||
+echo '{"cmd": "hello"}' | "$work/alone/box_kernel" | grep -q "\"protocol\":\"$major\." ||
     { echo "check-package.sh: the box kernel built from the archive does not answer"; exit 1; }
 
 mkdir -p "$work/adapter"
@@ -32,6 +35,6 @@ EOF
 cmake -S "$work/adapter" -B "$work/adapter/build" -DCMAKE_BUILD_TYPE=Release \
     > "$work/adapter.log" 2>&1 || { cat "$work/adapter.log"; exit 1; }
 cmake --build "$work/adapter/build"
-echo '{"cmd": "hello"}' | "$work/adapter/build/adapter" | grep -q '"protocol":"1\.' ||
+echo '{"cmd": "hello"}' | "$work/adapter/build/adapter" | grep -q "\"protocol\":\"$major\." ||
     { echo "check-package.sh: an adapter fetching the archive does not answer hello"; exit 1; }
 echo "the archive builds on its own and as a dependency pinned by its hash"

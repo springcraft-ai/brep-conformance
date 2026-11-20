@@ -33,7 +33,13 @@ The crate depends on no kernel. Its dependencies are `serde_json`, and `libc` on
 
 `PROTOCOL_VERSION` is the version of the protocol that this crate speaks, and `hello` reports it.
 A client and an adapter work together when their major versions agree; `speaks` makes that test.
-The crate's own version is separate from the protocol's version.
+
+The crate's own version is separate from the protocol's version, and from the version of the C++
+binding. The crate's version follows its Rust API by semantic versioning, and each release is tagged
+`brep-protocol-v<version>`. A new major or minor version of the protocol raises the same number of
+the crate. A breaking change to the Rust API raises the crate's major version and leaves the
+protocol's version as it is. The Semver workflow checks each pull request against the latest release
+on crates.io. A release's notes give the crate's version and the protocol version it speaks.
 
 ## Usage
 
