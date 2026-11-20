@@ -1,6 +1,6 @@
 # The contract
 
-This is version 1.0.0 of the contract: what a conforming kernel promises for its booleans,
+This is version 1.1.0 of the contract: what a conforming kernel promises for its booleans,
 constructions and queries. Each clause has an id, which the runner's checks cite.
 
 ## Tolerance
