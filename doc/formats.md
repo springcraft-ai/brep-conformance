@@ -177,21 +177,21 @@ role (`main`, `alt`, `ghost`, `ghost2`) and also carries the role as `extras.rol
 display's faces as one primitive of triangles and its edges as primitives of lines. A line
 primitive's `extras.lines` says which lines it holds: `edges`, the edges between faces, or `seams`,
 the seams and the edges a split made, which mark no change in the shape and have a material of their
-own, `seam`, so that a viewer can hide them. Each triangle vertex carries its face's index as
-`_FACE`, and each line vertex its edge's as `_EDGE`, both `UNSIGNED_SHORT`; a mesh with more faces
-or edges than that type holds has none. The mesh's `extras.edges` is a table with one row for each
-edge of the display, in its order, which `_EDGE` indexes:
-`{"faces": [0, 3], "turn": [1.5708, 1.5708], "split": false}`, as [`display`](api.md#display) gives
-them, `turn` being `null` where it gives none. A seam is no edge, and its vertices carry the index
-one past the table's last row. Whether an edge is tangent is left to the viewer, which compares
-`turn` with a threshold of its own. Positions are in the suite's millimetres with z up, under a root
-node that scales them to glTF's metres and turns z to glTF's y, which every glTF viewer takes as up.
-The file's `extras` carry the case's `id`, `test` and `hash`, the `kernel` that drew it, the case's
-`outcome` and `result`, and the views' `points`, `box` and `plane`. The file requires
-`KHR_mesh_quantization`, which three.js, Blender and `<model-viewer>` read. Positions are `SHORT`
-over the solid's box, and the node's `translation` and uniform `scale` take them back to
-millimetres. Normals are normalized `SHORT`, fine enough for reflection stripes to show where faces
-meet. Both primitives are indexed, with `UNSIGNED_SHORT` where the vertices fit.
+own, `seam`, faint, so that a viewer that draws every primitive barely shows them and can hide them.
+Each triangle vertex carries its face's index as `_FACE`, and each line vertex its edge's as
+`_EDGE`, both `UNSIGNED_SHORT`; a mesh with more faces or edges than that type holds has none. The
+mesh's `extras.edges` is a table with one row for each edge of the display, in its order, which
+`_EDGE` indexes: `{"faces": [0, 3], "turn": [1.5708, 1.5708], "split": false}`, as
+[`display`](api.md#display) gives them, `turn` being `null` where it gives none. A seam is no edge,
+and its vertices carry the index one past the table's last row. Whether an edge is tangent is left
+to the viewer, which compares `turn` with a threshold of its own. Positions are in the suite's
+millimetres with z up, under a root node that scales them to glTF's metres and turns z to glTF's y,
+which every glTF viewer takes as up. The file's `extras` carry the case's `id`, `test` and `hash`,
+the `kernel` that drew it, the case's `outcome` and `result`, and the views' `points`, `box` and
+`plane`. The file requires `KHR_mesh_quantization`, which three.js, Blender and `<model-viewer>`
+read. Positions are `SHORT` over the solid's box, and the node's `translation` and uniform `scale`
+take them back to millimetres. Normals are normalized `SHORT`, fine enough for reflection stripes to
+show where faces meet. Both primitives are indexed, with `UNSIGNED_SHORT` where the vertices fit.
 
 Each registered kernel's files are published under `<base>/<suite>/<kernel>/<version>/<key>`, the
 folder its report has on the results site. The base is compiled in from

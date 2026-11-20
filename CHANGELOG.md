@@ -27,13 +27,14 @@ a refused blend differently.
 
 ### Scoring
 
-- Contract 1.1.0. B42 adds a cone to the solids it displays. A vertex at the cone's apex must have,
+- Contract 2.0.0. B42 adds a cone to the solids it displays. A vertex at the cone's apex must have,
   in each triangle that uses it, one of the normals that the cone has across that triangle, to
   within 1e-3.
 - B42 has a fourth check, of what each edge says: the faces it names, the turn between them against
   its closed form to within 1e-3, the flag on an edge a split made, and the seams. A display from an
-  adapter written to protocol 1.0.0 fails this check alone, as not reported. B42 also displays a box
-  with its upright edges rounded, where faces meet smoothly, and a box with one side in two faces.
+  adapter written to protocol 1.0.0 fails this check alone, as not reported, except on a ball, which
+  has no edge to report. B42 also displays a box with its upright edges rounded, where faces meet
+  smoothly, and a box with one side in two faces.
 - B31 and B39 no longer run when the kernel refused the blend. Before, a kernel that offers `normal`
   or curvatures at probes got a failed case for a refused blend. Now the case is a refusal, as
   every other check of a blend case already scored it.

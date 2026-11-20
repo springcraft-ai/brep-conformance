@@ -501,8 +501,9 @@ pub(super) fn projection_case(r: &mut Rng) -> Drawn {
 /// A box, a cylinder, a ball, a cone, a drilled box, a box with its four upright edges rounded or
 /// a box with one side in two faces, with its surfaces, the edges between them and its closed-form
 /// volume and area: a display must cover its boundary and draw exactly those edges, each with the
-/// turn its faces make. Every edge is a convex right angle but the eight lines where a rounded
-/// box's rounds meet its sides, which turn by nothing. A ball has no edge, and a seam is none.
+/// turn its faces make. Every edge is a convex right angle but two kinds: a cone's rim, which
+/// turns by the cone's half angle more, and the eight lines where a rounded box's rounds meet its
+/// sides, which turn by nothing. A ball has no edge, and a seam is none.
 pub(super) fn display_case(r: &mut Rng) -> Drawn {
     use crate::model::add;
     use brep_protocol::profile::rounded;

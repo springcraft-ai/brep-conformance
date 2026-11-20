@@ -12,14 +12,15 @@ use std::collections::HashMap;
 use brep_protocol::Display;
 use serde_json::{Value, json};
 
-/// Each role's colour as linear RGBA, in the report viewer's tones, and the edges'.
+/// Each role's colour as linear RGBA, in the report viewer's tones, and the edges'. A seam marks
+/// no change in the shape, so its lines are faint in a viewer that draws every primitive.
 const MATERIALS: [(&str, [f64; 4]); 6] = [
     ("main", [0.202, 0.287, 0.371, 1.0]),
     ("alt", [0.479, 0.242, 0.078, 1.0]),
     ("ghost", [0.212, 0.468, 0.716, 0.14]),
     ("ghost2", [0.117, 0.456, 0.238, 0.14]),
     ("edge", [0.01, 0.01, 0.01, 1.0]),
-    ("seam", [0.01, 0.01, 0.01, 1.0]),
+    ("seam", [0.01, 0.01, 0.01, 0.15]),
 ];
 
 /// What a line primitive's `extras.lines` says it draws: the edges between faces, or the seams

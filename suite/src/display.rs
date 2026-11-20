@@ -261,7 +261,11 @@ pub(crate) fn checks(
              {cover:.3e}; length {drawn:.6} of {total:.6}"
         ),
     ));
-    out.push(topology(d, want, tol, scale));
+    out.push(if bad_index {
+        (false, "topology: not checked".into())
+    } else {
+        topology(d, want, tol, scale)
+    });
     out
 }
 
@@ -306,7 +310,9 @@ fn topology(d: &Display, want: &DisplayExact, tol: f64, scale: f64) -> (bool, St
     let (mut splits, mut cuts, mut extra) = (0usize, 0usize, 0usize);
     for e in &d.edges {
         let distinct = e.faces.len() == 2 && e.faces[0] != e.faces[1];
-        if e.faces.len() < 2 || e.faces.iter().any(|&f| f as usize >= d.faces.len()) {
+        // One face named twice is a seam, which has its own list.
+        let itself = e.faces.len() == 2 && !distinct;
+        if e.faces.len() < 2 || itself || e.faces.iter().any(|&f| f as usize >= d.faces.len()) {
             unnamed += 1;
         } else {
             let lies = e.faces.iter().all(|&f| {
@@ -561,6 +567,13 @@ mod tests {
     }
 
     #[test]
+    fn a_triangle_naming_no_vertex_fails_every_check_of_the_faces_and_is_not_read_further() {
+        let (mut d, want) = cube();
+        d.faces[0].triangles[0] = [0, 1, 7];
+        assert_eq!(held(&d, &want), [false, false, true, false]);
+    }
+
+    #[test]
     fn a_normal_pointing_in_fails_the_normals() {
         let (mut d, want) = cube();
         d.faces[2].normals[1] = [0.0, 1.0, 0.0];
@@ -620,8 +633,11 @@ mod tests {
         let mut far = d.clone();
         far.edges[0].faces[0] = 5;
         assert_eq!(held(&far, &want), [true, true, true, false]);
+        // One face named twice fails with a turn and without one.
         let mut twice = d.clone();
         twice.edges[0].faces = vec![0, 0];
+        assert!(!held(&twice, &want)[3]);
+        twice.edges[0].turn = None;
         assert!(!held(&twice, &want)[3]);
         let mut none = d.clone();
         none.edges[0].faces = vec![99, 0];

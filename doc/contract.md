@@ -1,6 +1,6 @@
 # The contract
 
-This is version 1.1.0 of the contract: what a conforming kernel promises for its booleans,
+This is version 2.0.0 of the contract: what a conforming kernel promises for its booleans,
 constructions and queries. Each clause has an id, which the runner's checks cite.
 
 ## Tolerance
@@ -383,9 +383,10 @@ as its row in the table above says:
   one. The prism's side may come back as one face or as two: an edge drawn between the two must be
   flagged. Every seam must lie on the solid's surfaces. A cylinder, a cone and a drilled box each
   have one seam, or none where the kernel cuts the round face in two by split edges instead; a
-  box, a rounded box and the prism have none; a ball's seams are not counted. A display that names no
-  face, gives no turn, flags no split and lists no seam, as an adapter written to protocol 1.0.0
-  does, fails this check alone, as not reported.
+  box, a rounded box and the prism have none; a ball's seams are not counted. A display that names
+  no face, gives no turn, flags no split and lists no seam, as an adapter written to protocol 1.0.0
+  does, fails this check alone, as not reported. A ball is the exception: it has no edge to report,
+  so its display passes this check with nothing said.
 
 The face edits `delete_faces`, `move_faces` and `thicken` are treated as features, so B14 to B16
 judge each result as the primitive it must be. `sweep_path` is treated as a constructor, so B0 to
