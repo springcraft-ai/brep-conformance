@@ -91,7 +91,7 @@ pub const FUNCTIONS: &[&str] = &[
 
 /// Whether a client speaking `ours` may drive an adapter speaking `theirs`: their major versions
 /// agree.
-pub fn speaks(ours: &str, theirs: &str) -> bool {
+pub(crate) fn speaks(ours: &str, theirs: &str) -> bool {
     let major = |v: &str| v.split('.').next().and_then(|n| n.parse::<u64>().ok());
     major(ours).is_some() && major(ours) == major(theirs)
 }
