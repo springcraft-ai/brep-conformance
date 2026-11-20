@@ -9,8 +9,40 @@ export interface Shape {
   normals: Float32Array
   // Three vertex indices per triangle.
   triangles: Uint32Array
-  // Two xyz ends per segment: the file's own line primitives, none where it has none.
+  // Two xyz ends per segment: the file's own line primitives, none where it has none. Seams and
+  // the edges a split made, which mark no change in the shape, are left out.
   edges: Float32Array
+  // The least and greatest turn of each segment's edge, in radians: the signed angle between the
+  // normals of the two faces it bounds, NaN where the file does not say. Absent on a shape whose
+  // file gives no turns, and on one put together from others.
+  turns?: Float32Array
+}
+
+// An edge whose faces' normals turn by less than this all along it, in radians, is tangent: about
+// three degrees, the threshold the suite's own report draws by.
+export const TANGENT = 0.05
+
+// Whether hiding tangent edges would hide any of the shape's.
+export function hasTangent(s: Shape): boolean {
+  const t = s.turns
+  if (!t) return false
+  for (let i = 0; i < t.length; i += 2)
+    if (Math.abs(t[i]!) < TANGENT && Math.abs(t[i + 1]!) < TANGENT) return true
+  return false
+}
+
+// The shape without its tangent edges. An edge whose turn the file does not give stays.
+export function creasesOf(s: Shape): Shape {
+  const t = s.turns
+  if (!t || !hasTangent(s)) return s
+  const edges: number[] = []
+  const turns: number[] = []
+  for (let i = 0; i < t.length / 2; i++) {
+    if (Math.abs(t[i * 2]!) < TANGENT && Math.abs(t[i * 2 + 1]!) < TANGENT) continue
+    for (let k = 0; k < 6; k++) edges.push(s.edges[i * 6 + k]!)
+    turns.push(t[i * 2]!, t[i * 2 + 1]!)
+  }
+  return { ...s, edges: Float32Array.from(edges), turns: Float32Array.from(turns) }
 }
 
 interface Accessor {
@@ -29,9 +61,16 @@ interface BufferView {
 }
 
 interface Primitive {
-  attributes: { POSITION?: number; NORMAL?: number }
+  attributes: { POSITION?: number; NORMAL?: number; _EDGE?: number }
   indices?: number
   mode?: number
+  // What a line primitive of the suite's draws: `edges`, or `seams`, which also holds split edges.
+  extras?: { lines?: string }
+}
+
+// One row of a mesh's table of edges, which a line vertex's `_EDGE` indexes.
+interface EdgeRow {
+  turn?: [number, number] | null
 }
 
 interface Node {
@@ -47,7 +86,7 @@ interface Node {
 interface Gltf {
   accessors?: Accessor[]
   bufferViews?: BufferView[]
-  meshes?: { primitives: Primitive[] }[]
+  meshes?: { primitives: Primitive[]; extras?: { edges?: EdgeRow[] } }[]
   nodes?: Node[]
   scenes?: { nodes: number[]; name?: string; extras?: { note?: string; alt?: string } }[]
   scene?: number
@@ -309,6 +348,8 @@ function gather(
   const normals: number[] = []
   const triangles: number[] = []
   const lines: number[] = []
+  const turns: number[] = []
+  let told = false
   const place = (m: Mat, p: number[], i: number) => {
     const [x, y, z] = [p[i]!, p[i + 1]!, p[i + 2]!]
     return [0, 1, 2].map(r => m[r]! * x + m[4 + r]! * y + m[8 + r]! * z + m[12 + r]!)
@@ -330,8 +371,10 @@ function gather(
     const node = g.nodes?.[index]
     if (!node || depth > 64 || skip(node.extras?.role ?? '')) return
     const m = mul(parent, local(node))
-    for (const prim of node.mesh !== undefined ? (g.meshes?.[node.mesh]?.primitives ?? []) : []) {
+    const mesh = node.mesh !== undefined ? g.meshes?.[node.mesh] : undefined
+    for (const prim of mesh?.primitives ?? []) {
       if (prim.attributes.POSITION === undefined) continue
+      if (prim.extras?.lines === 'seams') continue
       const mode = prim.mode ?? MODE_TRIANGLES
       const p = read(g, bin, prim.attributes.POSITION, 'VEC3')
       const count = p.length / 3
@@ -350,8 +393,18 @@ function gather(
         for (const i of idx) triangles.push(first + i)
       } else if (mode === MODE_LINES || mode === MODE_LINE_STRIP) {
         const step = mode === MODE_LINES ? 2 : 1
-        for (let k = 0; k + 1 < idx.length; k += step)
+        const table = mesh?.extras?.edges
+        const of =
+          table && prim.attributes._EDGE !== undefined
+            ? read(g, bin, prim.attributes._EDGE, 'SCALAR')
+            : null
+        for (let k = 0; k + 1 < idx.length; k += step) {
           lines.push(...place(m, p, idx[k]! * 3), ...place(m, p, idx[k + 1]! * 3))
+          const turn = of ? table?.[of[idx[k]!]!]?.turn : null
+          const known = Array.isArray(turn) && turn.length === 2 && turn.every(Number.isFinite)
+          turns.push(known ? turn[0] : NaN, known ? turn[1] : NaN)
+          told ||= known
+        }
       }
     }
     for (const c of node.children ?? []) visit(c, m, depth + 1)
@@ -366,5 +419,6 @@ function gather(
     normals: Float32Array.from(normals),
     triangles: T,
     edges: Float32Array.from(lines),
+    ...(told ? { turns: Float32Array.from(turns) } : {}),
   }
 }

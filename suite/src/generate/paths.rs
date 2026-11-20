@@ -337,6 +337,15 @@ pub fn test_path(c: &Case) -> &'static str {
             "cylinder" => "queries/display-of-a-cylinder",
             "sphere" => "queries/display-of-a-sphere",
             "cone" => "queries/display-of-a-cone",
+            "extrude"
+                if c.exact
+                    .display
+                    .as_ref()
+                    .is_some_and(|d| d.splits.is_empty()) =>
+            {
+                "queries/display-of-a-filleted-box"
+            }
+            "extrude" => "queries/display-of-a-split-box",
             _ => "queries/display-of-a-drilled-box",
         },
         // STEP.

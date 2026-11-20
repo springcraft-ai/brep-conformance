@@ -1,7 +1,7 @@
 // Everything the Scan view needs in the browser, loaded as one chunk after the page hydrates. It
 // imports nothing the page itself imports: a module both share is bundled into the page's chunk,
 // which then has no manifest entry of its own and cannot be prerendered.
-import { parseOverlay, parseViews, type GlbView, type Overlay } from './glb'
+import { creasesOf, hasTangent, parseOverlay, parseViews, type GlbView, type Overlay } from './glb'
 import { frameOf, overlayAt } from './scan'
 import type { Vec3 } from './vec'
 
@@ -9,6 +9,8 @@ export { mountScan, type Ghost, type Mark, type Scene, type ScanHandle } from '.
 
 export interface Loaded {
   views: GlbView[]
+  // The views without their tangent edges, or null where no solid has one to hide.
+  creases: GlbView[] | null
   overlay: Overlay
   // The box round every view's subjects and the overlay, so turning from one view to the next
   // keeps the scale.
@@ -45,7 +47,13 @@ export function loadViews(url: string): Promise<Loaded> {
           ghosts: solids,
           marks: at.map(p => ({ p, held: false })),
         })
-        return { views, overlay, frame }
+        const creases = views.some(v => v.solids.some(s => hasTangent(s.shape)))
+          ? views.map(v => ({
+              ...v,
+              solids: v.solids.map(s => ({ ...s, shape: creasesOf(s.shape) })),
+            }))
+          : null
+        return { views, creases, overlay, frame }
       })
     p.catch(() => cache.delete(url))
     cache.set(url, p)

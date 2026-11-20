@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # The C++ binding of the protocol: one header, and nlohmann/json for the lines of JSON.
 cmake_minimum_required(VERSION 3.24)
-project(brep_protocol VERSION 1.0.0 LANGUAGES CXX)
+project(brep_protocol VERSION 2.0.0 LANGUAGES CXX)
 
 # An installed nlohmann/json where there is one; otherwise its release, fetched by its hash.
 find_package(nlohmann_json 3.11 QUIET)

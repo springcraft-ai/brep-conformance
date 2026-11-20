@@ -10,6 +10,9 @@ export function glbOf(
   lines: number[] = [],
   node: Record<string, unknown> = {},
   others: Record<string, unknown>[] = [],
+  // As the suite writes them: each vertex's row in `table`, the mesh's table of edges, and the
+  // line indices of its seams, a primitive of their own.
+  facts: { of: number[]; table: unknown[]; seams?: number[] } | null = null,
 ): ArrayBuffer {
   const pos = new Float32Array(positions)
   const tri = new Uint16Array(triangles)
@@ -17,9 +20,20 @@ export function glbOf(
   const pad = (n: number) => (n + 3) & ~3
   const offTri = pad(pos.byteLength)
   const offLin = offTri + pad(tri.byteLength)
-  const binLen = offLin + pad(lin.byteLength)
+  // `_EDGE` as UNSIGNED_SHORT padded to four bytes, then the seams' indices.
+  const tag = new Uint16Array((facts?.of ?? []).flatMap(e => [e, 0]))
+  const seam = new Uint16Array(facts?.seams ?? [])
+  const offTag = offLin + pad(lin.byteLength)
+  const offSeam = offTag + pad(tag.byteLength)
+  const binLen = offSeam + pad(seam.byteLength)
   const primitives: Record<string, unknown>[] = [{ attributes: { POSITION: 0 }, indices: 1 }]
-  if (lines.length) primitives.push({ attributes: { POSITION: 0 }, indices: 2, mode: 1 })
+  if (lines.length && !facts) primitives.push({ attributes: { POSITION: 0 }, indices: 2, mode: 1 })
+  if (facts) {
+    const attributes = { POSITION: 0, _EDGE: 3 }
+    primitives.push({ attributes, indices: 2, mode: 1, extras: { lines: 'edges' } })
+    if (seam.length)
+      primitives.push({ attributes, indices: 4, mode: 1, extras: { lines: 'seams' } })
+  }
   const json = {
     asset: { version: '2.0' },
     scene: 0,
@@ -33,17 +47,21 @@ export function glbOf(
       },
       ...others,
     ],
-    meshes: [{ primitives }],
+    meshes: [{ primitives, ...(facts ? { extras: { edges: facts.table } } : {}) }],
     buffers: [{ byteLength: binLen }],
     bufferViews: [
       { buffer: 0, byteOffset: 0, byteLength: pos.byteLength },
       { buffer: 0, byteOffset: offTri, byteLength: tri.byteLength },
       { buffer: 0, byteOffset: offLin, byteLength: lin.byteLength },
+      { buffer: 0, byteOffset: offTag, byteLength: tag.byteLength, byteStride: 4 },
+      { buffer: 0, byteOffset: offSeam, byteLength: seam.byteLength },
     ],
     accessors: [
       { bufferView: 0, componentType: 5126, count: pos.length / 3, type: 'VEC3' },
       { bufferView: 1, componentType: 5123, count: tri.length, type: 'SCALAR' },
       { bufferView: 2, componentType: 5123, count: lin.length, type: 'SCALAR' },
+      { bufferView: 3, componentType: 5123, count: tag.length / 2, type: 'SCALAR' },
+      { bufferView: 4, componentType: 5123, count: seam.length, type: 'SCALAR' },
     ],
   }
   const text = new TextEncoder().encode(JSON.stringify(json))
@@ -64,6 +82,8 @@ export function glbOf(
   bytes.set(new Uint8Array(pos.buffer), b + 8)
   bytes.set(new Uint8Array(tri.buffer), b + 8 + offTri)
   bytes.set(new Uint8Array(lin.buffer), b + 8 + offLin)
+  bytes.set(new Uint8Array(tag.buffer), b + 8 + offTag)
+  bytes.set(new Uint8Array(seam.buffer), b + 8 + offSeam)
   return out
 }
 

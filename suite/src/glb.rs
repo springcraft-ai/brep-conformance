@@ -1,9 +1,11 @@
 //! A case's views as one binary glTF: a scene per view, and in it a node per solid whose mesh holds
-//! the solid's triangles and, as a second primitive of lines, its edges. Positions stay in the
-//! suite's millimetres, z up, under a root node that scales them to glTF's metres and turns the
+//! the solid's triangles and, as primitives of lines, its edges and its seams. Positions stay in
+//! the suite's millimetres, z up, under a root node that scales them to glTF's metres and turns the
 //! suite's z axis to glTF's y, which is up in every glTF viewer. They are quantized to 16 bits
 //! over each solid's box (`KHR_mesh_quantization`). Each solid's node carries its role in
-//! `extras.role`, so a reader can leave out the ghosts, which are open surfaces, not solids.
+//! `extras.role`, so a reader can leave out the ghosts, which are open surfaces, not solids. Each
+//! triangle vertex carries its face's index as `_FACE` and each edge vertex its edge's as `_EDGE`,
+//! into the table of edges in the mesh's `extras`.
 
 use std::collections::HashMap;
 
@@ -11,13 +13,19 @@ use brep_protocol::Display;
 use serde_json::{Value, json};
 
 /// Each role's colour as linear RGBA, in the report viewer's tones, and the edges'.
-const MATERIALS: [(&str, [f64; 4]); 5] = [
+const MATERIALS: [(&str, [f64; 4]); 6] = [
     ("main", [0.202, 0.287, 0.371, 1.0]),
     ("alt", [0.479, 0.242, 0.078, 1.0]),
     ("ghost", [0.212, 0.468, 0.716, 0.14]),
     ("ghost2", [0.117, 0.456, 0.238, 0.14]),
     ("edge", [0.01, 0.01, 0.01, 1.0]),
+    ("seam", [0.01, 0.01, 0.01, 1.0]),
 ];
+
+/// What a line primitive's `extras.lines` says it draws: the edges between faces, or the seams
+/// and the edges a split made, which mark no change in the shape.
+const EDGES: &str = "edges";
+const SEAMS: &str = "seams";
 
 /// A quarter turn about x, as glTF's `[x, y, z, w]` quaternion: the suite's +z becomes +y.
 const Z_UP_TO_Y_UP: [f64; 4] = [
@@ -54,10 +62,11 @@ struct Builder {
     meshes: Vec<Value>,
 }
 
-/// A solid's primitives, and the translation and uniform scale its node takes their quantized
-/// positions back to millimetres by.
+/// A solid's primitives, its table of edges, and the translation and uniform scale its node takes
+/// their quantized positions back to millimetres by.
 struct Geometry {
     prims: Vec<Value>,
+    edges: Value,
     translation: [f64; 3],
     scale: f64,
 }
@@ -120,6 +129,24 @@ impl Builder {
         )
     }
 
+    /// One index per vertex as UNSIGNED_SHORT, padded to four bytes; none where an index would not
+    /// fit, since glTF gives a vertex attribute no wider integer.
+    fn tags(&mut self, v: &[u32]) -> Option<usize> {
+        if v.iter().any(|&x| x > u32::from(u16::MAX)) {
+            return None;
+        }
+        let bytes: Vec<u8> = v
+            .iter()
+            .flat_map(|&x| [x as u16, 0])
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        let view = self.view(&bytes, 34962, Some(4));
+        Some(self.accessor(
+            json!({"bufferView": view, "componentType": 5123, "count": v.len(),
+                             "type": "SCALAR"}),
+        ))
+    }
+
     /// Indices as UNSIGNED_SHORT where every vertex fits below the restart value, else
     /// UNSIGNED_INT.
     fn indices(&mut self, i: &[u32], vertices: usize) -> usize {
@@ -138,29 +165,61 @@ impl Builder {
         )
     }
 
-    /// The display's faces as one triangle primitive and its edges as one line primitive, without
-    /// materials, their positions quantized to 16 bits over its box.
+    /// The display's faces as one triangle primitive, its edges as one line primitive and its seams
+    /// and split edges as another, without materials, their positions quantized to 16 bits over
+    /// its box.
     fn primitives(&mut self, d: &Display) -> Geometry {
         let mut positions: Vec<[f64; 3]> = Vec::new();
         let mut normals: Vec<[f64; 3]> = Vec::new();
         let mut triangles: Vec<u32> = Vec::new();
-        for f in &d.faces {
+        let mut face_of: Vec<u32> = Vec::new();
+        for (k, f) in d.faces.iter().enumerate() {
             let base = positions.len() as u32;
             positions.extend(&f.positions);
             normals.extend(&f.normals);
+            face_of.extend(std::iter::repeat_n(k as u32, f.positions.len()));
             triangles.extend(f.triangles.iter().flatten().map(|i| i + base));
         }
-        let mut line_positions: Vec<[f64; 3]> = Vec::new();
-        let mut lines: Vec<u32> = Vec::new();
-        for e in d.edges.iter().filter(|e| e.len() >= 2) {
-            let base = line_positions.len() as u32;
-            line_positions.extend(e);
-            for k in 0..e.len() as u32 - 1 {
-                lines.extend([base + k, base + k + 1]);
+        // Each kind of line: its positions, its segments, and the edge each vertex belongs to.
+        #[derive(Default)]
+        struct Lines {
+            positions: Vec<[f64; 3]>,
+            segments: Vec<u32>,
+            edge_of: Vec<u32>,
+        }
+        impl Lines {
+            fn add(&mut self, line: &[[f64; 3]], edge: u32) {
+                if line.len() < 2 {
+                    return;
+                }
+                let base = self.positions.len() as u32;
+                self.positions.extend(line);
+                self.edge_of.extend(std::iter::repeat_n(edge, line.len()));
+                for k in 0..line.len() as u32 - 1 {
+                    self.segments.extend([base + k, base + k + 1]);
+                }
             }
         }
+        let (mut drawn, mut quiet) = (Lines::default(), Lines::default());
+        for (k, e) in d.edges.iter().enumerate() {
+            let lines = if e.split { &mut quiet } else { &mut drawn };
+            lines.add(&e.points, k as u32);
+        }
+        // A seam is no edge of the table: its vertices name the row past the table's last.
+        for seam in &d.seams {
+            quiet.add(seam, d.edges.len() as u32);
+        }
+        let edges: Vec<Value> = d
+            .edges
+            .iter()
+            .map(|e| json!({"faces": e.faces, "turn": e.turn, "split": e.split}))
+            .collect();
         let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
-        for p in positions.iter().chain(&line_positions) {
+        for p in positions
+            .iter()
+            .chain(&drawn.positions)
+            .chain(&quiet.positions)
+        {
             for k in 0..3 {
                 lo[k] = lo[k].min(p[k]);
                 hi[k] = hi[k].max(p[k]);
@@ -191,34 +250,52 @@ impl Builder {
             let p = self.positions(&quantize(&positions));
             let n = self.normals(&normals);
             let i = self.indices(&triangles, positions.len());
-            prims.push(
-                json!({"attributes": {"POSITION": p, "NORMAL": n}, "indices": i,
-                              "mode": 4}),
-            );
+            let mut attributes = json!({"POSITION": p, "NORMAL": n});
+            if let Some(f) = self.tags(&face_of) {
+                attributes["_FACE"] = json!(f);
+            }
+            prims.push(json!({"attributes": attributes, "indices": i, "mode": 4}));
         }
-        if !lines.is_empty() {
-            let p = self.positions(&quantize(&line_positions));
-            let i = self.indices(&lines, line_positions.len());
-            prims.push(json!({"attributes": {"POSITION": p}, "indices": i, "mode": 1}));
+        for (lines, kind) in [(drawn, EDGES), (quiet, SEAMS)] {
+            if lines.segments.is_empty() {
+                continue;
+            }
+            let p = self.positions(&quantize(&lines.positions));
+            let i = self.indices(&lines.segments, lines.positions.len());
+            let mut attributes = json!({"POSITION": p});
+            if let Some(e) = self.tags(&lines.edge_of) {
+                attributes["_EDGE"] = json!(e);
+            }
+            prims.push(json!({"attributes": attributes, "indices": i, "mode": 1,
+                              "extras": {"lines": kind}}));
         }
         Geometry {
             prims,
+            edges: json!(edges),
             translation,
             scale,
         }
     }
 
-    /// A glTF mesh of the primitives in the role's material, its edges in theirs.
-    fn mesh(&mut self, prims: &[Value], role: &str) -> usize {
-        let prims: Vec<Value> = prims
+    /// A glTF mesh of the primitives in the role's material, its edges and seams in theirs, with
+    /// the table of edges in its `extras`.
+    fn mesh(&mut self, g: &Geometry, role: &str) -> usize {
+        let prims: Vec<Value> = g
+            .prims
             .iter()
             .map(|p| {
                 let mut p = p.clone();
-                p["material"] = json!(material(if p["mode"] == 1 { "edge" } else { role }));
+                let of = match p["extras"]["lines"].as_str() {
+                    Some(SEAMS) => "seam",
+                    Some(_) => "edge",
+                    None => role,
+                };
+                p["material"] = json!(material(of));
                 p
             })
             .collect();
-        self.meshes.push(json!({"name": role, "primitives": prims}));
+        self.meshes
+            .push(json!({"name": role, "primitives": prims, "extras": {"edges": g.edges}}));
         self.meshes.len() - 1
     }
 }
@@ -243,7 +320,7 @@ pub fn glb(views: &[View], extras: Value, generator: &str) -> Vec<u8> {
             }
             let id = *meshes
                 .entry((s.key.clone(), s.role.to_string()))
-                .or_insert_with(|| b.mesh(&g.prims, s.role));
+                .or_insert_with(|| b.mesh(g, s.role));
             nodes.push(
                 json!({"name": s.role, "mesh": id, "extras": {"role": s.role},
                               "translation": g.translation, "scale": [g.scale, g.scale, g.scale]}),
@@ -327,7 +404,7 @@ pub fn glb(views: &[View], extras: Value, generator: &str) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use brep_protocol::DisplayFace;
+    use brep_protocol::{DisplayEdge, DisplayFace};
 
     /// The JSON chunk and the binary chunk of a GLB, checking its header.
     fn chunks(g: &[u8]) -> (Value, &[u8]) {
@@ -365,11 +442,88 @@ mod tests {
                 )
             })
             .collect();
+        let corners = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]];
         let edges = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]
             .iter()
-            .map(|e| vec![p[e[0]], p[e[1]]])
+            .map(|e| {
+                let faces = (0..4u32)
+                    .filter(|&f| e.iter().all(|c| corners[f as usize].contains(c)))
+                    .collect();
+                DisplayEdge::new(vec![p[e[0]], p[e[1]]], faces, Some([1.0, 2.0]), false)
+            })
             .collect();
-        Display::new(faces, edges)
+        Display::new(faces, edges, Vec::new())
+    }
+
+    /// The accessor's values, read as UNSIGNED_SHORT at its view's stride.
+    fn shorts(gltf: &Value, bin: &[u8], accessor: &Value) -> Vec<u16> {
+        let a = &gltf["accessors"][accessor.as_u64().unwrap() as usize];
+        assert_eq!(a["componentType"], 5123);
+        let v = &gltf["bufferViews"][a["bufferView"].as_u64().unwrap() as usize];
+        let at = v["byteOffset"].as_u64().unwrap() as usize;
+        let step = v["byteStride"].as_u64().unwrap_or(2) as usize;
+        (0..a["count"].as_u64().unwrap() as usize)
+            .map(|i| u16::from_le_bytes([bin[at + i * step], bin[at + i * step + 1]]))
+            .collect()
+    }
+
+    #[test]
+    fn each_vertex_names_its_face_or_edge_and_seams_and_splits_are_lines_of_their_own() {
+        let mut d = tetra();
+        let (a, b) = ([10.0, 20.0, 30.0], [12.0, 22.0, 30.0]);
+        d.edges.push(DisplayEdge::new(
+            vec![a, b],
+            vec![0, 0],
+            Some([0.0; 2]),
+            true,
+        ));
+        d.edges.push(DisplayEdge::bare(vec![a]));
+        d.seams.push(vec![a, b, [14.0, 20.0, 30.0]]);
+        let views = [View {
+            name: "a",
+            note: None,
+            alt: None,
+            solids: vec![Solid {
+                key: "t".into(),
+                role: "main",
+                display: &d,
+            }],
+        }];
+        let g = glb(&views, json!({}), "test");
+        let (gltf, bin) = chunks(&g);
+        let mesh = &gltf["meshes"][0];
+        let prims = mesh["primitives"].as_array().unwrap();
+        assert_eq!(prims.len(), 3);
+        let faces = shorts(&gltf, bin, &prims[0]["attributes"]["_FACE"]);
+        assert_eq!(faces, [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3]);
+        assert_eq!(prims[1]["extras"]["lines"], "edges");
+        let edges = shorts(&gltf, bin, &prims[1]["attributes"]["_EDGE"]);
+        assert_eq!(edges, [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5]);
+        // The split edge keeps its row; the seam, no edge, names the row past the last.
+        assert_eq!(prims[2]["extras"]["lines"], "seams");
+        let quiet = shorts(&gltf, bin, &prims[2]["attributes"]["_EDGE"]);
+        assert_eq!(quiet, [6, 6, 8, 8, 8]);
+        let name = |p: &Value| {
+            gltf["materials"][p["material"].as_u64().unwrap() as usize]["name"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(
+            [name(&prims[0]), name(&prims[1]), name(&prims[2])],
+            ["main", "edge", "seam"]
+        );
+        let table = mesh["extras"]["edges"].as_array().unwrap();
+        assert_eq!(table.len(), 8);
+        assert_eq!(
+            table[0],
+            json!({"faces": [0, 1], "turn": [1.0, 2.0], "split": false})
+        );
+        assert_eq!(
+            table[6],
+            json!({"faces": [0, 0], "turn": [0.0, 0.0], "split": true})
+        );
+        assert_eq!(table[7], json!({"faces": [], "turn": null, "split": false}));
     }
 
     #[test]
@@ -384,6 +538,7 @@ mod tests {
                 vec![n; 3],
                 vec![[0, 1, 2]],
             )],
+            Vec::new(),
             Vec::new(),
         );
         let views = [View {

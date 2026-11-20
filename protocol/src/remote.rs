@@ -10,7 +10,9 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use crate::model::{Op, Primitive, Side, Vec3};
-use crate::{Display, DisplayFace, Kernel, Mesh, PROTOCOL_VERSION, Refusal, TimedOut, speaks};
+use crate::{
+    Display, DisplayEdge, DisplayFace, Kernel, Mesh, PROTOCOL_VERSION, Refusal, TimedOut, speaks,
+};
 
 struct Worker {
     child: Child,
@@ -484,9 +486,54 @@ impl Kernel for Remote {
                 })
             })
             .collect::<Result<Vec<_>, Refusal>>()?;
-        let edges = serde_json::from_value(part(&v, "edges")?)
+        let lines: Vec<Vec<Vec3>> = serde_json::from_value(part(&v, "edges")?)
             .map_err(|e| format!("display edges: {e}"))?;
-        Ok(Display { faces, edges })
+        let n = lines.len();
+        // What an adapter omits is unknown; what it gives has one entry for each edge.
+        let per_edge = |key: &str| -> Result<Option<Value>, Refusal> {
+            let Some(given) = v.get(key).filter(|x| !x.is_null()) else {
+                return Ok(None);
+            };
+            match given.as_array().map(Vec::len) {
+                Some(len) if len == n => Ok(Some(given.clone())),
+                Some(len) => Err(format!("display: {len} `{key}` for {n} edges").into()),
+                None => Err(format!("display: `{key}` is not a list").into()),
+            }
+        };
+        let faces_of: Vec<Vec<u32>> = match per_edge("edge_faces")? {
+            Some(x) => serde_json::from_value(x).map_err(|e| format!("display edge_faces: {e}"))?,
+            None => vec![Vec::new(); n],
+        };
+        let turns: Vec<Option<[f64; 2]>> = match per_edge("edge_turns")? {
+            Some(x) => serde_json::from_value(x).map_err(|e| format!("display edge_turns: {e}"))?,
+            None => vec![None; n],
+        };
+        let split: Vec<bool> = match per_edge("edge_split")? {
+            Some(x) => serde_json::from_value(x).map_err(|e| format!("display edge_split: {e}"))?,
+            None => vec![false; n],
+        };
+        let edges = lines
+            .into_iter()
+            .zip(faces_of)
+            .zip(turns.into_iter().zip(split))
+            .map(|((points, faces), (turn, split))| DisplayEdge {
+                points,
+                faces,
+                turn,
+                split,
+            })
+            .collect();
+        let seams = match v.get("seams").filter(|x| !x.is_null()) {
+            Some(s) => {
+                serde_json::from_value(s.clone()).map_err(|e| format!("display seams: {e}"))?
+            }
+            None => Vec::new(),
+        };
+        Ok(Display {
+            faces,
+            edges,
+            seams,
+        })
     }
 
     fn offset(&mut self, s: &Handle, distance: f64) -> Result<Handle, Refusal> {
@@ -736,6 +783,48 @@ mod tests {
              *) echo '{{\"ok\": 1}}';; esac; done"
         );
         ["sh", "-c", &script].map(String::from).to_vec()
+    }
+
+    #[test]
+    fn a_display_without_the_edge_facts_reads_as_unknown_and_one_with_them_is_read_whole() {
+        let face = r#"{"positions": [], "normals": [], "triangles": []}"#;
+        let old = format!(r#"{{"ok": {{"faces": [{face}], "edges": [[[0,0,0],[1,0,0]]]}}}}"#);
+        let cmd = scripted(&format!(r#"*'"display"'*) echo '{old}';;"#));
+        let mut k = Remote::new(cmd, Duration::from_secs(10)).unwrap();
+        let s = k.read_step("a solid").unwrap();
+        let d = k.display(&s, 0.1).unwrap();
+        let line = vec![[0.0; 3], [1.0, 0.0, 0.0]];
+        assert_eq!(d.edges, [DisplayEdge::bare(line.clone())]);
+        assert!(d.seams.is_empty());
+
+        let new = format!(
+            r#"{{"ok": {{"faces": [{face}, {face}], "edges": [[[0,0,0],[1,0,0]], []],
+               "edge_faces": [[0, 1], [0, 1, 1]], "edge_turns": [[-0.5, 1.5], null],
+               "edge_split": [false, true], "seams": [[[0,0,0],[0,0,1]]]}}}}"#
+        )
+        .replace('\n', " ");
+        let cmd = scripted(&format!(r#"*'"display"'*) echo '{new}';;"#));
+        let mut k = Remote::new(cmd, Duration::from_secs(10)).unwrap();
+        let s = k.read_step("a solid").unwrap();
+        let d = k.display(&s, 0.1).unwrap();
+        assert_eq!(
+            d.edges,
+            [
+                DisplayEdge::new(line, vec![0, 1], Some([-0.5, 1.5]), false),
+                DisplayEdge::new(vec![], vec![0, 1, 1], None, true),
+            ]
+        );
+        assert_eq!(d.seams, [vec![[0.0; 3], [0.0, 0.0, 1.0]]]);
+
+        let short = r#"{"ok": {"faces": [], "edges": [[], []], "edge_split": [true]}}"#;
+        let cmd = scripted(&format!(r#"*'"display"'*) echo '{short}';;"#));
+        let mut k = Remote::new(cmd, Duration::from_secs(10)).unwrap();
+        let s = k.read_step("a solid").unwrap();
+        let refused = k.display(&s, 0.1).unwrap_err();
+        assert!(
+            refused.to_string().contains("1 `edge_split` for 2 edges"),
+            "{refused}"
+        );
     }
 
     #[test]

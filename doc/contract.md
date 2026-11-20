@@ -144,7 +144,7 @@ never answers, a failed check misleads, and a crash takes the operation down.
 | B39    | By its seams a curvature-continuous blend bends as what it meets does             |
 | B40    | The solid's nearest point to a point is a point of it, as near as the closed form |
 | B41    | A point of the boundary is on it; a point clear of it is in or out as it is held  |
-| B42    | A display closes the solid with its normals exact, and draws exactly its creases  |
+| B42    | A display closes the solid with its normals exact, and draws exactly its edges    |
 
 Sound cases ([process.md](process.md#two-kinds-of-test)) check limits instead of one answer, and
 have their own clauses. They count in the same total as every other case:
@@ -359,17 +359,33 @@ as its row in the table above says:
   millimetre to either side of a face. The points of the first kind are `"on"`. The points to either
   side are `"in"` and `"out"`.
 - **B42, displays** (`displays`). The cases call [`display`](api.md#display) on a box, a cylinder, a
-  ball, a cone or a drilled box, within 0.01 mm. The faces, once joined, must close, with every edge
-  used once each way round, and must bound the volume within twice the tolerance times the area.
-  Every vertex must lie within 1e-5 of the solid's size of one of its surfaces, with that surface's
-  outward normal there to within 1e-3, and every triangle must face the way its normals do. A vertex
-  at the cone's apex must, in each triangle that uses it, have to within 1e-3 one of the normals the
-  cone has across that triangle halfway out from the apex; a triangle of no area is passed over. The
-  edges are judged in space by the rules B38 applies to a drawing: every vertex lies on a crease,
-  every chord lies within the tolerance of a crease, every crease is covered, and the edges have no
-  more length than the creases have. A ball has no crease, a cone's one crease is its rim, and a
-  cylinder's seam does not count as one. None of these solids has two faces meeting smoothly, so their creases are every edge
-  `display` draws.
+  ball, a cone, a drilled box, a box whose four upright edges are rounded, or a box drawn as a
+  prism with one side in two faces, within 0.01 mm. The faces, once joined, must close, with every
+  edge used once each way round, and must bound the volume within twice the tolerance times the
+  area. Every vertex must lie within 1e-5 of the solid's size of one of its surfaces, with that
+  surface's outward normal there to within 1e-3, and every triangle must face the way its normals
+  do. A vertex at the cone's apex must, in each triangle that uses it, have to within 1e-3 one of
+  the normals the cone has across that triangle halfway out from the apex; a triangle of no area is
+  passed over. The edges are judged in space by the rules B38 applies to a drawing, against the
+  curves where two of the solid's surfaces meet, at an angle or smoothly: every vertex lies on one,
+  every chord lies within the tolerance of one, every one is covered, and the edges have no more
+  length than those curves have. A ball has no such curve, a cone's one is its rim, and the rounded
+  box has eight where a round meets a side smoothly. An edge flagged in `edge_split`, and a seam,
+  are no part of this.
+
+  What each edge says of its faces is a check of its own. Each edge must name at least two faces
+  in `edge_faces`, every one a face of the display, and each of its vertices must lie within twice
+  the tolerance of each face it names. An edge between two distinct faces must give in `edge_turns`
+  the turn the surfaces make there, to within 1e-3 at both ends of its range: `π/2` along a box's
+  edges, a cylinder's rims and a hole's, `π/2` and the cone's half angle at a cone's rim, and 0
+  where a round meets a side. An edge flagged in `edge_split` must lie on the solid's surfaces, off
+  every curve where two of them meet, between two distinct faces, with a turn of 0 if it gives
+  one. The prism's side may come back as one face or as two: an edge drawn between the two must be
+  flagged. Every seam must lie on the solid's surfaces. A cylinder, a cone and a drilled box each
+  have one seam, or none where the kernel cuts the round face in two by split edges instead; a
+  box, a rounded box and the prism have none; a ball's seams are not counted. A display that names no
+  face, gives no turn, flags no split and lists no seam, as an adapter written to protocol 1.0.0
+  does, fails this check alone, as not reported.
 
 The face edits `delete_faces`, `move_faces` and `thicken` are treated as features, so B14 to B16
 judge each result as the primitive it must be. `sweep_path` is treated as a constructor, so B0 to

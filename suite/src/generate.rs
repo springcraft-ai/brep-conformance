@@ -137,14 +137,39 @@ pub struct Drawing {
     pub pieces: Vec<Piece>,
 }
 
-/// A solid's surfaces, its creases, each a whole curve from parameter 0 to 1, and its volume and
-/// area.
+/// What a display of a solid must draw: its surfaces, each stretch of a curve where two of them
+/// meet, the lines along which a kernel may have cut one surface into two faces, how many seams
+/// close its round faces where that is fixed, and its volume and area.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DisplayExact {
     pub surfaces: Vec<Surface>,
-    pub creases: Vec<Curve3>,
+    pub edges: Vec<Meet>,
+    pub splits: Vec<Meet>,
+    pub seams: Option<usize>,
     pub volume: f64,
     pub area: f64,
+}
+
+/// A curve from parameter `t0` to `t1`, along which two surfaces meet with their outward normals
+/// `turn` apart: positive where the edge is convex, 0 where they meet smoothly.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Meet {
+    pub curve: Curve3,
+    pub t0: f64,
+    pub t1: f64,
+    pub turn: f64,
+}
+
+impl Meet {
+    /// The whole of `curve`.
+    pub fn whole(curve: Curve3, turn: f64) -> Meet {
+        Meet {
+            curve,
+            t0: 0.0,
+            t1: 1.0,
+            turn,
+        }
+    }
 }
 
 /// A surface a solid's boundary lies on, with the way out of the solid.
@@ -1655,8 +1680,8 @@ pub const FAMILIES: &[Family] = &[
     },
     Family {
         name: "displays",
-        version: 1,
-        count: 20,
+        version: 2,
+        count: 28,
         draw: drawing::display_case,
     },
     Family {
@@ -7955,13 +7980,13 @@ mod tests {
     fn the_default_seed_draws_the_same_ids_on_every_platform() {
         let ids: Vec<String> = cases(1).into_iter().map(|c| c.id).collect();
         let got = format!("{:016x}", fnv(&ids.join("\n")));
-        if got != "855c148b0b9e2297" {
+        if got != "e9ffe3c92f73e60f" {
             // Every id, so a run elsewhere can be compared with this one case by case.
             for id in &ids {
                 eprintln!("id {id}");
             }
         }
-        assert_eq!(got, "855c148b0b9e2297");
+        assert_eq!(got, "e9ffe3c92f73e60f");
     }
 
     #[test]

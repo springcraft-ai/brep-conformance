@@ -498,17 +498,26 @@ pub(super) fn projection_case(r: &mut Rng) -> Drawn {
     (shape.clone(), shape, exact)
 }
 
-/// A box, a cylinder, a ball or a drilled box, with its creases and closed-form volume and area: a
-/// display must cover its boundary and draw exactly those creases. A ball has none, and a
-/// cylinder's seam is no crease.
+/// A box, a cylinder, a ball, a cone, a drilled box, a box with its four upright edges rounded or
+/// a box with one side in two faces, with its surfaces, the edges between them and its closed-form
+/// volume and area: a display must cover its boundary and draw exactly those edges, each with the
+/// turn its faces make. Every edge is a convex right angle but the eight lines where a rounded
+/// box's rounds meet its sides, which turn by nothing. A ball has no edge, and a seam is none.
 pub(super) fn display_case(r: &mut Rng) -> Drawn {
     use crate::model::add;
+    use brep_protocol::profile::rounded;
     let origin = [r.range(-5.0, 5.0), r.range(-5.0, 5.0), r.range(-5.0, 5.0)];
     let rim = |c: Vec3, r: f64| Curve3::Circle {
         c,
         x: [1.0, 0.0, 0.0],
         y: [0.0, 1.0, 0.0],
         r,
+    };
+    let square = |curves: Vec<Curve3>| -> Vec<Meet> {
+        curves
+            .into_iter()
+            .map(|c| Meet::whole(c, PI / 2.0))
+            .collect()
     };
     // An axis box's six planes.
     let sides = |lo: Vec3, hi: Vec3| -> Vec<Surface> {
@@ -527,18 +536,27 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
             .collect()
     };
     let up = [0.0, 0.0, 1.0];
-    let (shape, surfaces, creases, volume, area): (Shape, Vec<Surface>, Vec<Curve3>, f64, f64) =
-        match r.next_u64() % 5 {
+    let prism = |pts: &[[f64; 2]], radii: &[f64], height: f64| Primitive::Extrude {
+        frame: Frame::at(origin),
+        profile: Profile {
+            loops: vec![rounded(pts, radii)],
+        },
+        height,
+    };
+    let mut splits = Vec::new();
+    let mut seams = Some(0);
+    let (shape, surfaces, edges, volume, area): (Shape, Vec<Surface>, Vec<Meet>, f64, f64) =
+        match r.next_u64() % 7 {
             0 => {
                 let s = [r.range(1.5, 7.0), r.range(1.5, 7.0), r.range(1.5, 7.0)];
                 let hi = add(origin, s);
                 let area = 2.0 * (s[0] * s[1] + s[1] * s[2] + s[2] * s[0]);
                 let volume = s[0] * s[1] * s[2];
-                let creases = box_edges(origin, hi);
+                let edges = square(box_edges(origin, hi));
                 (
                     axis_box(origin, hi).into(),
                     sides(origin, hi),
-                    creases,
+                    edges,
                     volume,
                     area,
                 )
@@ -551,7 +569,7 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
                     height: h,
                 };
                 let top = [origin[0], origin[1], origin[2] + h];
-                let creases = vec![rim(origin, rad), rim(top, rad)];
+                let edges = square(vec![rim(origin, rad), rim(top, rad)]);
                 let surfaces = vec![
                     Surface::Plane {
                         p: origin,
@@ -565,14 +583,17 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
                         out: true,
                     },
                 ];
+                seams = Some(1);
                 let area = 2.0 * PI * rad * (rad + h);
-                (cyl.into(), surfaces, creases, PI * rad * rad * h, area)
+                (cyl.into(), surfaces, edges, PI * rad * rad * h, area)
             }
             2 => {
                 let rad = r.range(0.5, 5.0);
                 let volume = 4.0 / 3.0 * PI * rad.ppowi(3);
                 let surfaces = vec![Surface::Ball { c: origin, r: rad }];
                 let area = 4.0 * PI * rad * rad;
+                // A ball closes by a seam between its poles in one kernel and by none in another.
+                seams = None;
                 (sphere(origin, rad).into(), surfaces, vec![], volume, area)
             }
             3 => {
@@ -592,9 +613,12 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
                 let volume = PI * rad * rad * h / 3.0;
                 let area = PI * rad * (rad + (rad * rad + h * h).sqrt());
                 let shape = cone(Frame::at(origin), rad, 0.0, h);
-                (shape.into(), surfaces, vec![rim(origin, rad)], volume, area)
+                // The rim's faces turn by a right angle and the cone's lean: π/2 + atan(rad/h).
+                let edges = vec![Meet::whole(rim(origin, rad), PI / 2.0 + (rad / h).patan())];
+                seams = Some(1);
+                (shape.into(), surfaces, edges, volume, area)
             }
-            _ => {
+            4 => {
                 let s = [r.range(3.0, 7.0), r.range(3.0, 7.0), r.range(1.5, 6.0)];
                 let hi = add(origin, s);
                 let rad = s[0].min(s[1]) * r.range(0.15, 0.35);
@@ -615,17 +639,106 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
                     r: rad,
                     out: false,
                 });
+                seams = Some(1);
                 let disc = PI * rad * rad;
                 let volume = s[0] * s[1] * s[2] - disc * s[2];
                 let area = 2.0 * (s[0] * s[1] + s[1] * s[2] + s[2] * s[0]) - 2.0 * disc
                     + 2.0 * PI * rad * s[2];
-                (shape, surfaces, creases, volume, area)
+                (shape, surfaces, square(creases), volume, area)
+            }
+            5 => {
+                // A w × d × h box with its four upright edges rounded by `rad`: each round is a
+                // quarter cylinder about a line `rad` in from two sides, meeting both smoothly.
+                let s = [r.range(3.0, 7.0), r.range(3.0, 7.0), r.range(1.5, 6.0)];
+                let hi = add(origin, s);
+                let rad = s[0].min(s[1]) * r.range(0.1, 0.4);
+                let pts = [[0.0, 0.0], [s[0], 0.0], [s[0], s[1]], [0.0, s[1]]];
+                let mut surfaces = sides(origin, hi);
+                let mut edges = Vec::new();
+                for (k, corner) in pts.iter().enumerate() {
+                    // The round's centre, and the quarter turn it spans, counter-clockwise from
+                    // the side it leaves: corner k's starts at 180° + 90°·k.
+                    let c = [
+                        origin[0] + if corner[0] == 0.0 { rad } else { s[0] - rad },
+                        origin[1] + if corner[1] == 0.0 { rad } else { s[1] - rad },
+                    ];
+                    let t0 = 0.5 + 0.25 * k as f64;
+                    surfaces.push(Surface::Round {
+                        c: [c[0], c[1], origin[2]],
+                        axis: up,
+                        r: rad,
+                        out: true,
+                    });
+                    for z in [origin[2], hi[2]] {
+                        edges.push(Meet {
+                            curve: rim([c[0], c[1], z], rad),
+                            t0,
+                            t1: t0 + 0.25,
+                            turn: PI / 2.0,
+                        });
+                    }
+                    for t in [t0, t0 + 0.25] {
+                        let a = rim([c[0], c[1], origin[2]], rad).at(t);
+                        let b = [a[0], a[1], hi[2]];
+                        edges.push(Meet::whole(Curve3::Line { a, b }, 0.0));
+                    }
+                    // The straight run from this round to the next, below and above.
+                    let next = pts[(k + 1) % 4];
+                    let along = [(next[0] - corner[0]) / 2.0, (next[1] - corner[1]) / 2.0];
+                    let len = along[0].abs() + along[1].abs();
+                    let inset = |p: [f64; 2], sign: f64| {
+                        [
+                            origin[0] + p[0] + sign * rad * along[0] / len,
+                            origin[1] + p[1] + sign * rad * along[1] / len,
+                        ]
+                    };
+                    let (a, b) = (inset(*corner, 1.0), inset(next, -1.0));
+                    for z in [origin[2], hi[2]] {
+                        let line = Curve3::Line {
+                            a: [a[0], a[1], z],
+                            b: [b[0], b[1], z],
+                        };
+                        edges.push(Meet::whole(line, PI / 2.0));
+                    }
+                }
+                let floor = s[0] * s[1] - (4.0 - PI) * rad * rad;
+                let round = 2.0 * (s[0] + s[1]) - 8.0 * rad + 2.0 * PI * rad;
+                let shape = prism(&pts, &[rad; 4], s[2]);
+                (
+                    shape.into(),
+                    surfaces,
+                    edges,
+                    floor * s[2],
+                    2.0 * floor + round * s[2],
+                )
+            }
+            _ => {
+                // A box drawn as a prism whose outline has a fifth corner partway along one side:
+                // a kernel that keeps it makes two faces of that side, on one plane.
+                let s = [r.range(3.0, 7.0), r.range(3.0, 7.0), r.range(1.5, 6.0)];
+                let hi = add(origin, s);
+                let m = s[0] * r.range(0.3, 0.7);
+                let pts = [[0.0, 0.0], [m, 0.0], [s[0], 0.0], [s[0], s[1]], [0.0, s[1]]];
+                let a = [origin[0] + m, origin[1], origin[2]];
+                let b = [a[0], a[1], hi[2]];
+                splits.push(Meet::whole(Curve3::Line { a, b }, 0.0));
+                let area = 2.0 * (s[0] * s[1] + s[1] * s[2] + s[2] * s[0]);
+                let shape = prism(&pts, &[0.0; 5], s[2]);
+                (
+                    shape.into(),
+                    sides(origin, hi),
+                    square(box_edges(origin, hi)),
+                    s[0] * s[1] * s[2],
+                    area,
+                )
             }
         };
     let exact = Exact {
         display: Some(DisplayExact {
             surfaces,
-            creases,
+            edges,
+            splits,
+            seams,
             volume,
             area,
         }),

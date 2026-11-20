@@ -17,7 +17,7 @@ use model::{Frame, Primitive, Side, Vec3};
 
 /// The protocol's version, which `hello` reports: requests and replies in
 /// [doc/api.md](../../doc/api.md#calling-a-kernel).
-pub const PROTOCOL_VERSION: &str = "1.0.0";
+pub const PROTOCOL_VERSION: &str = "1.1.0";
 
 /// Every function of this version of the protocol, in the order of
 /// [doc/api.md](../../doc/api.md). `hello` lists the ones a kernel offers out of these.
@@ -116,13 +116,32 @@ pub struct DisplayFace {
     pub triangles: Vec<[u32; 3]>,
 }
 
-/// A solid as a viewer draws it: each face meshed on its own, and the edges that are creases as
-/// polylines.
+/// A solid as a viewer draws it: each face meshed on its own, and every edge between faces as a
+/// polyline with the faces it bounds and how sharply they meet along it.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub struct Display {
     pub faces: Vec<DisplayFace>,
-    pub edges: Vec<Vec<Vec3>>,
+    pub edges: Vec<DisplayEdge>,
+    /// Where a face meets itself, as polylines; drawn only on request.
+    pub seams: Vec<Vec<Vec3>>,
+}
+
+/// One edge of a [`Display`]. An adapter that predates these facts gives `points` alone, which
+/// reads as no `faces`, no `turn` and no `split`: unknown, not measured as such.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub struct DisplayEdge {
+    /// The edge as drawn.
+    pub points: Vec<Vec3>,
+    /// One index into [`Display::faces`] per use: `[a, b]` for most edges, `[f]` on a sheet's
+    /// boundary, more than two where solids touch.
+    pub faces: Vec<u32>,
+    /// For an edge between two distinct faces: the least and greatest signed angle between their
+    /// outward normals over `points`, in radians, positive where the edge is convex.
+    pub turn: Option<[f64; 2]>,
+    /// The two faces lie on one surface: an edge only a split made.
+    pub split: bool,
 }
 
 impl Mesh {
@@ -145,8 +164,31 @@ impl DisplayFace {
 }
 
 impl Display {
-    pub fn new(faces: Vec<DisplayFace>, edges: Vec<Vec<Vec3>>) -> Display {
-        Display { faces, edges }
+    pub fn new(faces: Vec<DisplayFace>, edges: Vec<DisplayEdge>, seams: Vec<Vec<Vec3>>) -> Display {
+        Display {
+            faces,
+            edges,
+            seams,
+        }
+    }
+}
+
+impl DisplayEdge {
+    pub fn new(points: Vec<Vec3>, faces: Vec<u32>, turn: Option<[f64; 2]>, split: bool) -> Self {
+        DisplayEdge {
+            points,
+            faces,
+            turn,
+            split,
+        }
+    }
+
+    /// An edge whose faces and turn are not known.
+    pub fn bare(points: Vec<Vec3>) -> Self {
+        DisplayEdge {
+            points,
+            ..Default::default()
+        }
     }
 }
 

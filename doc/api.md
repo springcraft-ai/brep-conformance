@@ -12,7 +12,7 @@ Each group of functions opens with a table of its commands. The definitions foll
 
 A kernel takes part by shipping an **adapter**, a program that answers these calls with the kernel's
 own functions. The suite runs the adapter as one or more **worker** processes, so the client never
-links the kernel. This is version 1.0.0 of the protocol.
+links the kernel. This is version 1.1.0 of the protocol.
 
 ### Lifecycle
 
@@ -89,7 +89,7 @@ request and `<` marks its reply.
 ```text
 > {"cmd": "hello"}
 < {"ok": {"name": "example-kernel", "version": "1.2.0", "tolerance": 1e-7,
-   "configuration": "", "protocol": "1.0.0",
+   "configuration": "", "protocol": "1.1.0",
    "supports": ["box", "cylinder", "intersection", "volume", "check"]}}
 > {"cmd": "box", "frame": {"origin": [0, 0, 0], "x": [1, 0, 0], "y": [0, 1, 0], "z": [0, 0, 1]},
    "size": [10, 10, 10]}
@@ -1250,7 +1250,7 @@ means the same set of points within the tolerance.
 | [`bounding_box`](#bounding_box) | `s`                                        | `Point3[2]`                                                 |
 | [`split`](#split)               | `s`, `origin`, `normal`                    | `Solid[2]`                                                  |
 | [`mesh`](#mesh)                 | `s`, `tolerance`                           | `{positions: list<Point3>, triangles: list<Index[3]>}`      |
-| [`display`](#display)           | `s`, `tolerance`                           | `{faces: list<Face>, edges: list<list<Point3>>}`            |
+| [`display`](#display)           | `s`, `tolerance`                           | `{faces: list<Face>, edges: list<list<Point3>>, …}`         |
 | [`raycast`](#raycast)           | `s`, `origin`, `direction`; or `s`, `rays` | `list<Length>`; or `list<list<Length>>`                     |
 
 ### volume
@@ -1594,9 +1594,10 @@ for each face. The volume that the mesh bounds differs from the solid's volume b
 
 ### display
 
-`display(s: Solid, tolerance: Length) -> {faces: list<{positions: list<Point3>, normals: list<Vector3>, triangles: list<Index[3]>}>, edges: list<list<Point3>>}`
+`display(s: Solid, tolerance: Length) -> {faces: list<{positions: list<Point3>, normals: list<Vector3>, triangles: list<Index[3]>}>, edges: list<list<Point3>>, edge_faces: list<list<Index>>, edge_turns: list<Angle[2] | null>, edge_split: list<boolean>, seams: list<list<Point3>>}`
 
-Draws the solid as a viewer shows it: each face meshed on its own, and its edges as polylines.
+Draws the solid as a viewer shows it: each face meshed on its own, its edges as polylines, and for
+each edge the faces it bounds and how sharply they meet along it.
 
 Each face has its own vertices, so shading is smooth within a face and sharp where two faces meet.
 Every vertex lies on the face's surface, and `normals` gives the surface's outward unit normal at
@@ -1607,10 +1608,32 @@ outside, and no triangle lies farther than `tolerance` from the face. Together t
 solid, as [`mesh`](#mesh) does.
 
 `edges` holds each edge between two faces, whether they meet at an angle or smoothly, as where a
-fillet meets the face it rounds into. Each edge is given as a polyline whose every vertex lies on
-the edge and whose every chord lies within `tolerance` of the edge. A seam, where a face meets
-itself, is not drawn, and neither is an edge between two faces on one surface: neither marks a
-change in the shape.
+fillet meets the face it rounds into, or lie on one surface, as where a face was cut in two. Each
+edge is given as a polyline whose every vertex lies on the edge and whose every chord lies within
+`tolerance` of the edge. An edge of no length, such as a pole or a cone's apex, is not drawn.
+
+`edge_faces`, `edge_turns` and `edge_split` each hold one entry per edge, in the order of `edges`.
+They report what the kernel measured, and leave to the viewer what counts as a crease.
+
+- `edge_faces` gives the faces the edge bounds, each as an index into `faces`, once for each use the
+  faces make of the edge: two for an edge of a solid, more where solids touch along it.
+- `edge_turns` gives, for an edge between two distinct faces, `[least, greatest]`: the range, over
+  the polyline's vertices, of the angle between the two faces' outward normals there, in radians.
+  The angle is positive where the edge is convex, the solid filling less than half the space about
+  it, and negative where it is concave. It lies between `-π` and `π`, and is 0 where the faces meet
+  smoothly. Along a box's edges it is `[π/2, π/2]`. It is `null` for an edge that is not between two
+  distinct faces.
+- `edge_split` is `true` where the edge's two faces lie on one surface, so that only a split made
+  the edge, and no change in the shape. Its turn is 0.
+
+`seams` holds each seam, where a face meets itself as a cylinder's side does where it closes, as a
+polyline under the rules for an edge. A seam marks no change in the shape, so it is listed apart
+from `edges`, and a viewer draws it only on request.
+
+A viewer asked to hide tangent edges hides those whose turn stays within its own threshold of 0, and
+draws a split edge or a seam only on request. An adapter written to version 1.0.0 returns `faces`
+and `edges` alone, and leaves split edges out with the seams. A client reads a list that is missing
+as not known: no faces, no turn, not split, and no seams.
 
 The suite's runner draws the files it exports with `display` ([formats.md](formats.md#assets)).
 
@@ -1622,7 +1645,9 @@ of each are shown.
 < {"ok": {"faces": [{"positions": [[10.0, 20.0, 0.0], [10.0, 0.0, 0.0], [0.0, 0.0, 0.0],
    [0.0, 20.0, 0.0]], "normals": [[-0.0, -0.0, -1.0], [-0.0, -0.0, -1.0], [-0.0, -0.0, -1.0],
    [-0.0, -0.0, -1.0]], "triangles": [[0, 1, 2], [3, 0, 2]]}, … 5 more], "edges": [[[0.0, 0.0, 0.0],
-   [10.0, 0.0, 0.0]], … 11 more]}}
+   [10.0, 0.0, 0.0]], … 11 more], "edge_faces": [[0, 2], … 11 more],
+   "edge_turns": [[1.5707963267948966, 1.5707963267948966], … 11 more],
+   "edge_split": [false, … 11 more], "seams": []}}
 ```
 
 ### raycast

@@ -27,7 +27,7 @@ namespace brep_protocol {
 using Json = nlohmann::json;
 
 // The protocol's version, which `hello` reports.
-inline constexpr const char* PROTOCOL_VERSION = "1.0.0";
+inline constexpr const char* PROTOCOL_VERSION = "1.1.0";
 
 // Every function of this version of the protocol, in the order of doc/api.md. `hello` lists the
 // ones a kernel offers out of these.
@@ -281,11 +281,26 @@ struct DisplayFace {
     std::vector<std::array<std::uint32_t, 3>> triangles;
 };
 
-// A solid as a viewer draws it: each face meshed on its own, and the edges that are creases as
-// polylines.
+// One edge of a `Display`: the edge as drawn, and what it bounds.
+struct DisplayEdge {
+    std::vector<Vec3> points;
+    // One index into `Display::faces` per use: two for most edges, one on a sheet's boundary, more
+    // than two where solids touch.
+    std::vector<std::uint32_t> faces;
+    // For an edge between two distinct faces: the least and greatest signed angle between their
+    // outward normals over `points`, in radians, positive where the edge is convex.
+    std::optional<std::array<double, 2>> turn;
+    // The two faces lie on one surface: an edge only a split made.
+    bool split = false;
+};
+
+// A solid as a viewer draws it: each face meshed on its own, and every edge between faces as a
+// polyline with the faces it bounds and how sharply they meet along it.
 struct Display {
     std::vector<DisplayFace> faces;
-    std::vector<std::vector<Vec3>> edges;
+    std::vector<DisplayEdge> edges;
+    // Where a face meets itself, as polylines; drawn only on request.
+    std::vector<std::vector<Vec3>> seams;
 };
 
 // A solid's edges and outlines seen along a direction, as polylines in the view plane.
@@ -1208,7 +1223,22 @@ Json answer(Kernel<S>& k, const Json& req, Store<S>& solids) {
                                  {"normals", wire::positions(f.normals)},
                                  {"triangles", wire::triangles(f.triangles)}});
         }
-        return Json{{"faces", std::move(faces)}, {"edges", wire::polylines(d.edges)}};
+        Json edges = Json::array();
+        Json edge_faces = Json::array();
+        Json edge_turns = Json::array();
+        Json edge_split = Json::array();
+        for (const DisplayEdge& e : d.edges) {
+            edges.push_back(wire::positions(e.points));
+            edge_faces.push_back(e.faces);
+            edge_turns.push_back(e.turn ? Json(*e.turn) : Json(nullptr));
+            edge_split.push_back(e.split);
+        }
+        return Json{{"faces", std::move(faces)},
+                    {"edges", std::move(edges)},
+                    {"edge_faces", std::move(edge_faces)},
+                    {"edge_turns", std::move(edge_turns)},
+                    {"edge_split", std::move(edge_split)},
+                    {"seams", wire::polylines(d.seams)}};
     }
     if (c == "raycast") {
         const S& s = solid("s");

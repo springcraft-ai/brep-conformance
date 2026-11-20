@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use brep_protocol::{Display, Kernel, Refusal};
+use brep_protocol::{Display, DisplayEdge, Kernel, Refusal};
 use serde_json::{Value, json};
 
 use super::{attempt, build};
@@ -155,18 +155,45 @@ fn ghost<K: Kernel>(k: &mut K, a: &K::Solid, b: &K::Solid, tol: f64) -> Result<D
     let on_faces = attempt(|| k.closest(&rest, &middles))
         .ok()
         .and_then(|p| k.classify(b, &p).ok());
-    let mids: Vec<[f64; 3]> = d
-        .edges
-        .iter()
-        .map(|e| e.get(e.len() / 2).copied().unwrap_or([0.0; 3]))
-        .collect();
+    let middle = |e: &[[f64; 3]]| e.get(e.len() / 2).copied().unwrap_or([0.0; 3]);
+    let mids: Vec<[f64; 3]> = d.edges.iter().map(|e| middle(&e.points)).collect();
     let on_edges = k.classify(b, &mids).ok();
+    let seam_mids: Vec<[f64; 3]> = d.seams.iter().map(|e| middle(e)).collect();
+    let on_seams = (!seam_mids.is_empty())
+        .then(|| k.classify(b, &seam_mids).ok())
+        .flatten();
     let keep = |sides: &Option<Vec<Side>>, i: usize| {
         sides
             .as_ref()
             .and_then(|s| s.get(i))
             .is_none_or(|s| *s != Side::On)
     };
+    // Where each face that stays lands, so an edge still names its faces; an edge that lost one
+    // bounds the ghost alone, between no two faces.
+    let mut kept = 0u32;
+    let lands: Vec<Option<u32>> = (0..d.faces.len())
+        .map(|i| {
+            keep(&on_faces, i).then(|| {
+                kept += 1;
+                kept - 1
+            })
+        })
+        .collect();
+    let edges = d
+        .edges
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| keep(&on_edges, *i))
+        .map(|(_, e)| {
+            let faces: Vec<u32> = e
+                .faces
+                .iter()
+                .filter_map(|&f| lands.get(f as usize).copied().flatten())
+                .collect();
+            let whole = faces.len() == e.faces.len();
+            DisplayEdge::new(e.points, faces, e.turn.filter(|_| whole), e.split && whole)
+        })
+        .collect();
     Ok(Display::new(
         d.faces
             .into_iter()
@@ -174,10 +201,11 @@ fn ghost<K: Kernel>(k: &mut K, a: &K::Solid, b: &K::Solid, tol: f64) -> Result<D
             .filter(|(i, _)| keep(&on_faces, *i))
             .map(|(_, f)| f)
             .collect(),
-        d.edges
+        edges,
+        d.seams
             .into_iter()
             .enumerate()
-            .filter(|(i, _)| keep(&on_edges, *i))
+            .filter(|(i, _)| keep(&on_seams, *i))
             .map(|(_, e)| e)
             .collect(),
     ))

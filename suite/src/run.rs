@@ -2384,7 +2384,7 @@ fn run_projection<K: Kernel>(k: &mut K, c: &Case, dr: &crate::generate::Drawing)
 pub const DISPLAY_TOLERANCE: f64 = 0.01;
 
 /// B42: a display's faces close the solid and bound its volume, its normals are units pointing out,
-/// and its edges are the solid's creases.
+/// its edges are those between the solid's surfaces, and each says what it bounds.
 fn run_display<K: Kernel>(k: &mut K, c: &Case, want: &crate::generate::DisplayExact) -> Value {
     let s = match made(k, c, "display") {
         Ok(s) => s,
@@ -3858,7 +3858,7 @@ pub const TIER_WORDS: [&str; 5] = ["1e-7", "1e-6", "1e-5", "1e-3", "fail"];
 
 /// The version of what draws a test's shape files: part of each file's name, so a change here
 /// names new files. springrep-adapter's tests fail when springrep's `display` changes until it does.
-pub const ASSET_GENERATOR: &str = "8";
+pub const ASSET_GENERATOR: &str = "9";
 
 /// Adds a case's verdict to its result: its `kind`; its `result`, the loosest tier among its
 /// checks or how it ended without an answer; for one that is not a pass at the suite's tolerance,
@@ -4220,6 +4220,7 @@ mod tests {
                     vec![[0.0, 0.0, 1.0]; 3],
                     vec![[0, 1, 2]],
                 )],
+                Vec::new(),
                 Vec::new(),
             ))
         }

@@ -79,6 +79,9 @@ pub struct Mesh {
     /// The shape's edges as segments: wherever two faces meet, at an angle or tangentially, as
     /// CAD draws them; not where a surface meets itself at its own seam.
     pub edges: Vec<[[f32; 3]; 2]>,
+    /// For each of `edges`, the signed angle between its two faces' normals there, in radians,
+    /// positive where the edge is convex; NaN where the edge has not two faces to compare.
+    pub turns: Vec<f32>,
     /// The face each triangle lies on, numbered by surface.
     pub faces: Vec<u32>,
     /// Mesh edges that bound a surface's kept part: a trim, or the surface's own border. Only
@@ -566,6 +569,8 @@ fn finish(m: &mut Mesh, cell: f64) {
     // Each welded side's uses: its two vertices as the triangle has them, and the face.
     type Uses = Vec<(u32, u32, u32)>;
     let mut sides: HashMap<(u32, u32), Uses> = HashMap::new();
+    // The third corner of the triangle each use belongs to, which lies on the use's face.
+    let mut third: HashMap<(u32, u32, u32), u32> = HashMap::new();
     for (t, face) in m.triangles.iter().zip(&m.faces) {
         // A triangle two of whose corners weld into one, as at a pole, has no area and no say.
         let w = t.map(|i| ids[i as usize]);
@@ -581,6 +586,7 @@ fn finish(m: &mut Mesh, cell: f64) {
             let key = if wa < wb { (wa, wb) } else { (wb, wa) };
             let (ea, eb) = if wa < wb { (a, b) } else { (b, a) };
             sides.entry(key).or_default().push((ea, eb, *face));
+            third.insert((ea, eb, *face), t[(k + 2) % 3]);
         }
     }
     let pair = |a: u32, b: u32| {
@@ -665,22 +671,50 @@ fn finish(m: &mut Mesh, cell: f64) {
             // Another face's border before the face's own; of those, the lowest face's.
             .min_by_key(|&j| (singles[j].2 == iface, singles[j].2))
     };
+    // The angle from the normal `n1` of the face that `use1` lies on to `n2`, the other face's:
+    // convex where the first face falls below the second's tangent plane.
+    let turn = |use1: (u32, u32, u32), n1: [f32; 3], n2: [f32; 3]| -> f32 {
+        let angle = dot(n1, n2).clamp(-1.0, 1.0).acos();
+        let Some(&c) = third.get(&use1) else {
+            return f32::NAN;
+        };
+        let (a, c) = (p(use1.0), p(c));
+        let into: f64 = (0..3).map(|k| (c[k] - a[k]) * f64::from(n2[k])).sum();
+        if into > 0.0 { -angle } else { angle }
+    };
     for key in keys {
         let s = &sides[key];
         let n = |i: &u32| m.normals[*i as usize];
-        let (a, b) = match s.as_slice() {
+        let (a, b, t) = match s.as_slice() {
             [(a1, b1, f1), (a2, b2, f2)] => {
                 let crease = dot(n(a1), n(a2)) < cos || dot(n(b1), n(b2)) < cos;
                 if f1 == f2 && !crease {
                     continue;
                 }
-                (*a1, *b1)
+                (*a1, *b1, turn((*a1, *b1, *f1), n(a1), n(a2)))
             }
             [(a, b, face)] => {
                 if !marked.contains(key) {
                     continue;
                 }
                 let i = index[&(*a, *b, *face)];
+                // The partner is sampled apart from this border, so its normal here is read
+                // between its two ends, where this border's start falls along it.
+                let with = |j: usize| {
+                    let (ja, jb, _) = singles[j];
+                    let (o, d) = (p(ja), [0, 1, 2].map(|k| p(jb)[k] - p(ja)[k]));
+                    let dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+                    let along: f64 = (0..3).map(|k| (p(*a)[k] - o[k]) * d[k]).sum();
+                    let t = if dd > 0.0 {
+                        (along / dd).clamp(0.0, 1.0) as f32
+                    } else {
+                        0.0
+                    };
+                    let (n0, n1) = (m.normals[ja as usize], m.normals[jb as usize]);
+                    let mix = [0, 1, 2].map(|k| n0[k] + t * (n1[k] - n0[k]));
+                    let len = dot(mix, mix).sqrt().max(1e-30);
+                    turn((*a, *b, *face), n(a), mix.map(|x| x / len))
+                };
                 match partner(i) {
                     // A surface meeting itself, at a seam its two sides were sampled apart
                     // along: no edge where it is smooth, a crease drawn once where not.
@@ -688,16 +722,18 @@ fn finish(m: &mut Mesh, cell: f64) {
                         if dot(n(a), m.normals[singles[j].0 as usize]) >= tangent || j < i {
                             continue;
                         }
-                        (*a, *b)
+                        (*a, *b, with(j))
                     }
                     Some(j) if singles[j].2 < *face => continue,
-                    _ => (*a, *b),
+                    Some(j) => (*a, *b, with(j)),
+                    None => (*a, *b, f32::NAN),
                 }
             }
-            _ => (s[0].0, s[0].1),
+            _ => (s[0].0, s[0].1, f32::NAN),
         };
         m.edges
             .push([m.positions[a as usize], m.positions[b as usize]]);
+        m.turns.push(t);
     }
 }
 
@@ -1318,9 +1354,9 @@ pub unsafe extern "C" fn release(p: *mut u8, len: usize) {
 }
 
 /// Meshes the shape whose JSON is at `p`: a buffer of a zero status word, the vertex, triangle
-/// and edge counts, the positions then the normals as f32 triples, the triangles as u32 triples
-/// and the edges as pairs of f32 triples, all little-endian; or a status of one, the error's
-/// length and its text.
+/// and edge counts, the positions then the normals as f32 triples, the triangles as u32 triples,
+/// the edges as pairs of f32 triples and each edge's turn as an f32, all little-endian; or a status
+/// of one, the error's length and its text.
 ///
 /// # Safety
 ///
@@ -1348,6 +1384,9 @@ pub unsafe extern "C" fn mesh_json(p: *const u8, len: usize, cell: f64) -> *cons
                     o.extend(x.to_le_bytes());
                 }
                 for x in m.edges.iter().flatten().flatten() {
+                    o.extend(x.to_le_bytes());
+                }
+                for x in &m.turns {
                     o.extend(x.to_le_bytes());
                 }
             }
@@ -1711,6 +1750,57 @@ mod tests {
         .unwrap();
         let bm = mesh(&ball, 0.0);
         assert!(bm.edges.is_empty(), "{} edges", bm.edges.len());
+    }
+
+    /// The length of `m`'s edges whose turn lies within 1e-3 of `turn`.
+    fn length_turning(m: &Mesh, turn: f64) -> f64 {
+        m.edges
+            .iter()
+            .zip(&m.turns)
+            .filter(|(_, t)| (f64::from(**t) - turn).abs() < 1e-3)
+            .map(|([a, b], _)| dist(a.map(f64::from), b.map(f64::from)))
+            .sum()
+    }
+
+    #[test]
+    fn each_edge_turns_as_its_faces_do_convex_concave_or_not_at_all() {
+        // A 4 × 4 × 2 box less a 2 × 2 corner through it: an L, whose one inner edge, 2 long,
+        // is concave, and whose other edges, 2·16 + 5·2 long, are convex right angles.
+        let block = |at: [f64; 3], size: [f64; 3]| serde_json::json!({"kind": "box", "frame": frame(at), "size": size});
+        let l = shape(&serde_json::json!({"kind": "boolean", "op": "difference",
+            "a": block([0.0; 3], [4.0, 4.0, 2.0]), "b": block([2.0, 2.0, -1.0], [3.0, 3.0, 4.0])}))
+        .unwrap();
+        let m = mesh(&l, 0.0);
+        assert_eq!(m.turns.len(), m.edges.len());
+        close(length_turning(&m, PI / 2.0), 42.0, 1e-3);
+        close(length_turning(&m, -PI / 2.0), 2.0, 1e-3);
+        // A rod whose side runs smoothly into a quarter round: that circle turns by nothing,
+        // and the rod's base rim by a right angle.
+        let rod = shape(
+            &serde_json::json!({"kind": "revolve", "angle": TAU, "frame": frame([0.0; 3]),
+            "profile": [[
+                {"line": [[0.0, 0.0], [1.0, 0.0]]},
+                {"line": [[1.0, 0.0], [1.0, 2.0]]},
+                {"arc": {"center": [0.5, 2.0], "radius": 0.5, "start": 0.0, "sweep": PI / 2.0}},
+                {"line": [[0.5, 2.5], [0.0, 2.5]]},
+                {"line": [[0.0, 2.5], [0.0, 0.0]]}]]}),
+        )
+        .unwrap();
+        let m = mesh(&rod, 0.02);
+        for (z, turn) in [(0.0, PI / 2.0), (2.0, 0.0)] {
+            let at: Vec<f64> = m
+                .edges
+                .iter()
+                .zip(&m.turns)
+                .filter(|([a, b], _)| [a, b].iter().all(|p| (f64::from(p[2]) - z).abs() < 1e-6))
+                .map(|(_, t)| f64::from(*t))
+                .collect();
+            assert!(at.len() >= 8, "{} edges at z = {z}", at.len());
+            assert!(
+                at.iter().all(|t| (t - turn).abs() < 1e-2),
+                "z = {z}: {at:?}"
+            );
+        }
     }
 
     #[test]

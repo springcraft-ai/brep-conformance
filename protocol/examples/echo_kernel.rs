@@ -9,7 +9,7 @@
 
 use brep_protocol::model::{Frame, Primitive, Side, Vec3};
 use brep_protocol::profile::Profile;
-use brep_protocol::{Display, DisplayFace, Mesh, Projection};
+use brep_protocol::{Display, DisplayEdge, DisplayFace, Mesh, Projection};
 use brep_protocol::{FUNCTIONS, Kernel, Kind, Meeting, Refusal};
 use serde_json::{Value, json};
 
@@ -284,7 +284,17 @@ impl Kernel for Echo {
         );
         Ok(Display::new(
             vec![face, DisplayFace::new(vec![], vec![], vec![])],
-            vec![vec![[count(s) as f64, 0.0, 0.0], [0.0, 0.0, 0.0]], vec![]],
+            vec![
+                DisplayEdge::new(
+                    vec![[count(s) as f64, 0.0, 0.0], [0.0, 0.0, 0.0]],
+                    vec![0, 1],
+                    Some([-tolerance, 1.5]),
+                    false,
+                ),
+                DisplayEdge::new(vec![], vec![0, 1, 1], None, true),
+                DisplayEdge::bare(vec![]),
+            ],
+            vec![vec![[0.0, fold(s), 0.0], [0.0, 0.0, 1.0]]],
         ))
     }
     fn offset(&mut self, s: &Value, distance: f64) -> Result<Value, Refusal> {

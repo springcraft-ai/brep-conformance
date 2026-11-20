@@ -10,11 +10,18 @@ a refused blend differently.
 
 ### Protocol
 
-- Protocol 1.0.0, unchanged. No message changed. Adapters written to 1.0.0 run on this release.
+- Protocol 1.1.0. [`display`](doc/api.md#display) gains four fields: `edge_faces`, the faces each
+  edge bounds; `edge_turns`, the least and greatest signed angle between those faces' normals along
+  it; `edge_split`, which flags an edge between two faces on one surface; and `seams`, a list of
+  their own. Split edges, left out before, now come in `edges`, flagged. Adapters written to 1.0.0
+  run on this release, and a client reads the fields they omit as not known.
+- The Rust crate's `Display` holds its edges as `DisplayEdge` and has `seams`. The C++ binding's
+  `Display` changes the same way, which makes that binding 2.0.0.
 - [`display`](doc/api.md#display) now says what a vertex's normal is where the surface has no one
   normal, as at a cone's apex: each triangle that meets there has its own vertex there, with a
   normal that the surface has along that triangle. It also says that `edges` holds every edge
-  between two faces, including an edge where two faces meet smoothly.
+  between two faces, including an edge where two faces meet smoothly, and it leaves to the viewer
+  which of them count as creases.
 - [`shell`](doc/api.md#shell) is defined by faces moved inward instead of by distance to the
   boundary. A wall ends flush with each opening, and the cavity is sharp inside each concave edge.
 
@@ -23,6 +30,10 @@ a refused blend differently.
 - Contract 1.1.0. B42 adds a cone to the solids it displays. A vertex at the cone's apex must have,
   in each triangle that uses it, one of the normals that the cone has across that triangle, to
   within 1e-3.
+- B42 has a fourth check, of what each edge says: the faces it names, the turn between them against
+  its closed form to within 1e-3, the flag on an edge a split made, and the seams. A display from an
+  adapter written to protocol 1.0.0 fails this check alone, as not reported. B42 also displays a box
+  with its upright edges rounded, where faces meet smoothly, and a box with one side in two faces.
 - B31 and B39 no longer run when the kernel refused the blend. Before, a kernel that offers `normal`
   or curvatures at probes got a failed case for a refused blend. Now the case is a refusal, as
   every other check of a blend case already scored it.
@@ -33,8 +44,9 @@ a refused blend differently.
 
 ### Tests added
 
-- 3609 cases in 248 tests for the default seed: 122 cases in 10 tests more than 1.0.0.
-- `queries/display-of-a-cone`: the cone in B42.
+- 3617 cases in 250 tests for the default seed: 130 cases in 12 tests more than 1.0.0.
+- `queries/display-of-a-cone`, `queries/display-of-a-filleted-box` and
+  `queries/display-of-a-split-box`: the cone, the rounded box and the box with a split side in B42.
 - Edits against curved faces: `modify/delete-faces-of-turned-parts`,
   `modify/delete-faces-taking-material-away`, `modify/offset-boss-with-a-root-round`,
   `modify/offset-cone-to-its-apex`, `modify/offset-torus`, `modify/shell-ball-or-cone`,

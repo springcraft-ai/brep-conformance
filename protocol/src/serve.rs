@@ -8,7 +8,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use serde_json::{Value, json};
 
 use crate::model::{Op, Primitive};
-use crate::{FUNCTIONS, Kernel, PROTOCOL_VERSION, Refusal};
+use crate::{DisplayEdge, FUNCTIONS, Kernel, PROTOCOL_VERSION, Refusal};
 
 fn op(v: &Value) -> Result<Op, Refusal> {
     match v.as_str() {
@@ -211,7 +211,15 @@ fn answer<K: Kernel>(
                            "triangles": f.triangles})
                 })
                 .collect();
-            return Ok(json!({"faces": faces, "edges": d.edges}));
+            let each = |f: fn(&DisplayEdge) -> Value| d.edges.iter().map(f).collect::<Vec<_>>();
+            return Ok(json!({
+                "faces": faces,
+                "edges": each(|e| json!(e.points)),
+                "edge_faces": each(|e| json!(e.faces)),
+                "edge_turns": each(|e| json!(e.turn)),
+                "edge_split": each(|e| json!(e.split)),
+                "seams": d.seams,
+            }));
         }
         c @ ("delete_faces" | "move_faces" | "thicken") => {
             let faces: Vec<[f64; 3]> =

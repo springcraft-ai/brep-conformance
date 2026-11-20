@@ -70,6 +70,7 @@ export function ScanView({
   // The view shown, by name, so moving to another case or kernel keeps it where it can.
   const [viewName, setViewName] = useState<string | null>(null)
   const [operands, setOperands] = useState(true)
+  const [tangent, setTangent] = useState(true)
   const [zebra, setZebra] = useState<Density | null>(null)
   const [cut, setCut] = useState(false)
   const [points, setPoints] = useState(true)
@@ -88,7 +89,9 @@ export function ScanView({
   )
   const keys = useMemo(() => (loaded ? keysOf(loaded.overlay, points) : []), [loaded, points])
 
-  const views = loaded?.views ?? []
+  // Whether any solid has an edge its faces meet smoothly along, which the toggle would hide.
+  const hasSmooth = !!loaded?.creases
+  const views = (tangent ? loaded?.views : (loaded?.creases ?? loaded?.views)) ?? []
   const shown = useMemo(() => {
     if (!views.length) return -1
     const i = viewName === null ? -1 : views.findIndex(v => v.name === viewName)
@@ -119,6 +122,7 @@ export function ScanView({
     toggle,
     hasPoints,
     hasBox,
+    hasSmooth,
   }
   const kept = useRef(row)
   if (status !== 'loading') kept.current = row
@@ -276,6 +280,9 @@ export function ScanView({
               onChange={setOperands}
               label={shownRow.toggle}
             />
+          )}
+          {shownRow.hasSmooth && (
+            <Checkbox tone="void" checked={tangent} onChange={setTangent} label="tangent edges" />
           )}
           {shownRow.hasPoints && (
             <Checkbox tone="void" checked={points} onChange={setPoints} label="show points" />

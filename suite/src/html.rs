@@ -837,7 +837,8 @@ const VIEWER: &str = r##"<script>
     const nrm = take(Float32Array, nv * 3);
     const idx = take(Uint32Array, nt * 3);
     const edges = take(Float32Array, ne * 6);
-    return { pos, nrm, idx, edges };
+    const turns = take(Float32Array, ne);
+    return { pos, nrm, idx, edges, turns };
   };
   const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -874,7 +875,7 @@ const VIEWER: &str = r##"<script>
       idx = new Uint32Array(m.idx.length);
       for (let i = 0; i < m.idx.length; i += 3) { idx[i] = m.idx[i]; idx[i + 1] = m.idx[i + 2]; idx[i + 2] = m.idx[i + 1]; }
     }
-    return { pos: point(m.pos), nrm, idx, edges: point(m.edges) };
+    return { pos: point(m.pos), nrm, idx, edges: point(m.edges), turns: m.turns };
   };
 
   let ui = null;
@@ -884,6 +885,7 @@ const VIEWER: &str = r##"<script>
     root.innerHTML = '<div class="panel" role="dialog" aria-modal="true">' +
       '<div class="bar2"><div class="title"></div><div class="modes"></div>' +
       '<label><input type="checkbox" class="ghost" checked> operands</label>' +
+      '<label><input type="checkbox" class="tangent" checked> tangent edges</label>' +
       '<button type="button" class="close">close</button></div>' +
       '<div class="stage"><canvas class="main"></canvas><div class="viewcube"><canvas class="cube" aria-label="View cube: click a face, edge or corner to look from there"></canvas>' +
       '<canvas class="axes" width="64" height="64" aria-hidden="true"></canvas></div>' +
@@ -1143,7 +1145,17 @@ const VIEWER: &str = r##"<script>
   // and its edges, where faces meet at a crease, as black lines over them. A ghost is faint,
   // and pushed back so it never fights the subject for depth where they share a face: by a few
   // depth steps, not by its slope, which seen edge-on pushed it behind the subject's far side.
-  const solid = (m, color, opacity, flush) => {
+  // An edge whose faces' normals turn by less than this, in radians, is tangent: about three
+  // degrees, above what the mesher's sampled normals are off by and below any crease worth a line.
+  const TANGENT = 0.05;
+  const creases = (m) => {
+    const keep = [];
+    for (let i = 0; i < m.turns.length; i++) if (!(Math.abs(m.turns[i]) < TANGENT)) keep.push(i);
+    const out = new Float32Array(keep.length * 6);
+    keep.forEach((i, k) => out.set(m.edges.subarray(i * 6, i * 6 + 6), k * 6));
+    return out;
+  };
+  const solid = (m, color, opacity, flush, tangent) => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(m.pos, 3));
     g.setAttribute("normal", new THREE.BufferAttribute(m.nrm, 3));
@@ -1163,9 +1175,10 @@ const VIEWER: &str = r##"<script>
     });
     const part = new THREE.Group();
     part.add(new THREE.Mesh(g, mat));
-    if (m.edges.length) {
+    const lines = tangent ? m.edges : creases(m);
+    if (lines.length) {
       const e = new THREE.BufferGeometry();
-      e.setAttribute("position", new THREE.BufferAttribute(m.edges, 3));
+      e.setAttribute("position", new THREE.BufferAttribute(lines, 3));
       const lineMat = new THREE.LineBasicMaterial({
         color: 0x000000, transparent: true, opacity: ghost ? 0.12 : 0.5 });
       // Each face is meshed on its own, so where two meet, one's chords can stand a hair in front
@@ -1196,6 +1209,7 @@ const VIEWER: &str = r##"<script>
     const bar = ui.root.querySelector(".modes");
     bar.innerHTML = "";
     const ghostBox = ui.root.querySelector(".ghost");
+    const tangentBox = ui.root.querySelector(".tangent");
     const anyGhost = modes.some((v) => v.solids.some((s) => s.role.startsWith("ghost")));
     ghostBox.parentElement.style.display = anyGhost ? "" : "none";
     // The last test's solid goes at once, not when this one's is ready.
@@ -1231,7 +1245,7 @@ const VIEWER: &str = r##"<script>
           const m = moved(m0, s.matrix);
           if (!s.role.startsWith("ghost")) nt += m.idx.length / 3;
           const [color, opacity] = tint[s.role] || tint.main;
-          ui.group.add(solid(m, color, opacity, !!s.flush));
+          ui.group.add(solid(m, color, opacity, !!s.flush, tangentBox.checked));
         }
         // A view whose subject comes out empty, when the test first opens: show the next.
         if (first && nt === 0 && i + 1 < modes.length) { show(i + 1, true); return; }
@@ -1307,6 +1321,7 @@ const VIEWER: &str = r##"<script>
       bar.append(b);
     });
     ghostBox.onchange = () => show([...bar.children].findIndex((b) => b.getAttribute("aria-pressed") === "true"), false);
+    tangentBox.onchange = () => show([...bar.children].findIndex((b) => b.getAttribute("aria-pressed") === "true"), false);
     show(0, true);
   };
 })();

@@ -390,8 +390,13 @@ class Echo : public Kernel<Json> {
         DisplayFace face{{Vec3{tolerance, 0, 0}, Vec3{0, fold(s), 0}},
                          {Vec3{0, 0, 1}, Vec3{0, 1, 0}},
                          {{0, 1, 1}}};
+        DisplayEdge edge{{Vec3{static_cast<double>(count(s)), 0, 0}, Vec3{0, 0, 0}},
+                         {0, 1},
+                         std::array<double, 2>{-tolerance, 1.5},
+                         false};
         return Display{{face, DisplayFace{}},
-                       {{Vec3{static_cast<double>(count(s)), 0, 0}, Vec3{0, 0, 0}}, {}}};
+                       {edge, DisplayEdge{{}, {0, 1, 1}, std::nullopt, true}, DisplayEdge{}},
+                       {{Vec3{0, fold(s), 0}, Vec3{0, 0, 1}}}};
     }
     Json offset(const Json& s, double distance) override {
         return Json{{"op", "offset"}, {"s", s}, {"distance", distance}};

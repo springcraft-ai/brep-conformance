@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { box, glbOf, Z_UP_TO_Y_UP } from './fixture'
-import { overlayOf, parseGlb } from './glb'
+import { creasesOf, hasTangent, overlayOf, parseGlb } from './glb'
 
 // A triangle and one edge as the suite writes them: positions as SHORT padded to 8 bytes, normals
 // as normalized SHORT padded to 8 (BYTE padded to 4 in files written before), and the node's
@@ -97,6 +97,41 @@ describe('parseGlb', () => {
   it('keeps the file’s own edges when it has them', () => {
     const s = parseGlb(glbOf(positions, triangles, [0, 1, 1, 3]))
     expect(Array.from(s.edges)).toEqual([0, 0, 0, 2, 0, 0, 2, 0, 0, 2, 3, 0])
+  })
+
+  it('reads each edge’s turn, leaves seams out, and hides the tangent edges on request', () => {
+    // Three edges of the box: a crease, one tangent all along, and one tangent at one end only,
+    // which is a crease along the rest; and a seam, with a split edge, in lines of their own.
+    const table = [
+      { faces: [0, 1], turn: [1.5708, 1.5708], split: false },
+      { faces: [1, 2], turn: [0, 0.001], split: false },
+      { faces: [2, 3], turn: [0, -1.2], split: false },
+      { faces: [3, 3], turn: [0, 0], split: true },
+    ]
+    const of = [0, 0, 1, 1, 2, 2, 3, 3]
+    const lines = [0, 1, 2, 3, 4, 5]
+    const s = parseGlb(glbOf(positions, triangles, lines, {}, [], { of, table, seams: [6, 7] }))
+    expect(s.edges.length).toBe(18)
+    const turns = Array.from(s.turns!).map(t => Math.round(t * 1e4) / 1e4)
+    expect(turns).toEqual([1.5708, 1.5708, 0, 0.001, 0, -1.2])
+    expect(hasTangent(s)).toBe(true)
+    const creases = creasesOf(s)
+    expect(Array.from(creases.edges)).toEqual([...s.edges.slice(0, 6), ...s.edges.slice(12, 18)])
+    expect(creases.turns!.length).toBe(4)
+    expect(hasTangent(creases)).toBe(false)
+    expect(creasesOf(creases)).toBe(creases)
+  })
+
+  it('keeps every edge of a file that gives no turns', () => {
+    const plain = parseGlb(glbOf(positions, triangles, [0, 1, 1, 3]))
+    expect(plain.turns).toBeUndefined()
+    expect(hasTangent(plain)).toBe(false)
+    expect(creasesOf(plain)).toBe(plain)
+    // A table from an adapter that reports no turn: every row's is null.
+    const table = [{ faces: [], turn: null, split: false }]
+    const silent = parseGlb(glbOf(positions, triangles, [0, 1], {}, [], { of: [0, 0], table }))
+    expect(silent.turns).toBeUndefined()
+    expect(silent.edges.length).toBe(6)
   })
 
   it('applies node transforms', () => {
