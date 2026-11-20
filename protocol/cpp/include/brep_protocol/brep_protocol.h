@@ -650,16 +650,24 @@ inline double num(const Json& v, const char* key) {
     return number(at(v, key), key);
 }
 
-// A whole number from 0 to 2⁵³; `5.0` is `5`.
-inline std::uint64_t count(const Json& v, const char* what) {
+// An `integer` of doc/api.md: a whole number from 0 to 2⁵³, so `5.0` is `5`.
+inline std::optional<std::uint64_t> integer(const Json& v) {
+    constexpr std::uint64_t MAX = std::uint64_t(1) << 53;
     if (v.is_number_unsigned()) {
-        return v.get<std::uint64_t>();
+        const auto n = v.get<std::uint64_t>();
+        return n <= MAX ? std::optional<std::uint64_t>(n) : std::nullopt;
     }
     if (v.is_number()) {
         const double d = v.get<double>();
-        if (d >= 0 && d <= 9007199254740992.0 && std::floor(d) == d) {
+        if (d >= 0 && d <= static_cast<double>(MAX) && std::floor(d) == d) {
             return static_cast<std::uint64_t>(d);
         }
+    }
+    return std::nullopt;
+}
+inline std::uint64_t count(const Json& v, const char* what) {
+    if (const auto n = integer(v)) {
+        return *n;
     }
     throw Refusal::failed(std::string("`") + what + "` is not a whole number");
 }
@@ -939,10 +947,11 @@ class Store {
         return h;
     }
     const Solid& get(const Json& v) const {
-        if (!v.is_number_unsigned()) {
+        const auto handle = wire::integer(v);
+        if (!handle) {
             throw Refusal::failed(v.dump() + " is not a handle");
         }
-        const auto h = v.get<std::uint64_t>();
+        const std::uint64_t h = *handle;
         const auto it = solids_.find(h);
         if (it == solids_.end()) {
             throw Refusal::failed("no solid " + std::to_string(h));

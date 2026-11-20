@@ -19,6 +19,16 @@ fn nums(v: &Value) -> Result<Vec<f64>, String> {
         .collect()
 }
 
+/// An `integer` of doc/api.md: a whole number from 0 to 2⁵³, so `5.0` is `5`.
+pub(crate) fn integer(v: &Value) -> Option<u64> {
+    const MAX: u64 = 1 << 53;
+    if let Some(n) = v.as_u64() {
+        return (n <= MAX).then_some(n);
+    }
+    let d = v.as_f64()?;
+    (d >= 0.0 && d <= MAX as f64 && d.fract() == 0.0).then_some(d as u64)
+}
+
 fn vec3(v: &Value) -> Result<Vec3, String> {
     let n = nums(v)?;
     n.try_into().map_err(|_| "expected three numbers".into())
@@ -40,6 +50,9 @@ pub(crate) fn frame(v: &Value) -> Result<Frame, String> {
 
 fn seg(v: &Value) -> Result<Seg, String> {
     if let Some(l) = v.get("line") {
+        if l.as_array().map(Vec::len) != Some(2) {
+            return Err("a line is two points".into());
+        }
         return Ok(Seg::Line {
             a: vec2(&l[0])?,
             b: vec2(&l[1])?,
@@ -47,7 +60,7 @@ fn seg(v: &Value) -> Result<Seg, String> {
     }
     if let Some(s) = v.get("spline") {
         return Ok(Seg::Spline(Spline {
-            degree: s["degree"].as_u64().ok_or("`degree` is not a count")? as usize,
+            degree: integer(&s["degree"]).ok_or("`degree` is not a whole number")? as usize,
             knots: nums(&s["knots"])?,
             ctrl: s["ctrl"]
                 .as_array()
@@ -58,7 +71,7 @@ fn seg(v: &Value) -> Result<Seg, String> {
         }));
     }
     if let Some(c) = v.get("gn") {
-        let order = c["order"].as_u64().ok_or("`order` is not a whole number")?;
+        let order = integer(&c["order"]).ok_or("`order` is not a whole number")?;
         return Ok(Seg::Gn {
             a: vec2(&c["a"])?,
             apex: vec2(&c["apex"])?,
@@ -194,7 +207,8 @@ impl Primitive {
                         frame,
                         profile: profile()?,
                         path: crate::path::PathCurve {
-                            degree: path["degree"].as_u64().ok_or("`degree` is not a count")?
+                            degree: integer(&path["degree"])
+                                .ok_or("`degree` is not a whole number")?
                                 as usize,
                             knots: nums(&path["knots"])?,
                             ctrl: path["ctrl"]

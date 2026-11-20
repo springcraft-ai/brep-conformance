@@ -59,3 +59,10 @@ jobs:
           print(len(a), "cases,", len(differ), "with another outcome:", differ[:20])
           sys.exit(1 if differ else 0)
           EOF
+      # Two echo kernels answer with the arguments they were handed, so every request of the corpus
+      # gets one reply from both bindings, and every function of doc/api.md is answered.
+      - name: The Rust and C++ bindings read every request and write every reply alike
+        run: |
+          cargo build --release --locked -p brep-protocol --example echo_kernel
+          python3 -I protocol/parity/compare.py target/release/examples/echo_kernel \
+              protocol/cpp/build/echo_kernel

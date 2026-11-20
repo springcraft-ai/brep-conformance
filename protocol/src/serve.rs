@@ -36,8 +36,7 @@ const CONSTRUCTORS: [&str; 12] = [
 ];
 
 fn handle(v: &Value) -> Result<u64, Refusal> {
-    v.as_u64()
-        .ok_or_else(|| Refusal::failed(format!("{v} is not a handle")))
+    crate::wire::integer(v).ok_or_else(|| Refusal::failed(format!("{v} is not a handle")))
 }
 
 /// Answers requests until stdin closes. A refusal replies `err`; a panic replies `crash`, and the

@@ -102,6 +102,19 @@ cd ../.. && cargo run --release -p brep-conformance -- --adapter protocol/cpp/bu
 
 The suite gives it the same outcome on every case as the Rust example.
 
+The two bindings must read every request and write every reply alike.
+[`../parity/compare.py`](../parity/compare.py) checks this: it sends each request of
+[`../parity/requests.jsonl`](../parity/requests.jsonl) to an echo kernel in each language, which
+answers with the arguments it was handed, and fails on any reply that differs, or on a function
+of doc/api.md that no request has both answer. A protocol change updates both bindings and the
+corpus together. From the repository's root, after the build above:
+
+```bash
+cargo build --release -p brep-protocol --example echo_kernel
+python3 protocol/parity/compare.py target/release/examples/echo_kernel \
+    protocol/cpp/build/echo_kernel
+```
+
 ## Releases
 
 There is one release per version of the protocol's bindings, `brep-protocol@<version>`: the Rust

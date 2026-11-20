@@ -264,6 +264,12 @@ pub struct Projection {
     pub hidden: Vec<Vec<[f64; 2]>>,
 }
 
+impl Projection {
+    pub fn new(visible: Vec<Vec<[f64; 2]>>, hidden: Vec<Vec<[f64; 2]>>) -> Projection {
+        Projection { visible, hidden }
+    }
+}
+
 /// The axes of the view plane looking along `d`, as [`Projection`] defines them.
 pub fn view_axes(d: Vec3) -> (Vec3, Vec3) {
     let cross = |a: Vec3, b: Vec3| {
@@ -295,6 +301,16 @@ pub struct Measure {
     pub area: f64,
     /// Validity problems its own checker finds; empty when valid.
     pub issues: Vec<String>,
+}
+
+impl Measure {
+    pub fn new(volume: f64, area: f64, issues: Vec<String>) -> Measure {
+        Measure {
+            volume,
+            area,
+            issues,
+        }
+    }
 }
 
 /// One kernel: the functions of [doc/api.md](../../doc/api.md). Errors are refusals:

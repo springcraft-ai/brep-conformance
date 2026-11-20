@@ -219,7 +219,7 @@ impl Remote {
     }
 
     fn handle(&self, w: usize, v: Value) -> Result<Handle, Refusal> {
-        let handle = v.as_u64().ok_or("the worker returned no handle")?;
+        let handle = crate::wire::integer(&v).ok_or("the worker returned no handle")?;
         Ok(Handle { worker: w, handle })
     }
 }

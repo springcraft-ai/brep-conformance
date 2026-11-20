@@ -7,7 +7,7 @@
 # library and a vendor's SDK file are all refused because they are not on it.
 set -euo pipefail
 
-ALLOWED_EXTENSIONS=" cpp css h html js json lock md mjs py rs sh svg toml ts tsx txt yaml yml "
+ALLOWED_EXTENSIONS=" cpp css h html js json jsonl lock md mjs py rs sh svg toml ts tsx txt yaml yml "
 ALLOWED_NAMES=" .gitignore .prettierignore CODEOWNERS LICENSE NOTICE "
 
 refused=()

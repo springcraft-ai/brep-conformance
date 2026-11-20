@@ -33,6 +33,9 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # The tests read doc/api.md, so they build in the repository and not from a release's archive.
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/serve_test.cpp)
         enable_testing()
+        # The adapter protocol/parity/compare.py runs against the Rust binding's twin.
+        add_executable(echo_kernel tests/echo_kernel.cpp)
+        target_link_libraries(echo_kernel PRIVATE brep_protocol)
         add_executable(serve_test tests/serve_test.cpp)
         target_link_libraries(serve_test PRIVATE brep_protocol)
         target_compile_definitions(serve_test PRIVATE
