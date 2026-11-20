@@ -1,7 +1,4 @@
-//! The operations of [doc/api.md](../../doc/api.md) as a Rust API and as a protocol:
-//! the shapes a kernel is asked to make ([`model`], [`profile`]), the [`Kernel`] trait a kernel
-//! implements, [`serve`] to answer the protocol over stdin and stdout with any implementation, and
-//! [`Remote`], an implementation that forwards each call to a worker process speaking it.
+#![doc = include_str!("../README.md")]
 
 pub mod model;
 pub mod path;
