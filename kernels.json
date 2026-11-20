@@ -16,6 +16,21 @@
       "reviewers": []
     },
     {
+      "kernel": "cadrs",
+      "version": "0.2.8 (6cae1559)",
+      "license": "MIT OR Apache-2.0",
+      "source": "https://github.com/rvdende/cadrs",
+      "maintained_by_suite": false,
+      "adapter": {
+        "repo": "https://github.com/springcraft-ai/brep-conformance-cadrs",
+        "commit": "f5120753973123e20d15bb31b1846114a0121cb9",
+        "license": "MIT",
+        "build": ["cargo build --release --locked"],
+        "run": "{dir}/target/release/cadrs-adapter"
+      },
+      "reviewers": []
+    },
+    {
       "kernel": "opencascade",
       "version": "8.0.1.1.0",
       "license": "LGPL-2.1-only WITH OCCT-exception-1.0",

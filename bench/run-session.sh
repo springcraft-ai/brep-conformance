@@ -1,6 +1,6 @@
 #!/bin/bash
-# On the benchmark machine, from the repository's root, after setup.sh: one session over the four
-# kernels, with the settings bench/README.md gives.
+# On the benchmark machine, from the repository's root, after setup.sh: one session over the
+# kernels in `kernels` below, with the settings bench/README.md gives.
 # Every pass also writes its kernel's shape files, which the suite draws after judging each case,
 # outside every timed call; they go to a RAM disk, so no pass waits on the root volume, and are
 # moved to assets/<kernel>/ once the last pass ends.
@@ -86,7 +86,7 @@ one() {
 
 # One pass per kernel. Each adapter is the one kernels.json pins, started as its own program, so it
 # is the suite's child and lets go of its core when the suite replaces it.
-kernels=(springrep arris solidcore opencascade)
+kernels=(springrep arris cadrs solidcore opencascade)
 for kernel in "${kernels[@]}"; do
     one "$kernel" "$@"
 done
