@@ -370,23 +370,23 @@ as its row in the table above says:
   curves where two of the solid's surfaces meet, at an angle or smoothly: every vertex lies on one,
   every chord lies within the tolerance of one, every one is covered, and the edges have no more
   length than those curves have. A ball has no such curve, a cone's one is its rim, and the rounded
-  box has eight where a round meets a side smoothly. A seam, and an edge a split made, are no part
-  of this: an edge flagged in `edge_split`, or one that lies along the line where the case's solid
-  may be cut, flagged or not.
+  box has eight where a round meets a side smoothly. An edge flagged in `edge_split`, and a seam,
+  are no part of this.
 
-  What each edge says of its faces is a check of its own. Each of these facts is optional: a
-  display that leaves one out is not judged on it, and one that gives it must give it right. An
-  edge that names faces in `edge_faces` must name at least two, every one a face of the display,
-  and each of its vertices must lie within twice the tolerance of each face it names. An edge
-  between two distinct faces that gives a turn in `edge_turns` must give the turn the surfaces make
-  there, to within 1e-3 at both ends of its range: `π/2` along a box's edges, a cylinder's rims and
-  a hole's, `π/2` and the cone's half angle at a cone's rim, and 0 where a round meets a side. An
-  edge flagged in `edge_split` must lie on the solid's surfaces, off every curve where two of them
-  meet, between two distinct faces if it names them, with a turn of 0 if it gives one. The prism's
-  side may come back as one face or as two, and an edge drawn between the two is judged as a split
-  whether or not it is flagged. Seams are not scored. A display that names no face, gives no turn
-  and flags no split, as an adapter written to protocol 1.0.0 does, passes this check as not
-  reported.
+  What each edge says of its faces is a check of its own. Each edge must name at least two faces
+  in `edge_faces`, every one a face of the display, and each of its vertices must lie within twice
+  the tolerance of each face it names. An edge between two distinct faces must give in `edge_turns`
+  the turn the surfaces make there, to within 1e-3 at both ends of its range: `π/2` along a box's
+  edges, a cylinder's rims and a hole's, `π/2` and the cone's half angle at a cone's rim, and 0
+  where a round meets a side. An edge flagged in `edge_split` must lie on the solid's surfaces, off
+  every curve where two of them meet, between two distinct faces, with a turn of 0 if it gives
+  one. The prism's side may come back as one face or as two: an edge drawn between the two must be
+  flagged. Every seam must lie on the solid's surfaces. A cylinder, a cone and a drilled box each
+  have one seam, or none where the kernel cuts the round face in two by split edges instead; a
+  box, a rounded box and the prism have none; a ball's seams are not counted. A display that names
+  no face, gives no turn, flags no split and lists no seam, as an adapter written to protocol 1.0.0
+  does, fails this check alone, as not reported. A ball is the exception: it has no edge to report,
+  so its display passes this check with nothing said.
 
 The face edits `delete_faces`, `move_faces` and `thicken` are treated as features, so B14 to B16
 judge each result as the primitive it must be. `sweep_path` is treated as a constructor, so B0 to
