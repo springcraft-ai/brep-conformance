@@ -52,15 +52,14 @@ pub fn parse(text: &str) -> Result<Vec<Entry>, String> {
         let at = format!("kernels[{i}]");
         let a = &k["adapter"];
         let kernel = text_of(k, "kernel", &at)?;
-        // The name is a path segment of the kernel's files and pages, so it never starts with `.`.
-        if !kernel.starts_with(|c: char| c.is_ascii_alphanumeric())
-            || !kernel
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.')
-        {
-            return Err(format!(
-                "{at}: kernel `{kernel}` is not letters, digits, - and . after a letter or digit"
-            ));
+        let version = text_of(k, "version", &at)?;
+        for (field, value) in [("kernel", &kernel), ("version", &version)] {
+            if !segment(value) {
+                return Err(format!(
+                    "{at}: {field} `{value}` is not letters, digits, ., _ and - after a letter or \
+                     digit"
+                ));
+            }
         }
         if !seen.insert(kernel.clone()) {
             return Err(format!("{at}: kernel `{kernel}` is listed twice"));
@@ -84,7 +83,7 @@ pub fn parse(text: &str) -> Result<Vec<Entry>, String> {
             ));
         }
         out.push(Entry {
-            version: text_of(k, "version", &at)?,
+            version,
             repo: text_of(a, "repo", &at)?,
             build: list_of(a, "build", &at)?,
             run: text_of(a, "run", &at)?,
@@ -94,6 +93,14 @@ pub fn parse(text: &str) -> Result<Vec<Entry>, String> {
         });
     }
     Ok(out)
+}
+
+/// Whether a kernel's name or version can name a folder of its files on the CDN and a page of the
+/// site: characters a URL never encodes, after a letter or digit, so never `.` or `..`.
+fn segment(s: &str) -> bool {
+    s.starts_with(|c: char| c.is_ascii_alphanumeric())
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
 fn text_of(v: &Value, field: &str, at: &str) -> Result<String, String> {
@@ -246,6 +253,31 @@ mod tests {
         let copy = v["kernels"][0].clone();
         v["kernels"].as_array_mut().unwrap().push(copy);
         assert!(parse(&v.to_string()).unwrap_err().contains("listed twice"));
+    }
+
+    #[test]
+    fn a_version_names_one_folder_with_no_character_a_url_encodes() {
+        let full = "0123456789abcdef0123456789abcdef01234567";
+        let versioned = |v: &str| {
+            let mut j: Value = serde_json::from_str(&one(full)).unwrap();
+            j["kernels"][0]["version"] = Value::from(v);
+            j.to_string()
+        };
+        for v in ["0.2.9", "8.0.1.1.0", "1.0.0-rc.1", "2026_11_20"] {
+            assert_eq!(parse(&versioned(v)).unwrap()[0].version, v);
+        }
+        for v in [
+            "0.2.9 (bb09c367)",
+            "0.2.9+bb09c367",
+            "..",
+            ".1",
+            "a/b",
+            "1~2",
+            "",
+        ] {
+            let e = parse(&versioned(v)).unwrap_err();
+            assert!(e.contains("version"), "{v:?}: {e}");
+        }
     }
 
     #[test]

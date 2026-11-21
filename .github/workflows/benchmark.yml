@@ -282,7 +282,7 @@ jobs:
               # A kernel that can neither draw nor write STEP has no files.
               [ "$count" -gt 0 ] || continue
               folder=$(jq -r '"\(.suite)/\(.kernel.name)/\(.kernel.version)"' "results/$pass.json")
-              if ! [[ "$folder" =~ ^[A-Za-z0-9._+-]+/[A-Za-z0-9._+-]+/[A-Za-z0-9._+-]+$ ]]; then
+              if ! [[ "$folder" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
                   echo "$pass: $folder cannot name a folder"
                   exit 1
               fi

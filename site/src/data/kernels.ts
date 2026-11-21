@@ -18,6 +18,27 @@ export interface KernelInfo {
   reviewers: string[]
 }
 
+// A kernel's name and its version each name a folder of its files on the CDN and a page here:
+// characters a URL never encodes, after a letter or digit. suite/src/registry.rs refuses the same.
+const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+
+// Why an entry's name or version cannot name a folder; null when both can.
+export function badSegment(k: { kernel: string; version: string }): string | null {
+  for (const [field, value] of [
+    ['kernel', k.kernel],
+    ['version', k.version],
+  ] as const) {
+    if (!SEGMENT.test(value))
+      return `${field} \`${value}\` is not letters, digits, ., _ and - after a letter or digit`
+  }
+  return null
+}
+
+registry.kernels.forEach((k, i) => {
+  const bad = badSegment(k)
+  if (bad) throw new Error(`kernels.json: kernels[${i}]: ${bad}`)
+})
+
 export const KERNELS: KernelInfo[] = registry.kernels.map(k => ({
   kernel: k.kernel,
   version: k.version,

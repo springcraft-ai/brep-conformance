@@ -46,8 +46,11 @@ The run's fields:
 | `time_limit_ms`  | The longest one call of the kernel may take before it is a timeout (`--timeout`)     |
 | `cases`          | One object per case, in generation order                                             |
 
-A kernel's `version` is a release number, or a digest of the source it was built from. `stand_ins`
-looks like `{"sphere": "revolve"}`, and [contract.md](contract.md) gives the solids sent.
+A kernel's `version` is a release number, or a digest of the source it was built from. The name
+and the version each name a folder of the kernel's files on the CDN and a page of the site, so each
+is letters, digits, `.`, `_` and `-` after a letter or digit, with no character a URL encodes:
+`0.2.9`, not `0.2.9 (bb09c367)` or `0.2.9+bb09c367`. The suite refuses a `kernels.json` entry that
+breaks this when it reads the file. `stand_ins` looks like `{"sphere": "revolve"}`, and [contract.md](contract.md) gives the solids sent.
 
 A case's fields:
 

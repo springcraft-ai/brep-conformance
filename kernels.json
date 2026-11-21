@@ -32,7 +32,7 @@
     },
     {
       "kernel": "cadrs",
-      "version": "0.2.9 (bb09c367)",
+      "version": "0.2.9",
       "license": "MIT OR Apache-2.0",
       "source": "https://github.com/rvdende/cadrs",
       "maintained_by_suite": false,
