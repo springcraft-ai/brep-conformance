@@ -202,11 +202,13 @@ describe('relativeTimes', () => {
 describe('toggleCompare', () => {
   const order = ['a', 'b', 'c', 'd', 'e']
 
-  it('adds in rank order up to four, and removes down to two', () => {
+  it('adds in rank order up to four, and removes down to none', () => {
     expect(toggleCompare(['a', 'c'], 'b', order)).toEqual(['a', 'b', 'c'])
     expect(toggleCompare(['a', 'b', 'c', 'd'], 'e', order)).toEqual(['a', 'b', 'c', 'd'])
     expect(toggleCompare(['a', 'b', 'c'], 'b', order)).toEqual(['a', 'c'])
-    expect(toggleCompare(['a', 'c'], 'c', order)).toEqual(['a', 'c'])
+    expect(toggleCompare(['a', 'c'], 'c', order)).toEqual(['a'])
+    expect(toggleCompare(['c'], 'c', order)).toEqual([])
+    expect(toggleCompare([], 'd', order)).toEqual(['d'])
   })
 })
 

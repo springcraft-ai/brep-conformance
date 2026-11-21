@@ -18,6 +18,7 @@ import {
   type GridTest,
   type GridGroup,
 } from './model'
+import { KernelPicker } from './KernelPicker'
 import { TierBar } from './TierBar'
 
 const ANY_KERNEL = 'any'
@@ -78,12 +79,13 @@ function opWinner(g: GridGroup): number {
 }
 
 // Every test against the kernels compared, one <details> per operation so it reads without JS.
-// Hydrated, it adds a filter, the search, and open/close all. A cell opens that kernel's cases on
-// the test.
+// Hydrated, it adds the kernel picker, a filter, the search, and open/close all. A cell opens that
+// kernel's cases on the test.
 export function Grid({
   groups,
   kernels,
   shown,
+  onToggleKernel,
   suite,
   pages,
   level,
@@ -93,6 +95,8 @@ export function Grid({
   groups: GridGroup[]
   kernels: string[]
   shown: string[]
+  // Shows or hides one kernel's column, under toggleCompare's limits.
+  onToggleKernel: (kernel: string) => void
   // The report the grid is of, a suite version, and each kernel's page in it.
   suite: string
   pages: Record<string, string>
@@ -142,13 +146,18 @@ export function Grid({
   )
   const shownFilter = filters.includes(filter) ? filter : 'all'
   const searching = q.trim() !== ''
+  // Each row's winner is taken over every kernel and, on an operation's row, over every one of its
+  // tests, before the kernels are picked and the tests searched: a column is marked only for the
+  // kernel that is best of all, never for the best of those shown. `best` is that kernel's column
+  // among those shown, or -1 where it is hidden.
   const visible = groups
     .map(g => ({
       ...g,
+      best: cols.indexOf(opWinner(g)),
       cells: pick(g.cells),
       tests: g.tests
         .filter(t => matchesQuery(t, g.operation, q))
-        .map(t => ({ ...t, cells: pick(t.cells) }))
+        .map(t => ({ ...t, best: cols.indexOf(testWinner(t.cells)), cells: pick(t.cells) }))
         .filter(t => keep(t, shownFilter, scope)),
     }))
     .filter(g => g.tests.length)
@@ -180,87 +189,97 @@ export function Grid({
           value={q}
           onChange={onSearch}
         />
-        <span className="bc-annot hm-grid__count">
-          showing {tests.length} of {allTests}
-          {scope !== null &&
-            ` · ${shownFilter === 'all' ? 'all tests' : FILTER_LABEL[shownFilter]} for ${focus}`}
-          {' · '}
-          {names.length} of {kernels.length} kernels
-          {searching && ` · matching “${q.trim()}”`}
+        {/* The count, and at the right edge the kernel picker: outside the filters, which on a
+            phone scroll sideways and would clip its panel. */}
+        <span className="hm-grid__end">
+          <span className="bc-annot hm-grid__count">
+            showing {tests.length} of {allTests}
+            {scope !== null &&
+              ` · ${shownFilter === 'all' ? 'all tests' : FILTER_LABEL[shownFilter]} for ${focus}`}
+            {searching && ` · matching “${q.trim()}”`}
+          </span>
+          {kernels.length > 0 && (
+            <KernelPicker kernels={kernels} shown={names} onToggle={onToggleKernel} />
+          )}
         </span>
       </div>
-      <div className="hm-grid__scroll">
-        <div className="hm-grid__head">
-          <span className="bc-annot">{level ? 'test' : 'area · test'}</span>
-          {/* A kernel's name scopes the filters to its results; again, back to every kernel's. */}
-          {names.map(k => {
-            const on = scope !== null && focus === k
-            return (
-              <button
-                key={k}
-                type="button"
-                className={`bc-annot hm-grid__kernel sc-focus${on ? ' is-on' : ''}`}
-                aria-pressed={on}
-                title={on ? 'Filter by every kernel again' : `Filter by ${k}’s results`}
-                onClick={() => setFocus(on ? ANY_KERNEL : k)}
-              >
-                {k}
-                {on && <span aria-hidden="true"> ×</span>}
-              </button>
-            )
-          })}
-        </div>
-        {level !== undefined ? (
-          <div className="hm-tests">
-            {tests.map(t =>
-              testRow(
-                t,
-                t.test
-                  .slice(level.length + 1)
-                  .replaceAll('/', ' ')
-                  .replaceAll('-', ' '),
-              ),
-            )}
+      {/* With every kernel unticked, there is no column to draw. */}
+      {names.length === 0 ? (
+        <p className="bc-annot hm-grid__empty">no kernel shown · tick one under kernels</p>
+      ) : (
+        <div className="hm-grid__scroll">
+          <div className="hm-grid__head">
+            <span className="bc-annot">{level ? 'test' : 'area · test'}</span>
+            {/* A kernel's name scopes the filters to its results; again, back to every kernel's. */}
+            {names.map(k => {
+              const on = scope !== null && focus === k
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  className={`bc-annot hm-grid__kernel sc-focus${on ? ' is-on' : ''}`}
+                  aria-pressed={on}
+                  title={on ? 'Filter by every kernel again' : `Filter by ${k}’s results`}
+                  onClick={() => setFocus(on ? ANY_KERNEL : k)}
+                >
+                  {k}
+                  {on && <span aria-hidden="true"> ×</span>}
+                </button>
+              )
+            })}
           </div>
-        ) : (
-          visible.map(g => (
-            <details
-              key={g.operation}
-              id={g.operation}
-              className="hm-op"
-              open={isOpen(g.operation)}
-              onToggle={e => {
-                const v = (e.currentTarget as HTMLDetailsElement).open
-                if (v !== isOpen(g.operation)) setOpen(o => ({ ...o, [g.operation]: v }))
-              }}
-            >
-              <summary className="hm-row hm-row--op" data-row={g.operation}>
-                <span className="hm-row__name">
-                  <span className="hm-op__name">{g.operation}</span>
-                  <span className="hm-op__count">{g.tests.length}</span>
-                </span>
-                {g.cells.map((c, i) => (
-                  <span key={names[i]} className="hm-cell">
-                    <Share cell={c} best={i === opWinner(g)} />
-                    <TierBar
-                      thin
-                      top={i === opWinner(g)}
-                      counts={c?.counts ?? []}
-                      label={caseTitle(names[i]!, g.operation, c)}
-                    />
+          {level !== undefined ? (
+            <div className="hm-tests">
+              {tests.map(t =>
+                testRow(
+                  t,
+                  t.test
+                    .slice(level.length + 1)
+                    .replaceAll('/', ' ')
+                    .replaceAll('-', ' '),
+                ),
+              )}
+            </div>
+          ) : (
+            visible.map(g => (
+              <details
+                key={g.operation}
+                id={g.operation}
+                className="hm-op"
+                open={isOpen(g.operation)}
+                onToggle={e => {
+                  const v = (e.currentTarget as HTMLDetailsElement).open
+                  if (v !== isOpen(g.operation)) setOpen(o => ({ ...o, [g.operation]: v }))
+                }}
+              >
+                <summary className="hm-row hm-row--op" data-row={g.operation}>
+                  <span className="hm-row__name">
+                    <span className="hm-op__name">{g.operation}</span>
+                    <span className="hm-op__count">{g.tests.length}</span>
                   </span>
-                ))}
-              </summary>
-              {g.tests.map(t => testRow(t, t.slug.replaceAll('-', ' ')))}
-            </details>
-          ))
-        )}
-        {!visible.length && <p className="bc-annot hm-grid__empty">no test matches</p>}
-      </div>
+                  {g.cells.map((c, i) => (
+                    <span key={names[i]} className="hm-cell">
+                      <Share cell={c} best={i === g.best} />
+                      <TierBar
+                        thin
+                        top={i === g.best}
+                        counts={c?.counts ?? []}
+                        label={caseTitle(names[i]!, g.operation, c)}
+                      />
+                    </span>
+                  ))}
+                </summary>
+                {g.tests.map(t => testRow(t, t.slug.replaceAll('-', ' ')))}
+              </details>
+            ))
+          )}
+          {!visible.length && <p className="bc-annot hm-grid__empty">no test matches</p>}
+        </div>
+      )}
     </div>
   )
 
-  function testRow(t: GridTest, name: string) {
+  function testRow(t: GridTest & { best: number }, name: string) {
     const rel = relativeTimes(t.cells)
     const timed = rel.filter(r => r !== null).length
     return (
@@ -287,8 +306,8 @@ export function Grid({
               href={caseLink(names[i]!, t.test)}
               title={`${title} · open these cases`}
             >
-              <Frac cell={c} best={i === testWinner(t.cells)} />
-              <TierBar thin top={i === testWinner(t.cells)} counts={c.counts} label={title} />
+              <Frac cell={c} best={i === t.best} />
+              <TierBar thin top={i === t.best} counts={c.counts} label={title} />
               <Time cell={c} rel={rel[i]!} compared={timed > 1} />
             </a>
           )

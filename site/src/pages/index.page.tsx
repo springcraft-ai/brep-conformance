@@ -134,6 +134,7 @@ export default function Home({
             groups={groups}
             kernels={kernels}
             shown={picked}
+            onToggleKernel={compare}
             suite={suite}
             pages={pages}
             q={q}

@@ -105,9 +105,17 @@
 .hm-grid__scroll > * {
   min-width: calc(220px + var(--hm-k) * 136px);
 }
-.hm-grid__count {
-  align-self: center;
+/* The count and the kernel picker, on one baseline. The group is as tall as the filter buttons
+   and sits at their foot, so its text is level with their labels. */
+.hm-grid__end {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  height: 23px;
+  margin-bottom: 1px;
   margin-left: auto;
+}
+.hm-grid__count {
   text-align: right;
 }
 .hm-grid__tools {
@@ -123,6 +131,61 @@
   flex-wrap: wrap;
   align-items: end;
   gap: var(--sp-4);
+}
+/* The kernel picker: a borderless button that names how many kernels show, over a panel of
+   checkboxes that opens from the right edge. */
+.hm-kpick {
+  position: relative;
+  /* As tall as its button, with no line box of its own around it. */
+  display: flex;
+}
+/* The button reads in the count's own small capitals beside it, on one baseline. */
+.hm-kpick__trigger {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.hm-kpick__trigger::-webkit-details-marker {
+  display: none;
+}
+.hm-kpick__count {
+  color: var(--void-ink-1);
+  font-variant-numeric: tabular-nums;
+}
+.hm-kpick__caret {
+  color: var(--void-ink-2);
+  transition:
+    transform var(--dur-2) var(--ease-mech),
+    color var(--dur-2) var(--ease-mech);
+}
+.hm-kpick__trigger:hover .hm-kpick__caret,
+.hm-kpick__trigger:hover .hm-kpick__count,
+.hm-kpick[open] .hm-kpick__caret,
+.hm-kpick[open] .hm-kpick__count {
+  color: var(--accent);
+}
+.hm-kpick[open] .hm-kpick__caret {
+  transform: rotate(180deg);
+}
+.hm-kpick__panel {
+  position: absolute;
+  top: calc(100% + var(--sp-3));
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 200px;
+  padding: var(--sp-4);
+  background: var(--ground-void);
+  border: var(--hair) solid var(--void-ink-3);
+}
+.hm-kpick__note {
+  margin: 0;
+  padding-top: var(--sp-3);
+  border-top: var(--hair) solid var(--void-ink-4);
 }
 .hm-grid__head,
 .hm-row {

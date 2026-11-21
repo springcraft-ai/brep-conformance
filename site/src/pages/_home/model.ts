@@ -217,7 +217,7 @@ export function caseTitle(kernel: string, name: string, cell: Cell | null): stri
 
 // The most kernels the grid compares at once, and the fewest it lets a reader narrow it to.
 export const COMPARE_MAX = 4
-export const COMPARE_MIN = 2
+export const COMPARE_MIN = 0
 
 // The first COMPARE_MAX kernels in rank order.
 export function defaultCompare(board: BoardRow[]): string[] {
