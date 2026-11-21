@@ -298,6 +298,7 @@ fn answer<K: Kernel>(
         }
         "reset" => {
             solids.clear();
+            k.reset();
             return Ok(Value::Null);
         }
         "volume" => return Ok(json!(k.volume(solid("s")?)?)),
@@ -511,6 +512,59 @@ mod tests {
                 reason: "no verdict".into(),
             })
         }
+    }
+
+    /// A kernel that counts its resets.
+    struct Counted(usize);
+
+    impl Kernel for Counted {
+        type Solid = ();
+        fn name(&self) -> String {
+            "counted".into()
+        }
+        fn supports(&self) -> Vec<String> {
+            vec!["box".into()]
+        }
+        fn version(&self) -> String {
+            "0".into()
+        }
+        fn tolerance(&self) -> f64 {
+            1e-7
+        }
+        fn make(&mut self, _p: &Primitive) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn union(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn intersection(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn difference(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn volume(&mut self, _s: &()) -> Result<f64, Refusal> {
+            Ok(1.0)
+        }
+        fn area(&mut self, _s: &()) -> Result<f64, Refusal> {
+            Ok(6.0)
+        }
+        fn check(&mut self, _s: &()) -> Result<Vec<String>, Refusal> {
+            Ok(Vec::new())
+        }
+        fn reset(&mut self) {
+            self.0 += 1;
+        }
+    }
+
+    #[test]
+    fn a_reset_drops_the_handles_and_tells_the_kernel() {
+        let mut k = Counted(0);
+        let mut solids = HashMap::from([(1, ())]);
+        let reply = answer(&mut k, &json!({"cmd": "reset"}), &mut solids, &mut 2);
+        assert_eq!(reply.unwrap(), Value::Null);
+        assert!(solids.is_empty());
+        assert_eq!(k.0, 1);
     }
 
     #[test]

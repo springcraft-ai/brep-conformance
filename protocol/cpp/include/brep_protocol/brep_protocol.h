@@ -1012,6 +1012,7 @@ Json answer(Kernel<S>& k, const Json& req, Store<S>& solids) {
     }
     if (c == "reset") {
         solids.clear();
+        k.reset();
         return nullptr;
     }
     if (is_constructor(c)) {

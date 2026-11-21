@@ -69,6 +69,10 @@ class Bare : public Kernel<int> {
     std::vector<std::string> check(const int&) override {
         throw Refusal(declines_, "no verdict");
     }
+    void reset() override {
+        ++resets;
+    }
+    int resets = 0;
     std::optional<Refusal> refusal_for(std::exception_ptr e) const override {
         try {
             std::rethrow_exception(e);
@@ -145,6 +149,7 @@ void refusals_crashes_and_handles() {
     expect(ask(k, solids, R"({"cmd": "reset"})") == Json{{"ok", nullptr}}, "reset answers null");
     expect(ask(k, solids, R"({"cmd": "volume", "s": 1})").value("err", "") == "no solid 1",
            "reset releases every solid");
+    expect(k.resets == 1, "reset tells the kernel");
     expect(
         ask(k, solids, R"({"cmd": "box", )" + FRAME + R"(, "size": [1, 2]})").value("kind", "") ==
             "failed",
