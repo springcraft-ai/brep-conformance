@@ -674,9 +674,15 @@ impl Kernel for Remote {
         // A lost worker is replaced here, between cases, so a replacement that cannot start is
         // not charged to the next case.
         self.lost = None;
-        let _ = std::panic::catch_unwind(AssertUnwindSafe(|| self.call(json!({"cmd": "reset"}))));
+        let reply =
+            std::panic::catch_unwind(AssertUnwindSafe(|| self.call(json!({"cmd": "reset"}))));
         if let Some(Loss::Died(what) | Loss::TimedOut(what)) = self.lost.take() {
             eprintln!("the worker was lost between cases: {what}");
+        } else if !matches!(reply, Ok(Ok(_))) {
+            // A kernel that failed its own reset holds its solids in no known state: the next
+            // case starts on another worker.
+            self.worker = None;
+            eprintln!("the worker failed its reset between cases, and is replaced");
         }
     }
 
@@ -834,6 +840,34 @@ mod tests {
         k.read_step("first case").unwrap();
         k.reset();
         assert_eq!(k.read_step("next case").unwrap().handle, 1);
+    }
+
+    #[test]
+    fn a_worker_whose_kernel_fails_its_reset_is_replaced_before_the_next_case() {
+        // Each start adds a line to a file. A crash or a refusal in answer to reset ends the
+        // worker; a reset that succeeds keeps it.
+        for (reply, starts_after) in [
+            (r#"{"crash": "reset panicked"}"#, 2),
+            (r#"{"err": "no", "kind": "failed"}"#, 2),
+            (r#"{"ok": null}"#, 1),
+        ] {
+            let starts = std::env::temp_dir().join(format!(
+                "remote-reset-{}-{starts_after}-{}",
+                std::process::id(),
+                reply.len()
+            ));
+            let _ = std::fs::remove_file(&starts);
+            let mut cmd = scripted(&format!(r#"*'"reset"'*) echo '{reply}';;"#));
+            cmd[2] = format!("echo >> '{}'; {}", starts.display(), cmd[2]);
+            let mut k = Remote::new(cmd, Duration::from_secs(10)).unwrap();
+            k.read_step("first case").unwrap();
+            k.reset();
+            let next = k.read_step("next case");
+            let started = std::fs::read_to_string(&starts).unwrap().lines().count();
+            let _ = std::fs::remove_file(&starts);
+            assert_eq!(next.unwrap().handle, 1, "{reply}");
+            assert_eq!(started, starts_after, "{reply}");
+        }
     }
 
     #[test]
