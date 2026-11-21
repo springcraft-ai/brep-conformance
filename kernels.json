@@ -38,7 +38,7 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-cadrs",
-        "commit": "863598a7ac88c5cb44b4e355abe47a9302f23aab",
+        "commit": "0d86b17771621a14e09ef98c45f015ba36998c7f",
         "license": "MIT",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/cadrs-adapter"
