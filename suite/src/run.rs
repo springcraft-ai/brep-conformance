@@ -3751,6 +3751,7 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
     peer: Option<&(dyn Fn() -> Result<Remote, String> + Sync)>,
     exports: &Exports,
 ) -> Result<Value, String> {
+    let started = (std::time::SystemTime::now(), Instant::now());
     // The header's kernel first, gone before the threads start theirs, so a run never holds more
     // kernels than threads.
     let (kernel, unsupported, calibration) = {
@@ -3781,6 +3782,7 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
                     }
                     // A kernel that cannot start refuses the case it was to run, and the next case
                     // starts another. A peer that cannot start leaves the case without interop.
+                    let cold = k.is_none();
                     let mut made = match k.take() {
                         Some(k) => Ok(k),
                         None => make(),
@@ -3801,6 +3803,11 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
                         }
                     };
                     v["test"] = json!(c.test);
+                    // The first case on a kernel the runner started for it pays that kernel's
+                    // first calls, which a reader may leave out of a time.
+                    if cold {
+                        v["cold"] = json!(true);
+                    }
                     judge(&mut v, c);
                     v["asset_step"] = json!(!crate::assets::of_case(c).step.is_empty());
                     if exports.any()
@@ -3845,9 +3852,14 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
             "cores": std::thread::available_parallelism().map_or(0, |n| n.get()),
             "threads": threads.max(1),
         },
+        "started_unix": started
+            .0
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs()),
         "unix": std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs()),
+        "wall_ms": started.1.elapsed().as_secs_f64() * 1e3,
         "calibration_ms": calibration,
         "cases": out.into_iter().map(|x| x.1).collect::<Vec<_>>(),
     }))

@@ -251,6 +251,13 @@ pub fn flat(results: &Value, verified: bool) -> Value {
                 "why": c["why"],
                 "failure": c["failure"],
                 "time_ms": c["time_ms"],
+                // Each step's time, so a reader can tell making the operands from the operation.
+                "ops": c["ops"].as_array().map(|ops| {
+                    ops.iter()
+                        .map(|o| json!({"op": o["op"], "outcome": o["outcome"], "ms": o["ms"]}))
+                        .collect::<Vec<_>>()
+                }),
+                "cold": c["cold"].as_bool().unwrap_or(false),
                 "group_median_ms": median.map(|m| m.0),
                 "group_low_confidence": median.is_none_or(|m| m.1 < TIMED_ENOUGH),
                 "asset": c["asset"],
@@ -284,7 +291,14 @@ pub fn flat(results: &Value, verified: bool) -> Value {
         "adapter": results["adapter"],
         "assets": assets,
         "suite": {"version": results["suite"], "contract": results["contract"]},
-        "run": {"unix": results["unix"], "verified": verified},
+        "run": {
+            "unix": results["unix"],
+            "started_unix": results["started_unix"],
+            "wall_ms": results["wall_ms"],
+            "calibration_ms": results["calibration_ms"],
+            "time_limit_ms": results["time_limit_ms"],
+            "verified": verified,
+        },
         "environment": results["environment"],
         "summary": {
             "cases": rows.len(),
@@ -301,6 +315,42 @@ pub fn flat(results: &Value, verified: bool) -> Value {
 mod tests {
     use super::*;
     use crate::generate;
+
+    #[test]
+    fn a_flat_report_carries_the_run_s_timings_and_each_case_s_steps() {
+        let test = generate::cases(1).into_iter().next().unwrap().test;
+        let results = json!({
+            "unix": 200, "started_unix": 100, "wall_ms": 100000.0, "calibration_ms": 7.5,
+            "time_limit_ms": 120000.0,
+            "cases": [
+                {"id": "a", "test": test, "result": "1e-7", "kind": "exact", "time_ms": 3.0,
+                 "cold": true, "ops": [
+                    {"op": "a", "outcome": "done", "ms": 1.0, "volume": 2.0},
+                    {"op": "a ∪ b", "outcome": "done", "ms": 2.0}]},
+                {"id": "b", "test": test, "result": "timeout", "kind": "exact",
+                 "time_ms": 120000.0, "ops": [
+                    {"op": "a ∪ b", "outcome": "timeout", "ms": 120000.0, "error": "late"}]},
+            ],
+        });
+        let flat = flat(&results, false);
+        assert_eq!(
+            flat["run"],
+            json!({"unix": 200, "started_unix": 100, "wall_ms": 100000.0, "calibration_ms": 7.5,
+                   "time_limit_ms": 120000.0, "verified": false})
+        );
+        let [a, b] = [&flat["cases"][0], &flat["cases"][1]];
+        // A step keeps its label, outcome and time, and nothing it found.
+        assert_eq!(
+            a["ops"],
+            json!([{"op": "a", "outcome": "done", "ms": 1.0},
+                   {"op": "a ∪ b", "outcome": "done", "ms": 2.0}])
+        );
+        assert_eq!(
+            (a["cold"].clone(), b["cold"].clone()),
+            (json!(true), json!(false))
+        );
+        assert_eq!(b["ops"][0]["outcome"], "timeout");
+    }
 
     #[test]
     fn a_flat_report_counts_every_case_and_times_those_that_answered() {

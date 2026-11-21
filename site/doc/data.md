@@ -12,14 +12,17 @@ The flat report `brep-conformance-report RESULTS.json --flat` writes, as
 older link names stays as it was; a rerun on the same suite version replaces the file.
 
 - `kernel`: its `name`, `version`, declared `tolerance` and `configuration`.
-- `suite`: the suite's `version` and the `contract` version. `run`: when it ended (`unix`) and
-  whether it ran on the suite's benchmark machine (`verified`). `environment`: OS, architecture,
-  cores and threads.
+- `suite`: the suite's `version` and the `contract` version. `run`: when it started (`started_unix`)
+  and ended (`unix`), how long it took (`wall_ms`), the calibration workload's time
+  (`calibration_ms`), the limit on one call (`time_limit_ms`), and whether it ran on the suite's
+  benchmark machine (`verified`). `environment`: OS, architecture, cores and threads.
 - `unsupported`: the functions the kernel does not offer; `stand_ins`: the function sent in place of
   each primitive it has no constructor for.
 - `cases`: one row per case: `id`, `test`, `operation` (the test path's first part, its area),
   `kind` (exact, sound or rejection), `result`, `why`, `failure` (geometry or measurement),
-  `time_ms`, the test's `group_median_ms`, and `exports`, the shape files the kernel wrote for it.
+  `time_ms`, each step's time (`ops`: `op`, `outcome`, `ms`), `cold` where the case was the first on
+  a newly started kernel, the test's `group_median_ms`, and `exports`, the shape files the kernel
+  wrote for it.
 
 A test's URL segment is its path without the area, joined by dashes: `booleans/overlap/spheres` is
 `overlap-spheres` under `booleans`.

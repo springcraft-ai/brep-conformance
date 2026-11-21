@@ -39,8 +39,11 @@ The run's fields:
 | `unsupported`    | The functions of the suite's protocol version that the kernel's `hello` leaves out   |
 | `stand_ins`      | For each primitive the kernel has no constructor for, the function sent in its place |
 | `environment`    | The machine's `os`, `arch` and `cores`, and the run's `threads`                      |
+| `started_unix`   | When the run started, in seconds since 1970                                          |
 | `unix`           | When the run ended, in seconds since 1970                                            |
+| `wall_ms`        | How long the run took, from start to end, calibration included                       |
 | `calibration_ms` | The time of the calibration workload on this kernel and machine                      |
+| `time_limit_ms`  | The longest one call of the kernel may take before it is a timeout (`--timeout`)     |
 | `cases`          | One object per case, in generation order                                             |
 
 A kernel's `version` is a release number, or a digest of the source it was built from. `stand_ins`
@@ -66,6 +69,7 @@ A case's fields:
 | `error`      | Where the case's own solids could not be made: the kernel's reason                                                                                                                                            |
 | `interop`    | With `--peer`: whether the second kernel read this one's STEP file as the same solid                                                                                                                          |
 | `time_ms`    | The sum of its steps' times                                                                                                                                                                                   |
+| `cold`       | `true` when the runner started a kernel for this case, so its time includes that kernel's first calls                                                                                                         |
 | `asset`      | The name of its shape files                                                                                                                                                                                   |
 | `sound`      | `true` on a case judged as sound                                                                                                                                                                              |
 | `asset_step` | `true` when the case has STEP files ([Assets](#assets))                                                                                                                                                       |
@@ -116,8 +120,10 @@ site reads. It holds `format` (the same number as the results file's), `kernel`,
 (the URL of the folder its files are published in, where it wrote any), `suite`, `run` (`unix`, and
 `verified` when the suite's own benchmark machine ran it), `environment`, `unsupported`,
 `stand_ins`, a `summary` (the number of `cases`, the headline `pass_1e7` and the count of each
-result) and `cases`. `cases` has one row per case, with `id`, `test`, `operation`, `kind`, `result`,
-`why`, `failure`, `time_ms`, `asset`, its test's `group_median_ms`, `group_low_confidence`, and,
+result) and `cases`. `run` also carries the results file's timings: `started_unix`, `wall_ms`,
+`calibration_ms` and `time_limit_ms`. `cases` has one row per case, with `id`, `test`, `operation`,
+`kind`, `result`, `why`, `failure`, `time_ms`, `ops` (each step's `op`, `outcome` and `ms`, as the
+results file has them), `cold`, `asset`, its test's `group_median_ms`, `group_low_confidence`, and,
 where files were drawn, `exports`: the `glb` key and the list of `step` keys, below the kernel's
 folder of [Assets](#assets).
 
