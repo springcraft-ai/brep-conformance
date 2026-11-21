@@ -2,8 +2,8 @@
 //! together close the solid and bound its volume, every vertex lies on the solid's surface with
 //! that surface's outward normal, and its edges are those between the solid's surfaces: every
 //! vertex on one, every chord within the tolerance of one, every one covered, and no more length
-//! than they have. Each edge names the faces it lies on and the turn they make along it, an edge
-//! between two faces on one surface is flagged as a split, and seams are listed apart.
+//! than they have. Each edge names the faces it lies on and the turn they make along it, and an edge
+//! between two faces on one surface is flagged as a split. Seams are listed apart, and not scored.
 
 use brep_protocol::{Display, DisplayFace, Mesh};
 
@@ -28,6 +28,23 @@ fn cross(a: Vec3, b: Vec3) -> Vec3 {
 
 fn gap(a: Vec3, b: Vec3) -> f64 {
     dot(sub(a, b), sub(a, b)).sqrt()
+}
+
+/// The middle of a line's middle chord: off its ends, where other edges meet it.
+fn middle(line: &[Vec3]) -> Option<Vec3> {
+    let i = line.len().checked_sub(1)? / 2;
+    let (a, b) = (line[i], *line.get(i + 1).unwrap_or(&line[i]));
+    Some([0, 1, 2].map(|k| (a[k] + b[k]) / 2.0))
+}
+
+/// Whether an edge lies along a split the case foresees, over its whole length, to within `near`. `edge_split` is optional,
+/// so such an edge is judged as a split whether or not the display flags it.
+fn on_split(points: &[Vec3], want: &DisplayExact, near: f64) -> bool {
+    !points.is_empty()
+        && want.splits.iter().any(|m| {
+            points.iter().all(|&q| to_meet(q, m) <= near)
+                && middle(points).is_some_and(|q| to_meet(q, m) <= near)
+        })
 }
 
 /// How far `q` lies from the segment from `a` to `b`.
@@ -222,15 +239,21 @@ pub(crate) fn checks(
         ));
     }
 
-    // The edges as B38 holds a drawing, in space and with no side hidden. An edge flagged as a
-    // split lies between no two surfaces, and is judged with the seams.
+    // The edges as B38 holds a drawing, in space and with no side hidden. A split, flagged or along
+    // one the case foresees, lies between no two surfaces, and is judged with the topology.
     let near = |q: Vec3| {
         want.edges
             .iter()
             .map(|m| to_meet(q, m))
             .fold(f64::INFINITY, f64::min)
     };
-    let between = || d.edges.iter().filter(|e| !e.split).map(|e| &e.points);
+    let split_near = 1e-5 * scale.max(1.0);
+    let between = || {
+        d.edges
+            .iter()
+            .filter(|e| !e.split && !on_split(&e.points, want, split_near))
+            .map(|e| &e.points)
+    };
     let (mut vertex, mut chord, mut drawn) = (0.0f64, 0.0f64, 0.0);
     for line in between() {
         for (i, &q) in line.iter().enumerate() {
@@ -269,24 +292,22 @@ pub(crate) fn checks(
     out
 }
 
-/// B42's fourth check: what each edge says of the faces it bounds. An edge lies on each face it
-/// names; one between two faces gives the turn the solid's surfaces make there, within 1e-3, and
-/// any other gives none; an edge is flagged as a split exactly where it lies on one surface, off
-/// every edge between two, along a line the solid may be cut on; and the seams lie on the solid,
-/// as many as it has. A display that says none of this has not answered.
+/// B42's fourth check: what each edge says of the faces it bounds. Each of these facts is optional,
+/// and judged only where the display gives it. An edge lies on each face it names; one between two
+/// faces gives the turn the solid's surfaces make there, within 1e-3; an edge flagged as a split
+/// lies on one surface, off every edge between two, along a line the solid may be cut on. Seams are
+/// not scored. A display that says none of this passes, as not reported.
 fn topology(d: &Display, want: &DisplayExact, tol: f64, scale: f64) -> (bool, String) {
     let on = 1e-6 * scale.max(1.0);
     let near = 1e-5 * scale.max(1.0);
-    let silent = d.seams.is_empty()
-        && d.edges
-            .iter()
-            .all(|e| e.faces.is_empty() && e.turn.is_none() && !e.split);
+    let silent = d
+        .edges
+        .iter()
+        .all(|e| e.faces.is_empty() && e.turn.is_none() && !e.split);
     if silent && !d.edges.is_empty() {
         return (
-            false,
-            "topology: not reported: no edge names its faces, its turn or a split, and no seam is \
-             listed"
-                .into(),
+            true,
+            "topology: not reported: no edge names its faces, its turn or a split".into(),
         );
     }
     let surface = |q: Vec3| {
@@ -300,21 +321,18 @@ fn topology(d: &Display, want: &DisplayExact, tol: f64, scale: f64) -> (bool, St
             .map(|m| to_meet(q, m))
             .fold(f64::INFINITY, f64::min)
     };
-    // The middle of a line's middle chord: off its ends, where other edges meet it.
-    let middle = |line: &[Vec3]| {
-        let i = line.len().checked_sub(1)? / 2;
-        let (a, b) = (line[i], *line.get(i + 1).unwrap_or(&line[i]));
-        Some([0, 1, 2].map(|k| (a[k] + b[k]) / 2.0))
-    };
     let (mut unnamed, mut astray, mut turns, mut worst) = (0usize, 0usize, 0usize, 0.0f64);
-    let (mut splits, mut cuts, mut extra) = (0usize, 0usize, 0usize);
+    let (mut splits, mut cuts) = (0usize, 0usize);
     for e in &d.edges {
         let distinct = e.faces.len() == 2 && e.faces[0] != e.faces[1];
         // One face named twice is a seam, which has its own list.
         let itself = e.faces.len() == 2 && !distinct;
-        if e.faces.len() < 2 || itself || e.faces.iter().any(|&f| f as usize >= d.faces.len()) {
+        // An edge that names no faces has not said, and is not judged on them.
+        let named = !e.faces.is_empty();
+        let unknown = e.faces.iter().any(|&f| f as usize >= d.faces.len());
+        if named && (e.faces.len() < 2 || itself || unknown) {
             unnamed += 1;
-        } else {
+        } else if named {
             let lies = e.faces.iter().all(|&f| {
                 let f = &d.faces[f as usize];
                 e.points.iter().all(|&q| {
@@ -327,14 +345,13 @@ fn topology(d: &Display, want: &DisplayExact, tol: f64, scale: f64) -> (bool, St
             });
             astray += usize::from(!lies);
         }
-        if e.split {
-            cuts += 1;
+        let foreseen = on_split(&e.points, want, near);
+        if e.split || foreseen {
+            cuts += usize::from(e.split);
             let flat = e.turn.is_none_or(|t| t.iter().all(|a| a.abs() <= 1e-3));
             let placed = e.points.iter().all(|&q| surface(q) <= near)
                 && middle(&e.points).is_none_or(|q| off(&want.edges, q) > tol + on);
-            splits += usize::from(!(flat && placed && distinct));
-            let foreseen = middle(&e.points).is_some_and(|q| off(&want.splits, q) <= near);
-            extra += usize::from(!foreseen);
+            splits += usize::from(!(flat && placed && (distinct || !named)));
             continue;
         }
         let Some(mid) = middle(&e.points) else {
@@ -344,40 +361,23 @@ fn topology(d: &Display, want: &DisplayExact, tol: f64, scale: f64) -> (bool, St
             .edges
             .iter()
             .min_by(|a, b| to_meet(mid, a).total_cmp(&to_meet(mid, b)));
+        // An edge that gives no turn has not said, and is not judged on it.
         match (e.turn, meet) {
-            (Some(t), Some(m)) if distinct => {
+            (None, _) => {}
+            (Some(t), Some(m)) if distinct || !named => {
                 let gap = t.iter().map(|a| (a - m.turn).abs()).fold(0.0, f64::max);
                 worst = worst.max(gap);
                 turns += usize::from(gap > 1e-3 || gap.is_nan());
             }
-            (None, _) if !distinct => {}
             _ => turns += 1,
         }
     }
-    let mut loose = 0usize;
-    for line in &d.seams {
-        let lies = line.iter().enumerate().all(|(i, &q)| {
-            let mid = line
-                .get(i + 1)
-                .map(|n| [0, 1, 2].map(|k| (q[k] + n[k]) / 2.0));
-            surface(q) <= near && mid.is_none_or(|m| surface(m) <= tol + on)
-        });
-        loose += usize::from(!lies);
-    }
-    // A round face closes along one seam, or is cut into faces by edges flagged as splits.
-    let closes = want
-        .seams
-        .is_none_or(|n| d.seams.len() == n || (d.seams.is_empty() && extra >= 2 * n));
-    let seams = match want.seams {
-        Some(n) => format!("{} seams of {n}", d.seams.len()),
-        None => format!("{} seams", d.seams.len()),
-    };
     (
-        unnamed == 0 && astray == 0 && turns == 0 && splits == 0 && loose == 0 && closes,
+        unnamed == 0 && astray == 0 && turns == 0 && splits == 0,
         format!(
             "topology: {} edges, {unnamed} naming no two faces, {astray} off a face they name, \
              {turns} with another turn than the surfaces', off by up to {worst:.3e}; {cuts} \
-             flagged as splits, {splits} of them wrongly; {seams}, {loose} off the solid",
+             flagged as splits, {splits} of them wrongly",
             d.edges.len()
         ),
     )
@@ -455,7 +455,6 @@ mod tests {
             surfaces,
             edges: creases,
             splits: Vec::new(),
-            seams: Some(0),
             volume: 1.0,
             area: 6.0,
         };
@@ -514,7 +513,6 @@ mod tests {
                 turn,
             )],
             splits: Vec::new(),
-            seams: Some(1),
             volume: std::f64::consts::PI * h / 3.0,
             area: std::f64::consts::PI * (1.0 + (1.0f64 + h * h).sqrt()),
         };
@@ -613,7 +611,7 @@ mod tests {
     }
 
     #[test]
-    fn a_display_that_says_nothing_of_its_edges_fails_only_the_topology() {
+    fn a_display_that_says_nothing_of_its_edges_passes_as_not_reported() {
         let (mut d, want) = cube();
         for e in &mut d.edges {
             *e = DisplayEdge::bare(e.points.clone());
@@ -621,9 +619,20 @@ mod tests {
         let checks = checks(&d, &want, 0.01, 1.7, crate::run::mesh_check);
         assert_eq!(
             checks.iter().map(|c| c.0).collect::<Vec<_>>(),
-            [true, true, true, false]
+            [true, true, true, true]
         );
         assert!(checks[3].1.starts_with("topology: not reported"));
+    }
+
+    #[test]
+    fn an_edge_that_names_its_faces_and_gives_no_turn_is_judged_on_its_faces_alone() {
+        let (mut d, want) = cube();
+        for e in &mut d.edges {
+            e.turn = None;
+        }
+        assert_eq!(held(&d, &want), [true, true, true, true]);
+        d.edges[0].faces[0] = 5;
+        assert!(!held(&d, &want)[3]);
     }
 
     #[test]
@@ -642,7 +651,7 @@ mod tests {
         let mut none = d.clone();
         none.edges[0].faces = vec![99, 0];
         assert!(!held(&none, &want)[3]);
-        for turn in [Some([FRAC_PI_2, 2.0]), Some([-FRAC_PI_2; 2]), None] {
+        for turn in [Some([FRAC_PI_2, 2.0]), Some([-FRAC_PI_2; 2])] {
             let mut bent = d.clone();
             bent.edges[3].turn = turn;
             assert!(!held(&bent, &want)[3], "{turn:?}");
@@ -705,15 +714,16 @@ mod tests {
     }
 
     #[test]
-    fn an_edge_a_split_made_passes_flagged_and_fails_unflagged_or_misplaced() {
+    fn an_edge_a_split_made_passes_flagged_or_not_and_fails_misplaced() {
         let (d, want) = halved();
         // The halves' corners at the cut are no corners of the front and back faces, so the joined
         // mesh is open there; the fixture is for the other three checks.
         assert_eq!(held(&d, &want)[1..], [true, true, true]);
         let at = d.edges.len() - 1;
+        // `edge_split` is optional: the same edge unflagged is still judged as a split.
         let mut unflagged = d.clone();
         unflagged.edges[at].split = false;
-        assert_eq!(held(&unflagged, &want)[2..], [false, false]);
+        assert_eq!(held(&unflagged, &want)[2..], [true, true]);
         // A crease is no split, and a split has no turn.
         let mut crease = d.clone();
         crease.edges[0].split = true;
@@ -727,17 +737,17 @@ mod tests {
     }
 
     #[test]
-    fn a_seam_missing_doubled_or_off_the_solid_fails_the_topology() {
+    fn seams_are_not_scored_and_one_drawn_among_the_edges_is_a_stray_edge() {
         let (d, want) = cone();
         let mut bare = d.clone();
         bare.seams.clear();
-        assert_eq!(held(&bare, &want), [true, true, true, false]);
+        assert_eq!(held(&bare, &want), [true, true, true, true]);
         let mut doubled = d.clone();
         doubled.seams.push(d.seams[0].clone());
-        assert!(!held(&doubled, &want)[3]);
+        assert_eq!(held(&doubled, &want), [true, true, true, true]);
         let mut off = d.clone();
         off.seams[0][1] = [0.0, 0.0, 3.0];
-        assert!(!held(&off, &want)[3]);
+        assert_eq!(held(&off, &want), [true, true, true, true]);
         // A seam drawn among the edges is a stray edge.
         let mut drawn = d.clone();
         drawn.edges.push(DisplayEdge::bare(d.seams[0].clone()));

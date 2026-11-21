@@ -545,7 +545,6 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
         height,
     };
     let mut splits = Vec::new();
-    let mut seams = Some(0);
     let (shape, surfaces, edges, volume, area): (Shape, Vec<Surface>, Vec<Meet>, f64, f64) =
         match r.next_u64() % 7 {
             0 => {
@@ -584,7 +583,6 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
                         out: true,
                     },
                 ];
-                seams = Some(1);
                 let area = 2.0 * PI * rad * (rad + h);
                 (cyl.into(), surfaces, edges, PI * rad * rad * h, area)
             }
@@ -593,8 +591,6 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
                 let volume = 4.0 / 3.0 * PI * rad.ppowi(3);
                 let surfaces = vec![Surface::Ball { c: origin, r: rad }];
                 let area = 4.0 * PI * rad * rad;
-                // A ball closes by a seam between its poles in one kernel and by none in another.
-                seams = None;
                 (sphere(origin, rad).into(), surfaces, vec![], volume, area)
             }
             3 => {
@@ -616,7 +612,6 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
                 let shape = cone(Frame::at(origin), rad, 0.0, h);
                 // The rim's faces turn by a right angle and the cone's lean: π/2 + atan(rad/h).
                 let edges = vec![Meet::whole(rim(origin, rad), PI / 2.0 + (rad / h).patan())];
-                seams = Some(1);
                 (shape.into(), surfaces, edges, volume, area)
             }
             4 => {
@@ -640,7 +635,6 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
                     r: rad,
                     out: false,
                 });
-                seams = Some(1);
                 let disc = PI * rad * rad;
                 let volume = s[0] * s[1] * s[2] - disc * s[2];
                 let area = 2.0 * (s[0] * s[1] + s[1] * s[2] + s[2] * s[0]) - 2.0 * disc
@@ -739,7 +733,6 @@ pub(super) fn display_case(r: &mut Rng) -> Drawn {
             surfaces,
             edges,
             splits,
-            seams,
             volume,
             area,
         }),

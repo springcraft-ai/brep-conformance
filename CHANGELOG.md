@@ -31,10 +31,11 @@ a refused blend differently.
   in each triangle that uses it, one of the normals that the cone has across that triangle, to
   within 1e-3.
 - B42 has a fourth check, of what each edge says: the faces it names, the turn between them against
-  its closed form to within 1e-3, the flag on an edge a split made, and the seams. A display from an
-  adapter written to protocol 1.0.0 fails this check alone, as not reported, except on a ball, which
-  has no edge to report. B42 also displays a box with its upright edges rounded, where faces meet
-  smoothly, and a box with one side in two faces.
+  its closed form to within 1e-3, and the flag on an edge a split made. Each of these facts is
+  optional: a display is judged only on the ones it gives, so a display from an adapter written to
+  protocol 1.0.0 passes this check as not reported. Seams are not scored. An edge along a split the case
+  foresees is judged as a split whether or not it is flagged. B42 also displays a box with its
+  upright edges rounded, where faces meet smoothly, and a box with one side in two faces.
 - B31 and B39 no longer run when the kernel refused the blend. Before, a kernel that offers `normal`
   or curvatures at probes got a failed case for a refused blend. Now the case is a refusal, as
   every other check of a blend case already scored it.

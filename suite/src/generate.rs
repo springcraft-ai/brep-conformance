@@ -138,14 +138,13 @@ pub struct Drawing {
 }
 
 /// What a display of a solid must draw: its surfaces, each stretch of a curve where two of them
-/// meet, the lines along which a kernel may have cut one surface into two faces, how many seams
-/// close its round faces where that is fixed, and its volume and area.
+/// meet, the lines along which a kernel may have cut one surface into two faces, and its volume
+/// and area.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DisplayExact {
     pub surfaces: Vec<Surface>,
     pub edges: Vec<Meet>,
     pub splits: Vec<Meet>,
-    pub seams: Option<usize>,
     pub volume: f64,
     pub area: f64,
 }
