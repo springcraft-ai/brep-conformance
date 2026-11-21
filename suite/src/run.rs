@@ -1178,7 +1178,7 @@ fn run_feature<K: Kernel<Solid: Clone + 'static>>(k: &mut K, c: &Case, f: &Featu
     };
     let area = base.area() + want_area;
     let vb = volume_bound(area, base.volume() + want_volume);
-    let bx = oracle::bounds(&c.a).and_then(|x| oracle::bounds(&c.b).map(|y| (x, y)));
+    let bx = oracle::bounds(&c.a).zip(oracle::bounds(&c.b));
     let reach = bx
         .map(|(x, y)| {
             [x.0, x.1, y.0, y.1]
@@ -4131,8 +4131,8 @@ mod tests {
         // A verdict no tolerance decides holds at every tier or at none.
         assert_eq!(tier_of(true), "1e-7");
         assert_eq!(tier_of(false), "fail");
-        let ok = tiers(|| within(LENGTH, 3e-7, bound)) && false;
-        assert_eq!(tier_of(ok), "fail");
+        assert!(tiers(|| within(LENGTH, 3e-7, bound)));
+        assert_eq!(tier_of(false), "fail");
         MEASURES.with(|m| m.borrow_mut().clear());
     }
 
