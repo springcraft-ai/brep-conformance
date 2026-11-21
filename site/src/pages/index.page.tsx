@@ -120,6 +120,7 @@ export default function Home({
           </a>
           <span className="hm-foot__meta bc-annot">
             <a href={href('/docs/#introduction-how-it-works')}>how scoring works</a>
+            <a href={href('/reports/')}>all reports</a>
             <span>
               {runs.length > 0 && `${fmt.runs(runs)} · `}
               suite {suite} · {n(cases)} cases

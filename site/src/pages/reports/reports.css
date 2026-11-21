@@ -1,0 +1,19 @@
+/* ---- the list of reports ---- */
+
+.rl-table {
+  margin-top: var(--sp-6);
+  overflow-x: auto;
+}
+.rl-suite {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+/* The report the home page shows, named in the accent. */
+.rl-current {
+  color: var(--accent);
+}
+/* A date range and a leader read on one line; a narrow screen scrolls the table instead. */
+.rl-nowrap {
+  white-space: nowrap;
+}

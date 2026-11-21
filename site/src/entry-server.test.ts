@@ -83,8 +83,10 @@ describe('the site', () => {
   it('renders one URL for the dev server, and 404 for an unknown page', () => {
     expect(render(`/badges/${site().kernels[0]}.svg`)?.status).toBe(200)
     expect(render('/reports/0.0.0/nobody/0/')?.status).toBe(404)
-    // The reports have no index yet.
-    expect(render('/reports/')?.status).toBe(404)
+    // The list of reports, with a link to each.
+    const reports = render('/reports/')
+    expect(reports?.status).toBe(200)
+    expect(reports?.body).toContain(`href="/reports/${site().suite}/"`)
     expect(render(`/reports/${site().suite}/compare/booleans/`)?.status).toBe(200)
     expect(render(`/reports/${site().suite}/compare/nothing/`)?.status).toBe(404)
     expect(render('/src/main.ts')).toBeNull()
