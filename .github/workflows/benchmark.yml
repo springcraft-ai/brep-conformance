@@ -277,7 +277,7 @@ jobs:
               exit 1
           fi
           immutable="public, max-age=31536000, immutable"
-          for pass in springrep arris cadrs cad-kernel solidcore opencascade; do
+          for pass in springrep arris cadrs cad-kernel next.BREP solidcore opencascade; do
               count=$(grep -c "^$pass/" results/staged.txt || true)
               # A kernel that can neither draw nor write STEP has no files.
               [ "$count" -gt 0 ] || continue

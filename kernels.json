@@ -46,6 +46,21 @@
       "reviewers": []
     },
     {
+      "kernel": "next.BREP",
+      "version": "0.24.0",
+      "license": "LicenseRef-Autodrop3d",
+      "source": "https://github.com/mmiscool/next.BREP.io_RUST_BREP_KERNEL",
+      "maintained_by_suite": false,
+      "adapter": {
+        "repo": "https://github.com/springcraft-ai/brep-conformance-next-brep",
+        "commit": "705f5e16c489d25fcda61a8b38c3042a0795a910",
+        "license": "MIT",
+        "build": ["cargo build --release --locked"],
+        "run": "{dir}/target/release/next-brep-adapter"
+      },
+      "reviewers": []
+    },
+    {
       "kernel": "opencascade",
       "version": "8.0.1.1.0",
       "license": "LGPL-2.1-only WITH OCCT-exception-1.0",

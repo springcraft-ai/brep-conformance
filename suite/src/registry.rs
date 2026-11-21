@@ -52,12 +52,14 @@ pub fn parse(text: &str) -> Result<Vec<Entry>, String> {
         let at = format!("kernels[{i}]");
         let a = &k["adapter"];
         let kernel = text_of(k, "kernel", &at)?;
-        if !kernel
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        // The name is a path segment of the kernel's files and pages, so it never starts with `.`.
+        if !kernel.starts_with(|c: char| c.is_ascii_alphanumeric())
+            || !kernel
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.')
         {
             return Err(format!(
-                "{at}: kernel `{kernel}` is not lower-case letters, digits and -"
+                "{at}: kernel `{kernel}` is not letters, digits, - and . after a letter or digit"
             ));
         }
         if !seen.insert(kernel.clone()) {
@@ -215,6 +217,7 @@ mod tests {
                 "arris",
                 "cad-kernel",
                 "cadrs",
+                "next.BREP",
                 "opencascade",
                 "solidcore",
                 "springrep"
@@ -243,6 +246,19 @@ mod tests {
         let copy = v["kernels"][0].clone();
         v["kernels"].as_array_mut().unwrap().push(copy);
         assert!(parse(&v.to_string()).unwrap_err().contains("listed twice"));
+    }
+
+    #[test]
+    fn a_kernel_name_is_one_path_segment_that_starts_with_a_letter_or_digit() {
+        let full = "0123456789abcdef0123456789abcdef01234567";
+        let named =
+            |name: &str| one(full).replace(r#""kernel": "k""#, &format!(r#""kernel": "{name}""#));
+        for name in ["next.BREP", "cad-kernel", "k2"] {
+            assert_eq!(parse(&named(name)).unwrap()[0].kernel, name);
+        }
+        for name in ["..", ".k", "-k", "a/b", "a b", ""] {
+            assert!(parse(&named(name)).is_err(), "{name:?}");
+        }
     }
 
     fn quiet_git(dir: &Path, args: &[&str]) {

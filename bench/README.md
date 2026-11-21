@@ -72,7 +72,7 @@ records every commit and tool version.
 
 | Setting  | Value                                                                                                                      |
 | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Order    | springrep, arris, cadrs, cad-kernel, solidcore, OpenCascade: one pass each                                                 |
+| Order    | springrep, arris, cadrs, cad-kernel, next.BREP, solidcore, OpenCascade: one pass each                                      |
 | Workers  | 24, always passed                                                                                                          |
 | Cores    | The suite's runner on the housekeeping cores; each adapter on an isolated core of its own, through [`pin.sh`](pin.sh)      |
 | Adapters | Started by the registry's command, through [`adapters.py`](adapters.py)                                                    |

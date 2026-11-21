@@ -16,6 +16,7 @@ body:
         - arris
         - cad-kernel
         - cadrs
+        - next.BREP
         - opencascade
         - solidcore
         - springrep
