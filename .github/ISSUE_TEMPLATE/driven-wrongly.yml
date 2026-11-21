@@ -14,6 +14,7 @@ body:
       label: Kernel
       options:
         - arris
+        - cad-kernel
         - cadrs
         - opencascade
         - solidcore

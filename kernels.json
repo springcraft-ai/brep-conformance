@@ -16,6 +16,21 @@
       "reviewers": []
     },
     {
+      "kernel": "cad-kernel",
+      "version": "0.17.0",
+      "license": "MIT OR Apache-2.0",
+      "source": "https://github.com/bmander/geomsolver",
+      "maintained_by_suite": false,
+      "adapter": {
+        "repo": "https://github.com/springcraft-ai/brep-conformance-cad-kernel",
+        "commit": "7cf583bba7f3708f099bf5a8e0ea4f858f5e10f8",
+        "license": "MIT",
+        "build": ["cargo build --release --locked"],
+        "run": "{dir}/target/release/cad-kernel-adapter"
+      },
+      "reviewers": []
+    },
+    {
       "kernel": "cadrs",
       "version": "0.2.9 (bb09c367)",
       "license": "MIT OR Apache-2.0",

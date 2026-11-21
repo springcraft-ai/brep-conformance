@@ -22,6 +22,7 @@ per contract clause. It is not run on every pull request: it runs in release, by
   registry, pins each to a reviewed commit and one release of its kernel:
   [OpenCascade](https://github.com/springcraft-ai/brep-conformance-occt), in C++, and the Rust
   kernels [arris](https://github.com/springcraft-ai/brep-conformance-arris),
+  [cad-kernel](https://github.com/springcraft-ai/brep-conformance-cad-kernel),
   [cadrs](https://github.com/springcraft-ai/brep-conformance-cadrs),
   [solidcore](https://github.com/springcraft-ai/brep-conformance-solidcore) and
   [springrep](https://github.com/springcraft-ai/brep-conformance-springrep).

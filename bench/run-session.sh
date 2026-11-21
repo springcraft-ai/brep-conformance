@@ -86,7 +86,7 @@ one() {
 
 # One pass per kernel. Each adapter is the one kernels.json pins, started as its own program, so it
 # is the suite's child and lets go of its core when the suite replaces it.
-kernels=(springrep arris cadrs solidcore opencascade)
+kernels=(springrep arris cadrs cad-kernel solidcore opencascade)
 for kernel in "${kernels[@]}"; do
     one "$kernel" "$@"
 done
