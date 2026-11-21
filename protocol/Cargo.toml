@@ -1,6 +1,6 @@
 [package]
 name = "brep-protocol"
-version = "2.1.0"
+version = "2.0.1"
 edition = "2024"
 license = "MIT"
 description = "The B-rep operations a conformance suite calls: their data types, the kernel trait, and its JSON-lines binding"

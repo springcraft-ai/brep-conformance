@@ -3770,9 +3770,6 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
         for _ in 0..threads.max(1) {
             s.spawn(|| {
                 let (mut k, mut p): (Option<K>, Option<Remote>) = (None, None);
-                // The kernel's process starts as the last case ended, before its reset: a start
-                // since then, in that reset or in this case, is a new process answering this one.
-                let mut seen: Option<u64> = None;
                 loop {
                     let i = {
                         let mut n = next.lock().unwrap();
@@ -3807,12 +3804,11 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
                         }
                     };
                     v["test"] = json!(c.test);
-                    // A case answered by a newly started process pays its first calls, which a
-                    // reader may leave out of a time. A kernel that did not start ran nothing.
-                    if let Ok(k) = &made {
-                        let now = k.starts();
-                        v["cold"] = json!(fresh || seen != Some(now));
-                        seen = Some(now);
+                    // The first case on a kernel the runner started for it pays that kernel's first
+                    // calls, which a reader may leave out of a time. A kernel that did not start ran
+                    // nothing. A worker the client replaces inside a kernel is not seen here.
+                    if made.is_ok() {
+                        v["cold"] = json!(fresh);
                     }
                     judge(&mut v, c);
                     v["asset_step"] = json!(!crate::assets::of_case(c).step.is_empty());
@@ -4269,61 +4265,12 @@ mod tests {
         assert_eq!(starts.load(Ordering::SeqCst), 3);
     }
 
-    /// A kernel that runs in processes of its own, a new one after every second reset.
-    struct Restarting(u64, u64);
-
-    impl Kernel for Restarting {
-        type Solid = ();
-        fn name(&self) -> String {
-            "restarting".into()
-        }
-        fn supports(&self) -> Vec<String> {
-            vec!["box".into(), "union".into(), "volume".into(), "area".into()]
-        }
-        fn version(&self) -> String {
-            "0".into()
-        }
-        fn tolerance(&self) -> f64 {
-            1e-7
-        }
-        fn make(&mut self, _p: &Primitive) -> Result<(), Refusal> {
-            Ok(())
-        }
-        fn union(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
-            Ok(())
-        }
-        fn intersection(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
-            Ok(())
-        }
-        fn difference(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
-            Ok(())
-        }
-        fn volume(&mut self, _s: &()) -> Result<f64, Refusal> {
-            Ok(1.0)
-        }
-        fn area(&mut self, _s: &()) -> Result<f64, Refusal> {
-            Ok(6.0)
-        }
-        fn check(&mut self, _s: &()) -> Result<Vec<String>, Refusal> {
-            Ok(Vec::new())
-        }
-        fn reset(&mut self) {
-            self.1 += 1;
-            if self.1.is_multiple_of(2) {
-                self.0 += 1;
-            }
-        }
-        fn starts(&self) -> u64 {
-            self.0
-        }
-    }
-
     #[test]
-    fn a_case_is_cold_on_a_new_kernel_or_a_new_process_and_not_where_none_started() {
+    fn a_case_is_cold_on_a_kernel_started_for_it_and_records_the_time_limit() {
         let cases: Vec<Case> = crate::generate::cases(1)
             .into_iter()
             .filter(|c| c.test.starts_with("booleans/overlap/boxes"))
-            .take(6)
+            .take(4)
             .collect();
         let cold = |r: &Value| -> Vec<Value> {
             r["cases"]
@@ -4333,9 +4280,8 @@ mod tests {
                 .map(|c| c["cold"].clone())
                 .collect()
         };
-        // One thread: the first case starts the kernel, and every second reset starts a process.
         let r = run(
-            || Ok::<_, String>(Restarting(1, 0)),
+            || Ok::<_, String>(Sticky(Default::default())),
             &cases,
             1,
             None,
@@ -4343,12 +4289,12 @@ mod tests {
             Some(std::time::Duration::from_secs(9)),
         )
         .unwrap();
-        let t = json!(true);
-        let f = json!(false);
-        assert_eq!(cold(&r), [&t, &f, &t, &f, &t, &f].map(Clone::clone));
+        assert_eq!(
+            cold(&r),
+            [json!(true), json!(false), json!(false), json!(false)]
+        );
         assert_eq!(r["time_limit_ms"], 9000.0);
         assert!(r["wall_ms"].as_f64().unwrap() >= 0.0);
-        // A kernel that never runs in a process of its own is cold on its first case only.
         let r = run(
             || Ok::<_, String>(Sticky(Default::default())),
             &cases,
@@ -4358,7 +4304,6 @@ mod tests {
             None,
         )
         .unwrap();
-        assert_eq!(cold(&r), [&t, &f, &f, &f, &f, &f].map(Clone::clone));
         assert_eq!(r["time_limit_ms"], Value::Null);
     }
 

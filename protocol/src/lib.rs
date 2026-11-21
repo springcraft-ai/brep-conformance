@@ -758,12 +758,6 @@ pub trait Kernel {
     }
     /// Releases every solid this kernel made, once its caller is done with them.
     fn reset(&mut self) {}
-    /// How many processes this kernel has started, for one that runs in processes of its own: a
-    /// change between two reads says a new process answered the calls between them. 0 for a
-    /// kernel in the caller's own process.
-    fn starts(&self) -> u64 {
-        0
-    }
 
     fn boolean(
         &mut self,
