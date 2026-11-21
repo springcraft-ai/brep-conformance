@@ -257,7 +257,8 @@ pub fn flat(results: &Value, verified: bool) -> Value {
                         .map(|o| json!({"op": o["op"], "outcome": o["outcome"], "ms": o["ms"]}))
                         .collect::<Vec<_>>()
                 }),
-                "cold": c["cold"].as_bool().unwrap_or(false),
+                // Null in a results file written before a case's start was recorded.
+                "cold": c["cold"],
                 "group_median_ms": median.map(|m| m.0),
                 "group_low_confidence": median.is_none_or(|m| m.1 < TIMED_ENOUGH),
                 "asset": c["asset"],
@@ -347,7 +348,7 @@ mod tests {
         );
         assert_eq!(
             (a["cold"].clone(), b["cold"].clone()),
-            (json!(true), json!(false))
+            (json!(true), Value::Null)
         );
         assert_eq!(b["ops"][0]["outcome"], "timeout");
     }

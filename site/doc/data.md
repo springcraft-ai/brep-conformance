@@ -20,9 +20,9 @@ older link names stays as it was; a rerun on the same suite version replaces the
   each primitive it has no constructor for.
 - `cases`: one row per case: `id`, `test`, `operation` (the test path's first part, its area),
   `kind` (exact, sound or rejection), `result`, `why`, `failure` (geometry or measurement),
-  `time_ms`, each step's time (`ops`: `op`, `outcome`, `ms`), `cold` where the case was the first on
-  a newly started kernel, the test's `group_median_ms`, and `exports`, the shape files the kernel
-  wrote for it.
+  `time_ms`, each step's time (`ops`: `op`, `outcome`, `ms`), `cold`, whether a newly started kernel
+  or kernel process answered the case (null in a report from before it was recorded), the test's
+  `group_median_ms` (cold cases included), and `exports`, the shape files the kernel wrote for it.
 
 A test's URL segment is its path without the area, joined by dashes: `booleans/overlap/spheres` is
 `overlap-spheres` under `booleans`.

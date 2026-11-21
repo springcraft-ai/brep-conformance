@@ -129,6 +129,8 @@ pub struct Remote {
     lost: Option<Loss>,
     hello: Value,
     limit: Duration,
+    /// How many workers this session has started, the first included.
+    starts: u64,
 }
 
 impl Remote {
@@ -154,6 +156,7 @@ impl Remote {
             lost: None,
             hello,
             limit,
+            starts: 1,
         })
     }
 
@@ -167,6 +170,7 @@ impl Remote {
         let limit = self.limit;
         if self.worker.is_none() {
             self.worker = Some(Worker::spawn(&self.command)?);
+            self.starts += 1;
         }
         let reply = match self.worker.as_mut().map(|wk| wk.call(&req, limit)) {
             Some(Ok(reply)) => reply,
@@ -690,6 +694,10 @@ impl Kernel for Remote {
         serde_json::from_value(self.hello["supports"].clone()).unwrap_or_default()
     }
 
+    fn starts(&self) -> u64 {
+        self.starts
+    }
+
     fn write_step(&mut self, s: &Handle) -> Result<String, Refusal> {
         serde_json::from_value(self.call(json!({"cmd": "write_step", "s": s.handle}))?)
             .map_err(malformed("write_step"))
@@ -867,6 +875,7 @@ mod tests {
             let _ = std::fs::remove_file(&starts);
             assert_eq!(next.unwrap().handle, 1, "{reply}");
             assert_eq!(started, starts_after, "{reply}");
+            assert_eq!(k.starts(), starts_after as u64, "{reply}");
         }
     }
 

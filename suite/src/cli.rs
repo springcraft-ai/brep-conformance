@@ -145,6 +145,7 @@ pub fn main() -> ExitCode {
             .as_ref()
             .map(|f| f as &(dyn Fn() -> Result<Remote, String> + Sync)),
         &exports,
+        Some(limit),
     );
     let mut results = match run {
         Ok(results) => results,
@@ -156,7 +157,6 @@ pub fn main() -> ExitCode {
     if let Some(e) = &official {
         results["adapter"] = e.stamp();
     }
-    results["time_limit_ms"] = serde_json::json!(limit.as_secs_f64() * 1e3);
     std::fs::write(&out, serde_json::to_string_pretty(&results).unwrap()).expect("writing results");
     print!("{}", report::summary(&results));
     println!("\nresults: {}", out.display());

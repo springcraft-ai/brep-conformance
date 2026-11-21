@@ -69,7 +69,7 @@ A case's fields:
 | `error`      | Where the case's own solids could not be made: the kernel's reason                                                                                                                                            |
 | `interop`    | With `--peer`: whether the second kernel read this one's STEP file as the same solid                                                                                                                          |
 | `time_ms`    | The sum of its steps' times                                                                                                                                                                                   |
-| `cold`       | `true` when the runner started a kernel for this case, so its time includes that kernel's first calls                                                                                                         |
+| `cold`       | Whether a newly started kernel or kernel process answered the case, so its time includes that process's first calls; absent where no kernel started for it                                                    |
 | `asset`      | The name of its shape files                                                                                                                                                                                   |
 | `sound`      | `true` on a case judged as sound                                                                                                                                                                              |
 | `asset_step` | `true` when the case has STEP files ([Assets](#assets))                                                                                                                                                       |
@@ -123,9 +123,10 @@ site reads. It holds `format` (the same number as the results file's), `kernel`,
 result) and `cases`. `run` also carries the results file's timings: `started_unix`, `wall_ms`,
 `calibration_ms` and `time_limit_ms`. `cases` has one row per case, with `id`, `test`, `operation`,
 `kind`, `result`, `why`, `failure`, `time_ms`, `ops` (each step's `op`, `outcome` and `ms`, as the
-results file has them), `cold`, `asset`, its test's `group_median_ms`, `group_low_confidence`, and,
-where files were drawn, `exports`: the `glb` key and the list of `step` keys, below the kernel's
-folder of [Assets](#assets).
+results file has them), `cold` (null for a results file written before it was recorded), `asset`,
+its test's `group_median_ms` (over every answered case of the test, cold ones included),
+`group_low_confidence`, and, where files were drawn, `exports`: the `glb` key and the list of `step`
+keys, below the kernel's folder of [Assets](#assets).
 
 ## Operands
 

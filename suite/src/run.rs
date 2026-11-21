@@ -3743,13 +3743,14 @@ fn run_nist<K: Kernel<Solid: Clone + 'static>>(
 
 /// Runs `cases` on `threads` threads, each thread on a kernel of its own from `make`, reset after
 /// each case. `peer`, when given, makes each thread a second kernel, which reads the STEP files the
-/// first writes.
+/// first writes. `limit` is the longest one call of the kernel may take, which the results record.
 pub fn run<K: Kernel<Solid: Clone + 'static>>(
     make: impl Fn() -> Result<K, String> + Sync,
     cases: &[Case],
     threads: usize,
     peer: Option<&(dyn Fn() -> Result<Remote, String> + Sync)>,
     exports: &Exports,
+    limit: Option<std::time::Duration>,
 ) -> Result<Value, String> {
     let started = (std::time::SystemTime::now(), Instant::now());
     // The header's kernel first, gone before the threads start theirs, so a run never holds more
@@ -3769,6 +3770,9 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
         for _ in 0..threads.max(1) {
             s.spawn(|| {
                 let (mut k, mut p): (Option<K>, Option<Remote>) = (None, None);
+                // The kernel's process starts as the last case ended, before its reset: a start
+                // since then, in that reset or in this case, is a new process answering this one.
+                let mut seen: Option<u64> = None;
                 loop {
                     let i = {
                         let mut n = next.lock().unwrap();
@@ -3782,7 +3786,7 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
                     }
                     // A kernel that cannot start refuses the case it was to run, and the next case
                     // starts another. A peer that cannot start leaves the case without interop.
-                    let cold = k.is_none();
+                    let fresh = k.is_none();
                     let mut made = match k.take() {
                         Some(k) => Ok(k),
                         None => make(),
@@ -3803,10 +3807,12 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
                         }
                     };
                     v["test"] = json!(c.test);
-                    // The first case on a kernel the runner started for it pays that kernel's
-                    // first calls, which a reader may leave out of a time.
-                    if cold {
-                        v["cold"] = json!(true);
+                    // A case answered by a newly started process pays its first calls, which a
+                    // reader may leave out of a time. A kernel that did not start ran nothing.
+                    if let Ok(k) = &made {
+                        let now = k.starts();
+                        v["cold"] = json!(fresh || seen != Some(now));
+                        seen = Some(now);
                     }
                     judge(&mut v, c);
                     v["asset_step"] = json!(!crate::assets::of_case(c).step.is_empty());
@@ -3860,6 +3866,7 @@ pub fn run<K: Kernel<Solid: Clone + 'static>>(
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs()),
         "wall_ms": started.1.elapsed().as_secs_f64() * 1e3,
+        "time_limit_ms": limit.map(|l| l.as_secs_f64() * 1e3),
         "calibration_ms": calibration,
         "cases": out.into_iter().map(|x| x.1).collect::<Vec<_>>(),
     }))
@@ -4252,11 +4259,107 @@ mod tests {
             .filter(|c| c.test.starts_with("booleans/overlap/boxes"))
             .take(2)
             .collect();
-        let r = run(make, &cases, 1, None, &Exports::default()).unwrap();
+        let r = run(make, &cases, 1, None, &Exports::default(), None).unwrap();
         assert_eq!(r["cases"][0]["outcome"], "refused");
         assert_eq!(r["cases"][0]["error"], "starting the kernel: no free core");
+        // A kernel that did not start ran nothing, so the case says nothing of a start.
+        assert!(r["cases"][0].get("cold").is_none());
+        assert_eq!(r["cases"][1]["cold"], true);
         assert_ne!(r["cases"][1]["outcome"], "refused", "{}", r["cases"][1]);
         assert_eq!(starts.load(Ordering::SeqCst), 3);
+    }
+
+    /// A kernel that runs in processes of its own, a new one after every second reset.
+    struct Restarting(u64, u64);
+
+    impl Kernel for Restarting {
+        type Solid = ();
+        fn name(&self) -> String {
+            "restarting".into()
+        }
+        fn supports(&self) -> Vec<String> {
+            vec!["box".into(), "union".into(), "volume".into(), "area".into()]
+        }
+        fn version(&self) -> String {
+            "0".into()
+        }
+        fn tolerance(&self) -> f64 {
+            1e-7
+        }
+        fn make(&mut self, _p: &Primitive) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn union(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn intersection(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn difference(&mut self, _a: &(), _b: &()) -> Result<(), Refusal> {
+            Ok(())
+        }
+        fn volume(&mut self, _s: &()) -> Result<f64, Refusal> {
+            Ok(1.0)
+        }
+        fn area(&mut self, _s: &()) -> Result<f64, Refusal> {
+            Ok(6.0)
+        }
+        fn check(&mut self, _s: &()) -> Result<Vec<String>, Refusal> {
+            Ok(Vec::new())
+        }
+        fn reset(&mut self) {
+            self.1 += 1;
+            if self.1.is_multiple_of(2) {
+                self.0 += 1;
+            }
+        }
+        fn starts(&self) -> u64 {
+            self.0
+        }
+    }
+
+    #[test]
+    fn a_case_is_cold_on_a_new_kernel_or_a_new_process_and_not_where_none_started() {
+        let cases: Vec<Case> = crate::generate::cases(1)
+            .into_iter()
+            .filter(|c| c.test.starts_with("booleans/overlap/boxes"))
+            .take(6)
+            .collect();
+        let cold = |r: &Value| -> Vec<Value> {
+            r["cases"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|c| c["cold"].clone())
+                .collect()
+        };
+        // One thread: the first case starts the kernel, and every second reset starts a process.
+        let r = run(
+            || Ok::<_, String>(Restarting(1, 0)),
+            &cases,
+            1,
+            None,
+            &Exports::default(),
+            Some(std::time::Duration::from_secs(9)),
+        )
+        .unwrap();
+        let t = json!(true);
+        let f = json!(false);
+        assert_eq!(cold(&r), [&t, &f, &t, &f, &t, &f].map(Clone::clone));
+        assert_eq!(r["time_limit_ms"], 9000.0);
+        assert!(r["wall_ms"].as_f64().unwrap() >= 0.0);
+        // A kernel that never runs in a process of its own is cold on its first case only.
+        let r = run(
+            || Ok::<_, String>(Sticky(Default::default())),
+            &cases,
+            1,
+            None,
+            &Exports::default(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(cold(&r), [&t, &f, &f, &f, &f, &f].map(Clone::clone));
+        assert_eq!(r["time_limit_ms"], Value::Null);
     }
 
     /// Two NIST files in a folder of their own, the first one the test kernel hangs on.
@@ -4283,6 +4386,7 @@ mod tests {
             1,
             None,
             &Exports::default(),
+            None,
         )
         .unwrap();
         let _ = std::fs::remove_dir_all(&dir);
@@ -4323,6 +4427,7 @@ mod tests {
             1,
             None,
             &ex,
+            None,
         )
         .unwrap();
         let read = &r["cases"][1]["exports"];
@@ -4364,6 +4469,7 @@ mod tests {
             1,
             None,
             &Exports::default(),
+            None,
         )
         .unwrap();
         let _ = std::fs::remove_dir_all(&dir);
