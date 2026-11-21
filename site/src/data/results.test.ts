@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   ASSET_BASE,
-  caseTimes,
+  caseTime,
   compareRuns,
   compareVersions,
   latestByKernel,
   latestReports,
   leaderboard,
   parseReport,
-  speedFactors,
   summarize,
   testIndex,
 } from './results'
@@ -219,77 +218,23 @@ describe('compareRuns and latestByKernel', () => {
   })
 })
 
-describe('caseTimes', () => {
-  it('times each kernel on the cases every kernel answered, a fail included', () => {
+describe('caseTime', () => {
+  it('times a kernel on its own passed cases only', () => {
     const a = parseReport(
       raw('a', '1', [
         row('1', 't/a', 'pass', '1e-7', 1),
         row('2', 't/a', 'fail', 'fail', 2),
         row('3', 't/a', 'pass', '1e-7', 3),
         row('4', 't/a', 'pass', '1e-7', 100),
+        row('5', 't/a', 'refused', null, 1000),
       ]),
     )
-    const b = parseReport(
-      raw('b', '1', [
-        row('1', 't/a', 'pass', '1e-6', 10),
-        row('2', 't/a', 'pass', '1e-7', 20),
-        row('3', 't/a', 'pass', '1e-7', 30),
-        row('4', 't/a', 'refused', null, 1),
-      ]),
-    )
-    const t = caseTimes([a, b])
-    expect(t.a).toEqual({ median: 2, q1: 1.5, q3: 2.5, cases: 3 })
-    expect(t.b).toEqual({ median: 20, q1: 15, q3: 25, cases: 3 })
+    expect(caseTime(a)).toEqual({ median: 3, q1: 2, q3: 51.5, cases: 3 })
   })
 
-  it('gives no time when no case was answered by all', () => {
+  it('gives no time when the kernel passed no case', () => {
     const a = parseReport(raw('a', '1', [row('1', 't/a', 'refused', null)]))
-    expect(caseTimes([a])).toEqual({ a: null })
-  })
-})
-
-describe('speedFactors', () => {
-  it('compares group medians on cases every kernel passed at one tier, warmup dropped', () => {
-    const cases = (scale: number, extra: RawCase[] = []) => [
-      row('w', 'g/1', 'pass', '1e-7', 1000),
-      row('a', 'g/1', 'pass', '1e-7', 1 * scale),
-      row('b', 'g/1', 'pass', '1e-7', 3 * scale),
-      row('c', 'g/1', 'pass', '1e-7', 5 * scale),
-      row('d', 'g/2', 'pass', '1e-7', 1),
-      row('e', 'g/2', 'pass', '1e-7', 10),
-      ...extra,
-    ]
-    const fast = parseReport(raw('fast', '1', cases(1)))
-    const slow = parseReport(raw('slow', '1', cases(4)))
-    const s = speedFactors([fast, slow])
-    // g/1 medians 3 vs 12: factor 4. g/2 has one case left after the warmup: equal, factor 1.
-    expect(s.fast!.factor).toBeCloseTo(1)
-    expect(s.slow!.factor).toBeCloseTo(Math.sqrt(4))
-    expect(s.slow!.groups).toBe(2)
-  })
-
-  it('leaves out cases the kernels reached at different tiers', () => {
-    const a = parseReport(
-      raw('a', '1', [row('w', 'g/1', 'pass', '1e-7'), row('x', 'g/1', 'pass', '1e-7', 1)]),
-    )
-    const b = parseReport(
-      raw('b', '1', [row('w', 'g/1', 'pass', '1e-7'), row('x', 'g/1', 'fail', '1e-6', 9)]),
-    )
-    const s = speedFactors([a, b])
-    expect(s.a!.factor).toBeNull()
-    expect(s.b!.groups).toBe(0)
-  })
-
-  it('leaves out a group whose fastest median is below the timer resolution', () => {
-    const a = parseReport(
-      raw('a', '1', [row('w', 'g/1', 'pass', '1e-7'), row('x', 'g/1', 'pass', '1e-7', 0)]),
-    )
-    const b = parseReport(
-      raw('b', '1', [row('w', 'g/1', 'pass', '1e-7'), row('x', 'g/1', 'pass', '1e-7', 200)]),
-    )
-    const s = speedFactors([a, b])
-    expect(s.b!.groups).toBe(0)
-    expect(s.b!.factor).toBeNull()
+    expect(caseTime(a)).toBeNull()
   })
 })
 

@@ -74,9 +74,7 @@ export interface BoardRow {
   counts: Counts
   // A kernel's time over the fastest kernel's, test by test; sorts ascending as faster, and a
   // kernel with no comparable test sorts last.
-  speed: number
   // The tests the factor is taken over.
-  speedGroups: number
   time: CaseTime | null
   // Sorts ascending as faster; a kernel with no common case sorts last.
   medianMs: number
@@ -119,8 +117,6 @@ export function boardRows(board: LeaderRow[]): BoardRow[] {
       passing: r.summary.passing,
       total: r.summary.total,
       counts: countsOf(r.summary.grades),
-      speed: r.speed.factor ?? Number.POSITIVE_INFINITY,
-      speedGroups: r.speed.groups,
       time: r.time,
       medianMs: r.time?.median ?? Number.POSITIVE_INFINITY,
       license: info?.license ?? null,

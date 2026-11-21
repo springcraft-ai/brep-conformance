@@ -10,7 +10,7 @@ export interface LeaderboardKernel {
   maintainers: boolean
   // Case counts in `grades` order.
   counts: number[]
-  // Case times in milliseconds over the cases every kernel answered; null with no such case.
+  // Case times in milliseconds over the kernel's passed cases; null when it passed none.
   time: CaseTime | null
   run: {
     // When the run ended, as an ISO date and time; empty when the report has no time.

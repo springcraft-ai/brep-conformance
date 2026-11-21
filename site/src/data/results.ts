@@ -367,63 +367,6 @@ export function latestReports(reports: Report[]): Report[] {
   return latestByKernel(reports.filter(r => r.methodology.suite === suite))
 }
 
-function median(xs: number[]): number {
-  const s = [...xs].sort((a, b) => a - b)
-  const m = s.length >> 1
-  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2
-}
-
-export interface Speed {
-  // Geometric mean over groups of this kernel's median time over the fastest kernel's; 1 is
-  // fastest everywhere. Null when no group had a case every kernel passed at one tier.
-  factor: number | null
-  groups: number
-  medians: Record<string, number>
-}
-
-// Groups are tests. A group's first case is a warmup and is dropped; the rest count only where
-// every kernel compared reached the same tier, so no kernel is timed on work another skipped.
-export function speedFactors(reports: Report[]): Record<string, Speed> {
-  const kernels = reports.map(r => r.identity.kernel)
-  const byId = reports.map(r => new Map(r.cases.map(c => [c.id, c])))
-  const groups = new Map<string, string[]>()
-  for (const c of reports[0]?.cases ?? []) {
-    const ids = groups.get(c.test) ?? []
-    ids.push(c.id)
-    groups.set(c.test, ids)
-  }
-  const out: Record<string, Speed> = Object.fromEntries(
-    kernels.map(k => [k, { factor: null, groups: 0, medians: {} }]),
-  )
-  const logs: number[][] = kernels.map(() => [])
-  for (const [test, ids] of groups) {
-    const common = ids.slice(1).filter(id => {
-      const rows = byId.map(m => m.get(id))
-      const tier = rows[0]?.tier
-      return rows.every(c => c && c.tier === tier && c.tier !== null && c.timeMs !== null)
-    })
-    if (!common.length) continue
-    const meds = byId.map(m => median(common.map(id => m.get(id)!.timeMs!)))
-    const fastest = Math.min(...meds)
-    // A median below the timer's resolution has no ratio; counting it as a tie would pull every
-    // kernel toward 1.
-    if (!(fastest > 0)) continue
-    meds.forEach((med, i) => {
-      out[kernels[i]!]!.medians[test] = med
-      logs[i]!.push(Math.log(med / fastest))
-    })
-  }
-  kernels.forEach((k, i) => {
-    const l = logs[i]!
-    out[k] = {
-      ...out[k]!,
-      groups: l.length,
-      factor: l.length ? Math.exp(l.reduce((a, b) => a + b, 0) / l.length) : null,
-    }
-  })
-  return out
-}
-
 function quantile(sorted: number[], q: number): number {
   const i = (sorted.length - 1) * q
   const lo = Math.floor(i)
@@ -435,25 +378,19 @@ export interface CaseTime {
   median: number
   q1: number
   q3: number
-  // How many cases the times are over: the same for every kernel compared.
+  // How many cases the times are over: the kernel's passed cases.
   cases: number
 }
 
-// One kernel's case times over the cases every kernel answered, with a tier or a fail, so each is
-// timed on the same work. Null for every kernel when no case was answered by all.
-export function caseTimes(reports: Report[]): Record<string, CaseTime | null> {
-  const byId = reports.map(r => new Map(r.cases.map(c => [c.id, c])))
-  const answered = (c: CaseRow | undefined) =>
-    !!c && c.timeMs !== null && (c.tier !== null || c.result === 'fail')
-  const common = (reports[0]?.cases ?? []).filter(c => byId.every(m => answered(m.get(c.id))))
-  return Object.fromEntries(
-    reports.map((r, i) => {
-      if (!common.length) return [r.identity.kernel, null]
-      const v = common.map(c => byId[i]!.get(c.id)!.timeMs!).sort((a, b) => a - b)
-      const time = { median: quantile(v, 0.5), q1: quantile(v, 0.25), q3: quantile(v, 0.75) }
-      return [r.identity.kernel, { ...time, cases: v.length }]
-    }),
-  )
+// A kernel's case times over its own passed cases, so no other kernel's results move them. Null
+// when it passed no timed case.
+export function caseTime(r: Report): CaseTime | null {
+  const v = r.cases
+    .filter(c => c.result === '1e-7' && c.timeMs !== null)
+    .map(c => c.timeMs!)
+    .sort((a, b) => a - b)
+  if (!v.length) return null
+  return { median: quantile(v, 0.5), q1: quantile(v, 0.25), q3: quantile(v, 0.75), cases: v.length }
 }
 
 // The segment that names a kernel's page in its report's URL: the kernel's name, or name@version
@@ -475,15 +412,12 @@ export interface LeaderRow {
   date: string
   adapter: Adapter | null
   summary: Summary
-  speed: Speed
   time: CaseTime | null
 }
 
 // Ranked by the headline alone, ties by name: no kernel gets a place of its own. `all` is every
 // report read, which names each kernel's page.
 export function leaderboard(latest: Report[], all: Report[] = latest): LeaderRow[] {
-  const speed = speedFactors(latest)
-  const time = caseTimes(latest)
   return latest
     .map(r => ({
       kernel: r.identity.kernel,
@@ -494,8 +428,7 @@ export function leaderboard(latest: Report[], all: Report[] = latest): LeaderRow
       date: r.environment.date,
       adapter: r.identity.adapter,
       summary: summarize(r.cases),
-      speed: speed[r.identity.kernel]!,
-      time: time[r.identity.kernel]!,
+      time: caseTime(r),
     }))
     .sort((a, b) => b.summary.passRate - a.summary.passRate || a.kernel.localeCompare(b.kernel))
 }

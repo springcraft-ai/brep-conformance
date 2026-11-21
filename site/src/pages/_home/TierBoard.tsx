@@ -83,7 +83,8 @@ function Count({ value, digits, suffix = '' }: { value: number; digits: number; 
 
 const decimals = (s: string) => s.split('.')[1]?.length ?? 0
 
-// The median case time, its unit set small; its title gives the middle half and what it is over.
+// The median time of the kernel's passed cases, its unit set small; its hover card gives P25 and
+// P75 and how many cases they are over.
 function Speed({ r, isBest }: { r: BoardRow; isBest: boolean }) {
   const [tip, setTip] = useState<{ x: number; y: number } | null>(null)
   if (!r.time) return <span className="hm-fig hm-fig--none">–</span>
@@ -96,7 +97,7 @@ function Speed({ r, isBest }: { r: BoardRow; isBest: boolean }) {
     <span
       className={`hm-fig hm-speed${best(isBest)}`}
       tabIndex={0}
-      aria-label={`median case time ${fmt.ms(r.time.median)}; the middle half take ${fmt.ms(r.time.q1)} to ${fmt.ms(r.time.q3)}`}
+      aria-label={`P50 ${fmt.ms(r.time.median)} per passed case; P25 ${fmt.ms(r.time.q1)}, P75 ${fmt.ms(r.time.q3)}, over ${n(r.time.cases)} passed cases`}
       onMouseMove={e => setTip({ x: e.clientX, y: e.clientY })}
       onFocus={e => at(e.currentTarget)}
       onMouseLeave={() => setTip(null)}
@@ -106,10 +107,10 @@ function Speed({ r, isBest }: { r: BoardRow; isBest: boolean }) {
       <small>{unit}</small>
       {tip && (
         <span className="hm-tip" aria-hidden="true" style={tipAt(tip.x, tip.y)}>
-          median {fmt.ms(r.time.median)} per case
+          P50 {fmt.ms(r.time.median)} per passed case
           <small>
-            Half of its cases take {fmt.ms(r.time.q1)} to {fmt.ms(r.time.q3)}. Timed only on the{' '}
-            {n(r.time.cases)} cases every kernel answered.
+            P25 {fmt.ms(r.time.q1)} · P75 {fmt.ms(r.time.q3)}, over its {n(r.time.cases)} passed
+            cases
           </small>
         </span>
       )}

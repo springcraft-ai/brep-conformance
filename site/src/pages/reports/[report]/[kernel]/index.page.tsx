@@ -115,10 +115,6 @@ export default function ReportPage(props: Props) {
             {standing && (
               <a className="rp-standing" href={url.report(m.suite)}>
                 {ordinal(standing.place)} of {standing.of} kernels
-                {standing.speedFactor !== null &&
-                  (standing.speedFactor < 1.005
-                    ? ' · the fastest'
-                    : ` · ${fmt.factor(standing.speedFactor)} the fastest’s time`)}
               </a>
             )}
             <button

@@ -112,7 +112,7 @@ describe('keep', () => {
 
 describe('boardRows', () => {
   const summary = summarize(cases('1e-7', '1e-6'))
-  const row = (kernel: string, factor: number | null) => ({
+  const row = (kernel: string, timed: boolean) => ({
     kernel,
     segment: kernel,
     name: kernel,
@@ -121,25 +121,23 @@ describe('boardRows', () => {
     date: '2026-11-09',
     adapter: { repo: `https://example.com/${kernel}-adapter/`, commit: '0'.repeat(40) },
     summary,
-    speed: { factor, groups: factor === null ? 0 : 3, medians: {} },
-    time: factor === null ? null : { median: 4, q1: 3, q3: 5, cases: 2 },
+    time: timed ? { median: 4, q1: 3, q3: 5, cases: 2 } : null,
   })
 
   it('keeps the leaderboard order as rank and sorts a missing time last', () => {
-    const rows = boardRows([row('a', 1.5), { ...row('b', null), adapter: null }])
+    const rows = boardRows([row('a', true), { ...row('b', false), adapter: null }])
     expect(rows.map(r => [r.rank, r.kernel, r.adapter])).toEqual([
       [1, 'a', 'a-adapter'],
       [2, 'b', null],
     ])
-    expect(rows[1]!.speed).toBe(Number.POSITIVE_INFINITY)
     expect(rows[1]!.medianMs).toBe(Number.POSITIVE_INFINITY)
     expect(rows[0]!.medianMs).toBe(4)
     expect(rows[0]!.counts[at('1e-6')]).toBe(1)
   })
 
   it('states a known kernel’s license and leaves an unknown one empty', () => {
-    expect(boardRows([row('solidcore', 1)])[0]!.license).toBe('Apache-2.0')
-    expect(boardRows([row('nope', 1)])[0]!.license).toBeNull()
+    expect(boardRows([row('solidcore', true)])[0]!.license).toBe('Apache-2.0')
+    expect(boardRows([row('nope', true)])[0]!.license).toBeNull()
   })
 })
 

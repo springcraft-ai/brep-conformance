@@ -42,7 +42,7 @@ export interface Props {
   adapterLicense: string | null
   // The kernel's own maintainers who review its adapter; null for a kernel not in the registry.
   // Where the results page ranks this report, when it is the kernel's release ranked there.
-  standing: { place: number; of: number; speedFactor: number | null } | null
+  standing: { place: number; of: number } | null
 }
 
 export function entries(): PageEntry<Props>[] {
@@ -52,11 +52,7 @@ export function entries(): PageEntry<Props>[] {
     const standingOf = (kernel: string, version: string): Props['standing'] => {
       const at = v.leaderboard.findIndex(l => l.kernel === kernel && l.version === version)
       if (at < 0) return null
-      return {
-        place: at + 1,
-        of: v.leaderboard.length,
-        speedFactor: v.leaderboard[at]!.speed.factor,
-      }
+      return { place: at + 1, of: v.leaderboard.length }
     }
     const pages = new Map(v.tests.map(t => [pageKey(t.operation, t.slug), new Set(t.cases)]))
     return v.reports.map(r => entryOf(r, v.suite, v.latest, s.all, pages, documented, standingOf))

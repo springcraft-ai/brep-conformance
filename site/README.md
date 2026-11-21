@@ -15,7 +15,7 @@ interaction opts into hydration, and only that page ships JavaScript.
   rules and [`page.ts`](src/site/page.ts) the module contracts. Adding a page never edits a shared
   file.
 - **All parsing and derivation is in [`results.ts`](src/data/results.ts):** the report types, the
-  1e-7 pass rate, tiers and grades, the speed factor, the leaderboard and the test and operation
+  1e-7 pass rate, tiers and grades, the case time, the leaderboard and the test and operation
   indexes. It reads the flat report `brep-conformance-report --flat` writes, as
   [formats.md](../doc/formats.md) describes it. [`source.ts`](src/data/source.ts) only finds and
   reads the files.
