@@ -129,6 +129,12 @@ a.rp-grade:hover .rp-grade__n {
   box-shadow: inset 2px 0 0 var(--accent);
   padding-left: 8px;
 }
+/* Another run of the same release: what it ran with that this one did not. */
+.rp-release__differs {
+  display: block;
+  font-size: 11px;
+  color: var(--void-ink-3);
+}
 
 .rp-fold {
   border-bottom: var(--hairline-void-soft);

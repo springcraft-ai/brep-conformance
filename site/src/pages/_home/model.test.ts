@@ -122,6 +122,8 @@ describe('boardRows', () => {
     adapter: { repo: `https://example.com/${kernel}-adapter/`, commit: '0'.repeat(40) },
     summary,
     time: timed ? { median: 4, q1: 3, q3: 5, cases: 2, step: null } : null,
+    run: '1-1',
+    override: false,
   })
 
   it('keeps the leaderboard order as rank and sorts a missing time last', () => {
@@ -133,6 +135,12 @@ describe('boardRows', () => {
     expect(rows[1]!.medianMs).toBe(Number.POSITIVE_INFINITY)
     expect(rows[0]!.medianMs).toBe(4)
     expect(rows[0]!.counts[at('1e-6')]).toBe(1)
+    expect(rows[0]!.otherRun).toBeNull()
+  })
+
+  it('names the day of a row that comes from another run than the board', () => {
+    const [r] = boardRows([{ ...row('a', true), run: '2-1', override: true }])
+    expect(r!.otherRun).toBe('2026-11-09')
   })
 
   it('states a known kernel’s license and leaves an unknown one empty', () => {

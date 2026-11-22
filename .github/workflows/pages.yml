@@ -1,23 +1,30 @@
 # SPDX-License-Identifier: MIT
+# Builds the site from the runs reports.json lists, fetched from the CDN, and deploys it from main.
+# A pull request gets the same checks and build, so a reports.json that names a missing or altered
+# report fails before it merges.
 name: Pages
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# One deployment at a time; a newer push waits rather than cancelling one that is publishing.
+# One deployment at a time; a newer push waits rather than cancelling one that is publishing. A pull
+# request's build is its own group, and a newer push to it replaces the last.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      PAGES_URL: https://springcraft-ai.github.io/brep-conformance
     defaults:
       run:
         working-directory: site
@@ -29,23 +36,29 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
       - id: pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Install, fetching the design system at its pinned hashes
         run: npm ci
       - name: Types, tests and formatting
         run: npx tsc -p . && npm test && npx prettier --check --log-level warn .
+      - name: Fetch every report reports.json lists, each checked against the hash in its name
+        run: node scripts/reports.ts fetch ../reports.json "$RUNNER_TEMP/reports"
       - name: Build the static site under the Pages path
         env:
-          SITE_BASE: ${{ steps.pages.outputs.base_path }}/
-          SITE_URL: ${{ steps.pages.outputs.base_url }}/
-          BREP_REPORTS_DIR: ${{ github.workspace }}/reports
+          # A pull request's build is not deployed, so it takes the site's address as it is.
+          SITE_BASE: ${{ steps.pages.outputs.base_path || '/brep-conformance' }}/
+          SITE_URL: ${{ steps.pages.outputs.base_url || env.PAGES_URL }}/
+          BREP_REPORTS_DIR: ${{ runner.temp }}/reports
         run: npm run build
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site/dist/site
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

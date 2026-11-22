@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { kernelSegment } from '@/data/results'
 import { levelsOf } from './pages/reports/[report]/compare/[...path]/index.data'
+import { segmentsOf } from './pages/reports/[report]/[kernel]/index.data'
 import { site } from '@/data/source'
 import { prerender, render, routes } from './entry-server'
 import { operations } from './pages/operations/doc'
@@ -30,7 +30,10 @@ describe('the site', () => {
     for (const v of s.suites) {
       expect(byFile.has(`reports/${v.suite}/index.html`)).toBe(true)
       for (const r of v.reports)
-        expect(byFile.has(`reports/${v.suite}/${kernelSegment(s.all, r)}/index.html`)).toBe(true)
+        for (const k of segmentsOf(r, v))
+          expect(byFile.has(`reports/${v.suite}/${k}/index.html`)).toBe(true)
+      for (const r of v.latest)
+        expect(byFile.has(`reports/${v.suite}/${r.identity.kernel}/index.html`)).toBe(true)
       for (const t of v.tests)
         expect(byFile.has(`reports/${v.suite}/compare/${t.test}/index.html`)).toBe(true)
       for (const l of levelsOf(v.tests.map(t => t.test)))

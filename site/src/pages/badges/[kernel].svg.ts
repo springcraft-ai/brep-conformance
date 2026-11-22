@@ -1,4 +1,4 @@
-import { latestByKernel, summarize } from '@/data/results'
+import { summarize, type Report } from '@/data/results'
 import { site } from '@/data/source'
 import type { EndpointModule } from '@/site/page'
 import { badgeText, renderBadge } from './badge'
@@ -9,12 +9,17 @@ interface Props {
   olderSuite: string | null
 }
 
-// One badge per kernel that has any report, so an embedded badge outlives a suite release the
-// kernel has not been rerun on yet. On the current suite it is the leaderboard's headline.
+// One badge per kernel on any leaderboard, so an embedded badge outlives a suite release the kernel
+// has not been rerun on yet: its entry on the newest suite whose leaderboard has it. On the current
+// suite it is the leaderboard's headline.
 const badge: EndpointModule<Props> = {
   entries: () => {
     const s = site()
-    return latestByKernel(s.all).map(r => ({
+    const entries = new Map<string, Report>()
+    for (const v of s.suites)
+      for (const r of v.latest)
+        if (!entries.has(r.identity.kernel)) entries.set(r.identity.kernel, r)
+    return [...entries.values()].map(r => ({
       params: { kernel: r.identity.kernel },
       props: {
         kernel: r.identity.kernel,

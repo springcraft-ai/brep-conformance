@@ -204,6 +204,7 @@ export function TierBoard({
                   </a>
                   <span className="hm-license">
                     {fmt.version(r.version)}
+                    {r.otherRun && ` · run of ${r.otherRun}`}
                     {r.license && (
                       <>
                         {' · '}

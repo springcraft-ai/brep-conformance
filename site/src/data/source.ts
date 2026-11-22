@@ -1,11 +1,14 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { kernelInfo, KERNELS } from './kernels'
+import { kernelInfo } from './kernels'
 import { ASSET_BASE, buildSite, LOCAL_ASSETS, parseReport, type Report, type Site } from './results'
+import { boardRuns, currentSuite, emptyIndex, fileHash, parseIndex, type RunsIndex } from './runs'
 
 // Build-time only: a page's *.data.ts may import this, a *.page.tsx never does.
 
-// With no BREP_REPORTS_DIR the site is built with no results.
+// A folder holding reports.json and, below it, <run>/<file> for each report it lists, as
+// `node scripts/reports.ts fetch` leaves them. With no BREP_REPORTS_DIR the site has no results.
 export const REPORTS_DIR = process.env.BREP_REPORTS_DIR
   ? resolve(process.env.BREP_REPORTS_DIR)
   : null
@@ -22,60 +25,87 @@ function assetFolder(suite: string, kernel: string, version: string): string {
   return `${ASSET_BASE}/${suite}/${kernel}/${version}`
 }
 
-function subdirs(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true })
-    .filter(e => e.isDirectory() && !e.name.startsWith('.'))
-    .map(e => e.name)
-    .sort()
-}
-
 // The test fixtures' kernels are made up, so the tests read them without the registry.
 const ANY_KERNEL = process.env.BREP_ANY_KERNEL === '1'
 
-// Only a kernel in the registry is shown, and an official run's adapter must come from the
-// repository the registry names; its commit may be an earlier one, for an earlier report.
+// A report of a kernel kernels.json no longer lists is kept and marked, for its pages; a
+// registered kernel's adapter must come from the repository the registry names, at any commit,
+// for an earlier report.
 function checkRegistered(file: string, report: Report): void {
   const id = report.identity
   const info = kernelInfo(id.kernel)
-  if (!info)
-    throw new Error(
-      `${file}: ${id.kernel} is not in kernels.json, which lists ` +
-        KERNELS.map(k => k.kernel).join(', '),
-    )
+  if (!info) {
+    report.registered = false
+    return
+  }
   if (id.adapter && id.adapter.repo !== info.adapter.repo)
     throw new Error(`${file}: ran the adapter in ${id.adapter.repo}, not ${info.adapter.repo}`)
 }
 
-// <suite>/<kernel>/<version>/report.json: one kernel release keeps a report per suite version, so a
-// rerun on a new suite never replaces the result an older link names.
-export function readReports(dir = REPORTS_DIR, anyKernel = ANY_KERNEL): Report[] {
-  if (!dir) return []
-  const out: Report[] = []
-  for (const suite of subdirs(dir)) {
-    for (const kernel of subdirs(join(dir, suite))) {
-      for (const version of subdirs(join(dir, suite, kernel))) {
-        const file = join(dir, suite, kernel, version, 'report.json')
-        if (!existsSync(file)) continue
-        const report = parseReport(
-          JSON.parse(readFileSync(file, 'utf8')),
-          file,
-          assetFolder(suite, kernel, version),
-        )
-        const id = report.identity
-        const on = report.methodology.suite
-        if (on !== suite || id.kernel !== kernel || id.version !== version)
-          throw new Error(`${file}: says ${id.kernel} ${id.version} on suite ${on}`)
-        if (!anyKernel) checkRegistered(file, report)
-        out.push(report)
-      }
+export interface Published {
+  index: RunsIndex
+  reports: Report[]
+}
+
+// Every report reports.json lists. A file must hash to the name it is listed under, and say the
+// run, suite and kernel its entry does.
+export function readPublished(dir = REPORTS_DIR, anyKernel = ANY_KERNEL): Published {
+  if (!dir) return { index: emptyIndex(), reports: [] }
+  const indexFile = join(dir, 'reports.json')
+  const index = parseIndex(JSON.parse(readFileSync(indexFile, 'utf8')), indexFile)
+  const reports: Report[] = []
+  for (const entry of index.runs) {
+    for (const [kernel, listed] of Object.entries(entry.reports)) {
+      const file = join(dir, entry.run, listed.file)
+      if (!existsSync(file)) throw new Error(`${file}: not fetched; run scripts/reports.ts fetch`)
+      const bytes = readFileSync(file)
+      const hash = createHash('sha256').update(bytes).digest('hex').slice(0, 16)
+      if (hash !== fileHash(kernel, listed.file))
+        throw new Error(`${file}: its contents hash to ${hash}, not the name reports.json lists`)
+      const raw = JSON.parse(bytes.toString('utf8'))
+      const folder = assetFolder(
+        String(raw?.suite?.version),
+        String(raw?.kernel?.name),
+        String(raw?.kernel?.version),
+      )
+      const report = parseReport(raw, file, folder)
+      const id = report.identity
+      if (report.run.id !== entry.run) throw new Error(`${file}: says run ${report.run.id}`)
+      if (id.kernel !== kernel) throw new Error(`${file}: is ${id.kernel}'s, not ${kernel}'s`)
+      if (report.methodology.suite !== entry.suite)
+        throw new Error(`${file}: ran suite ${report.methodology.suite}, not ${entry.suite}`)
+      if (report.run.complete !== listed.complete)
+        throw new Error(`${file}: complete is ${report.run.complete}, not ${listed.complete}`)
+      if (!anyKernel) checkRegistered(file, report)
+      reports.push(report)
     }
   }
-  return out
+  return { index, reports }
+}
+
+// Each suite's leaderboard: its run and each kernel's. A kernel that left kernels.json leaves the
+// current leaderboard; an older suite's leaderboard is the record of that version, and keeps it.
+export function boardsOf(
+  index: RunsIndex,
+  reports: Report[],
+): Map<string, { run: string; kernels: Map<string, string> }> {
+  const current = currentSuite(index)
+  const gone = new Set(reports.filter(r => !r.registered).map(r => r.identity.kernel))
+  return new Map(
+    Object.entries(index.leaderboard).map(([suite, b]) => {
+      const kernels = boardRuns(index, suite)
+      if (suite === current) for (const k of gone) kernels.delete(k)
+      return [suite, { run: b.run, kernels }]
+    }),
+  )
 }
 
 let cached: Site | undefined
 
 export function site(): Site {
-  cached ??= buildSite(readReports())
+  if (!cached) {
+    const { index, reports } = readPublished()
+    cached = buildSite(reports, boardsOf(index, reports), currentSuite(index))
+  }
   return cached
 }

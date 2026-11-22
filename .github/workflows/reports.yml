@@ -1,0 +1,183 @@
+# SPDX-License-Identifier: MIT
+# Writes the flat report of each pass of a Benchmark run, uploads each to the CDN under
+# reports/<run>-<attempt>/ named by its hash, and, for prod, opens a pull request that adds the run
+# to reports.json: bench/README.md. The Benchmark workflow calls it once the shape files are
+# published; started by hand, it publishes an earlier run's reports again.
+name: Reports
+
+on:
+  workflow_call:
+    inputs:
+      run_id:
+        type: string
+        required: true
+      publish:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: The Benchmark run whose reports to publish, such as 44984300614
+        type: string
+        required: true
+      publish:
+        description: Which CDN to publish the reports to; only prod is proposed for the site
+        type: choice
+        options: [prod, dev]
+        default: prod
+
+permissions: {}
+
+jobs:
+  # Runs no kernel code. The upload roles trust this repository's main branch and v* tags.
+  publish:
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read # the run's results artifact
+      id-token: write # for AWS OIDC
+    outputs:
+      run: ${{ steps.run.outputs.run }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # Only a Benchmark run of main or a v* tag that succeeded, or the run that called this one,
+      # which is still going.
+      - name: Find the run and its attempt
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          if ! [[ "$RUN_ID" =~ ^[0-9]+$ ]]; then
+              echo "::error::$RUN_ID is not a run id"
+              exit 1
+          fi
+          info=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")
+          path=$(jq -r .path <<<"$info")
+          ref=$(jq -r .head_branch <<<"$info")
+          conclusion=$(jq -r .conclusion <<<"$info")
+          if [ "$path" != .github/workflows/benchmark.yml ]; then
+              echo "::error::run $RUN_ID is of $path, not the Benchmark workflow"
+              exit 1
+          fi
+          if [ "$ref" != main ] && [[ "$ref" != v* ]]; then
+              echo "::error::run $RUN_ID ran on $ref, not main or a v* tag"
+              exit 1
+          fi
+          if [ "$RUN_ID" != "$GITHUB_RUN_ID" ] && [ "$conclusion" != success ]; then
+              echo "::error::run $RUN_ID ended $conclusion"
+              exit 1
+          fi
+          echo "run=$RUN_ID-$(jq -r .run_attempt <<<"$info")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: results
+          path: results
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Write each pass's report, named by its hash
+        env:
+          RUN: ${{ steps.run.outputs.run }}
+        run: |
+          cargo build --release --locked -p brep-conformance --bin brep-conformance-report
+          bench/publish-reports.sh results "$RUN" reports
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ inputs.publish == 'prod' && secrets.BREP_CONFORMANCE_ASSET_ROLE || secrets.BREP_CONFORMANCE_ASSET_ROLE_DEV }}
+          aws-region: us-west-2
+          mask-aws-account-id: true
+
+      # A name changes whenever the report does, so a file is never rewritten with other contents and
+      # the CDN may keep it for good.
+      - name: Upload the reports
+        env:
+          BUCKET: ${{ inputs.publish == 'prod' && secrets.BREP_CONFORMANCE_ASSET_BUCKET || secrets.BREP_CONFORMANCE_ASSET_BUCKET_DEV }}
+          RUN: ${{ steps.run.outputs.run }}
+        run: |
+          aws s3 cp reports "s3://$BUCKET/brep-conformance/reports/$RUN/" --recursive \
+              --exclude entry.json --content-type application/json \
+              --cache-control "public, max-age=31536000, immutable" --no-progress --only-show-errors
+          {
+              echo "## Reports of run $RUN, published to ${{ inputs.publish }}"
+              echo
+              echo "| Kernel | Version | Cases | At 1e-7 | Every test | File |"
+              echo "| --- | --- | --- | --- | --- | --- |"
+              jq -r '.reports | to_entries[] | [.key, .value.file, .value.complete] | @tsv' \
+                  reports/entry.json | while IFS=$'\t' read -r k file complete; do
+                  jq -r --arg k "$k" --arg f "$file" --arg c "$complete" \
+                      '"| \($k) | \(.kernel.version) | \(.summary.cases) | " +
+                       "\(.summary.pass_1e7 * 1000 | round / 10)% | \($c) | `\($f)` |"' \
+                      "reports/$file"
+              done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reports
+          path: reports
+
+  # Changes nothing on the site: it opens a pull request, and the site moves when that merges.
+  propose:
+    needs: publish
+    if: inputs.publish == 'prod'
+    runs-on: ubuntu-24.04
+    environment: benchmark
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # The push below takes the App's token; a persisted read-only one would be sent instead.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: reports
+          path: reports
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Add the run to reports.json
+        id: add
+        run: |
+          rc=0
+          body="$RUNNER_TEMP/body.md"
+          node site/scripts/reports.ts add reports.json reports "$body" || rc=$?
+          if [ "$rc" = 3 ]; then
+              echo "open=false" >> "$GITHUB_OUTPUT"
+              exit 0
+          fi
+          [ "$rc" = 0 ] || exit "$rc"
+          echo "open=true" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/body.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open the pull request
+        if: steps.add.outputs.open == 'true'
+        env:
+          APP_CLIENT_ID: ${{ vars.BENCHMARK_APP_CLIENT_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.BENCHMARK_APP_PRIVATE_KEY }}
+          RUN: ${{ needs.publish.outputs.run }}
+        run: |
+          token=$(bench/app-token.sh '{"contents": "write", "pull_requests": "write"}')
+          echo "::add-mask::$token"
+          suite=$(jq -r .suite reports/entry.json)
+          kernels=$(jq -r '.reports | keys | join(", ")' reports/entry.json)
+          title="[reports] Publish Benchmark run $RUN: $kernels on suite $suite"
+          branch="reports/run-$RUN"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add reports.json
+          git commit -q -m "$title"
+          git push -q "https://x-access-token:$token@github.com/$GITHUB_REPOSITORY.git" "$branch"
+          GH_TOKEN=$token gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+              --title "$title" --body-file "$RUNNER_TEMP/body.md" | tee -a "$GITHUB_STEP_SUMMARY"

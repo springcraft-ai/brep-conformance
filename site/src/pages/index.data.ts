@@ -12,7 +12,7 @@ export interface Props {
   cases: number
   tests: number
   kernels: string[]
-  // Each kernel's page in the report, in `kernels` order: kernelSegment.
+  // Each kernel's page in the report, in `kernels` order: boardSegment.
   segments: string[]
   // The days the board's runs ended, earliest and latest, as ISO dates; empty with no dated run.
   runs: string[]

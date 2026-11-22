@@ -1,0 +1,27 @@
+{
+  "runs": [
+    {
+      "run": "1-1",
+      "suite": "1.0.0",
+      "scope": "all",
+      "reports": {
+        "alpha": {
+          "file": "alpha-c1013deb4a4a8987.json",
+          "complete": true,
+          "seconds": 1
+        },
+        "beta": {
+          "file": "beta-03b86fdc36836a05.json",
+          "complete": true,
+          "seconds": 1
+        }
+      }
+    }
+  ],
+  "leaderboard": {
+    "1.0.0": {
+      "run": "1-1",
+      "kernels": {}
+    }
+  }
+}

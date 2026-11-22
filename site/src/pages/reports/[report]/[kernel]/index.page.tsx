@@ -112,6 +112,7 @@ export default function ReportPage(props: Props) {
             <span>pass at 1e-7 mm, over all {summary.total} cases</span>
             {/* The suite's machine runs every kernel of a report; a run elsewhere says so here. */}
             {!env.verified && <span className="rp-unverified">unverified run</span>}
+            {!props.registered && <span className="rp-unverified">no longer registered</span>}
             {standing && (
               <a className="rp-standing" href={url.report(m.suite)}>
                 {ordinal(standing.place)} of {standing.of} kernels
@@ -162,6 +163,10 @@ export default function ReportPage(props: Props) {
                 ...(props.adapterLicense
                   ? [{ label: 'adapter license', value: props.adapterLicense }]
                   : []),
+                ...(props.run.id ? [{ label: 'run', value: props.run.id }] : []),
+                ...(props.run.suiteCommit
+                  ? [{ label: 'suite commit', value: props.run.suiteCommit.slice(0, 7) }]
+                  : []),
                 {
                   label: 'finished',
                   value: env.date ? env.date.replace('T', ' ').replace(/\.\d+Z$/, ' UTC') : '–',
@@ -174,23 +179,25 @@ export default function ReportPage(props: Props) {
                 <Annot>releases</Annot>
                 <div className="rp-releases__list">
                   {props.releases.map(r => {
-                    const here = r.suite === m.suite && r.version === id.version
-                    const label = `${fmt.version(r.version)} · suite ${r.suite}`
-                    return here ? (
-                      <span
-                        key={`${r.suite}/${r.version}`}
-                        className="rp-release"
-                        aria-current="page"
-                      >
+                    // A release run more than once names each run by the day it ended.
+                    const reruns = props.releases.filter(
+                      o => o.suite === r.suite && o.version === r.version,
+                    ).length
+                    const day = r.date ? ` · ${r.date.slice(0, 10)}` : ''
+                    const label =
+                      `${fmt.version(r.version)} · suite ${r.suite}` + (reruns > 1 ? day : '')
+                    const key = `${r.suite}/${r.version}/${r.run ?? ''}`
+                    const differs = r.differs.length ? (
+                      <span className="rp-release__differs">{r.differs.join(' · ')}</span>
+                    ) : null
+                    return r.here ? (
+                      <span key={key} className="rp-release" aria-current="page">
                         {label}
                       </span>
                     ) : (
-                      <a
-                        key={`${r.suite}/${r.version}`}
-                        className="rp-release"
-                        href={url.kernel(r.suite, r.segment)}
-                      >
+                      <a key={key} className="rp-release" href={url.kernel(r.suite, r.segment)}>
                         {label}
+                        {differs}
                       </a>
                     )
                   })}

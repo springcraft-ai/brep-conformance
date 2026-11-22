@@ -1,25 +1,36 @@
 # SPDX-License-Identifier: MIT
-# Starts the benchmark machine, runs one session on it, terminates it, and publishes each kernel's
-# shape files to the CDN: bench/README.md.
+# Checks the inputs, starts the benchmark machine, runs one session on it, terminates it, publishes
+# each kernel's shape files and report to the CDN, and proposes the run for the site:
+# bench/README.md. Run unchanged, the form benchmarks every kernel on every test and publishes to
+# prod.
 name: Benchmark
+run-name: Benchmark · ${{ inputs.kernels }} · ${{ inputs.tests }} · ${{ inputs.publish }}
 
 on:
   workflow_dispatch:
     inputs:
-      suite_args:
-        description: Arguments for every pass, such as --family booleans/overlap/boxes; empty for the
-          whole suite
+      kernels:
+        description: all, or the kernels to run, comma-separated, as kernels.json names them
+        type: string
+        default: all
+      tests:
+        description: all; smoke, a few minutes' subset in bench/smoke.txt; or custom, below
+        type: choice
+        options: [all, smoke, custom]
+        default: all
+      custom_args:
+        description: The suite's arguments for tests custom, such as --family booleans/overlap/boxes
         type: string
         default: ''
-      publish:
-        description: Which CDN to publish the shape files to
-        type: choice
-        options: [dev, prod, none]
-        default: dev
       nist:
         description: Run NIST's STEP files, as step/read-nist cases; untick to run without them
         type: boolean
         default: true
+      publish:
+        description: Which CDN to publish the shape files and reports to; only prod goes on the site
+        type: choice
+        options: [prod, dev, none]
+        default: prod
       fail_bench:
         description: Fail the bench job on purpose, to test that the machine still ends
         type: boolean
@@ -36,7 +47,33 @@ env:
   RUNNER_LABEL: benchmark-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
+  # Launches nothing: a run with a bad input fails here, in seconds, and states what it will run.
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      kernels: ${{ steps.plan.outputs.kernels }}
+      scope: ${{ steps.plan.outputs.scope }}
+      suite_args: ${{ steps.plan.outputs.suite_args }}
+      nist: ${{ steps.plan.outputs.nist }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Check the inputs and state the plan
+        id: plan
+        env:
+          KERNELS: ${{ inputs.kernels }}
+          TESTS: ${{ inputs.tests }}
+          CUSTOM_ARGS: ${{ inputs.custom_args }}
+          NIST: ${{ inputs.nist }}
+          PUBLISH: ${{ inputs.publish }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+        run: python3 -I bench/plan.py .
+
   start:
+    needs: plan
     runs-on: ubuntu-24.04
     environment: benchmark
     timeout-minutes: 45
@@ -153,7 +190,7 @@ jobs:
   # has one role of its own, which anything on it can use: it can put to the staging bucket and
   # nothing else.
   bench:
-    needs: start
+    needs: [plan, start]
     runs-on: ${{ needs.start.outputs.label }}
     timeout-minutes: 420
     outputs:
@@ -188,14 +225,16 @@ jobs:
       # The toolchains, and each adapter at the commit kernels.json pins. Nothing here is timed.
       - name: Build the suite and the adapters
         env:
-          BENCH_NIST: ${{ inputs.nist }}
+          BENCH_KERNELS: ${{ needs.plan.outputs.kernels }}
+          BENCH_NIST: ${{ needs.plan.outputs.nist }}
         run: bench/setup.sh
 
       # The session's settings are fixed in bench/README.md: 24 workers, one isolated core each.
       - name: Run the session
         env:
-          SUITE_ARGS: ${{ inputs.suite_args }}
-          BENCH_NIST: ${{ inputs.nist }}
+          SUITE_ARGS: ${{ needs.plan.outputs.suite_args }}
+          BENCH_NIST: ${{ needs.plan.outputs.nist }}
+          BENCH_SCOPE: ${{ needs.plan.outputs.scope }}
         run: |
           # shellcheck disable=SC2086
           bench/run-session.sh 24 $SUITE_ARGS
@@ -277,7 +316,8 @@ jobs:
               exit 1
           fi
           immutable="public, max-age=31536000, immutable"
-          for pass in springrep arris cadrs cad-kernel next.BREP solidcore opencascade; do
+          read -ra passes <<<"$(sed -n 's/^kernels=//p' results/session.txt)"
+          for pass in "${passes[@]}"; do
               count=$(grep -c "^$pass/" results/staged.txt || true)
               # A kernel that can neither draw nor write STEP has no files.
               [ "$count" -gt 0 ] || continue
@@ -297,6 +337,20 @@ jobs:
               done
               echo "$pass: $count files in brep-conformance/$folder/" | tee -a "$GITHUB_STEP_SUMMARY"
           done
+
+  # Each pass's report, named by its hash, on the same CDN, and for prod the pull request that adds
+  # the run to reports.json. The site changes only when that pull request merges.
+  reports:
+    needs: publish
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/reports.yml
+    with:
+      run_id: ${{ github.run_id }}
+      publish: ${{ inputs.publish }}
+    secrets: inherit
 
   stop:
     needs: [start, bench]

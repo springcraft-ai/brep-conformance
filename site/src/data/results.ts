@@ -122,10 +122,26 @@ export interface Methodology {
   assetBase: string | null
 }
 
+// What the benchmark session recorded about the run; each field null for a run made elsewhere.
+export interface RunInfo {
+  // The Benchmark workflow's run and attempt, which reports.json lists.
+  id: string | null
+  // The pass ran every test.
+  complete: boolean | null
+  suiteCommit: string | null
+  // The machine's settings, as environment.txt gives them.
+  machine: Record<string, string> | null
+  calibrationMs: number | null
+}
+
 export interface Report {
   identity: Identity
+  // The kernel is in kernels.json. A kernel that left keeps its published reports, and is on no
+  // current leaderboard.
+  registered: boolean
   environment: Environment
   methodology: Methodology
+  run: RunInfo
   // The functions the kernel does not offer, and what the suite sends in place of a primitive it
   // has no constructor for.
   unsupported: string[]
@@ -246,7 +262,24 @@ export function parseReport(raw: unknown, at = 'report', folder?: string): Repor
   const suiteVersion = str(suite, 'version', `${at}.suite`)
   const cdn = cdnFolder(o.assets, suiteVersion, name, version, at)
   const assetBase = cdn === null ? null : (folder ?? cdn)
+  const machine =
+    env.machine === undefined || env.machine === null
+      ? null
+      : Object.fromEntries(
+          Object.entries(obj(env.machine, `${at}.environment.machine`)).map(([a, b]) => [
+            a,
+            String(b),
+          ]),
+        )
   return {
+    registered: true,
+    run: {
+      id: typeof run.id === 'string' ? run.id : null,
+      complete: typeof run.complete === 'boolean' ? run.complete : null,
+      suiteCommit: typeof suite.commit === 'string' ? suite.commit : null,
+      machine,
+      calibrationMs: numOrNull(run, 'calibration_ms', `${at}.run`),
+    },
     identity: {
       kernel: name,
       name,
@@ -329,15 +362,6 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
-export function currentSuite(reports: Report[]): string {
-  return (
-    reports
-      .map(r => r.methodology.suite)
-      .sort(compareVersions)
-      .at(-1) ?? ''
-  )
-}
-
 const RELEASE_NUMBER = /^\d+(\.\d+)*$/
 
 // Two runs of one kernel, older first: by release number when both have one, else by when they ran.
@@ -350,25 +374,36 @@ export function compareRuns(
   return order || (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
 }
 
-const runOf = (r: Report) => ({ version: r.identity.version, date: r.environment.date })
-
-// One report per kernel: its latest run on the newest suite version it has a run on.
-export function latestByKernel(reports: Report[]): Report[] {
+// Each version's own page: the leaderboard's run of it where there is one, else its newest run.
+export function selectedRuns(reports: Report[], board: Report[]): Report[] {
   const best = new Map<string, Report>()
   for (const r of reports) {
-    const prev = best.get(r.identity.kernel)
-    const suite = prev ? compareVersions(r.methodology.suite, prev.methodology.suite) : 1
-    if (suite > 0 || (suite === 0 && compareRuns(runOf(r), runOf(prev!)) > 0))
-      best.set(r.identity.kernel, r)
+    const key = `${r.identity.kernel}@${r.identity.version}`
+    const prev = best.get(key)
+    if (!prev || r.environment.date > prev.environment.date) best.set(key, r)
   }
-  return [...best.values()].sort((a, b) => a.identity.kernel.localeCompare(b.identity.kernel))
+  for (const r of board) best.set(`${r.identity.kernel}@${r.identity.version}`, r)
+  return [...best.values()]
 }
 
-// One report per kernel: its latest release run on the current suite version.
-export function latestReports(reports: Report[]): Report[] {
-  const suite = currentSuite(reports)
-  return latestByKernel(reports.filter(r => r.methodology.suite === suite))
+// The segments that name a kernel's pages in its report's URL. The kernel's name is its leaderboard
+// entry and never moves; name@version is that version's own page; name@version~run is one run,
+// for good.
+export function boardSegment(r: Report): string {
+  return r.identity.kernel
 }
+
+export function versionSegment(r: Report): string {
+  return `${r.identity.kernel}@${r.identity.version}`
+}
+
+export function runSegment(r: Report): string {
+  return `${versionSegment(r)}~${r.run.id ?? 'unlisted'}`
+}
+
+// The machine settings a leaderboard's rows must share: a row from another run than the board's
+// own is comparable only on the same machine and image.
+export const MACHINE_KEYS = ['instance_type', 'ami_id', 'kernel'] as const
 
 function quantile(sorted: number[], q: number): number {
   const i = (sorted.length - 1) * q
@@ -408,18 +443,9 @@ export function caseTime(r: Report): CaseTime | null {
   }
 }
 
-// The segment that names a kernel's page in its report's URL: the kernel's name, or name@version
-// where the suite holds more than one release of the kernel. `reports` is every report read.
-export function kernelSegment(reports: Report[], r: Report): string {
-  const releases = reports.filter(
-    o => o.methodology.suite === r.methodology.suite && o.identity.kernel === r.identity.kernel,
-  )
-  return releases.length > 1 ? `${r.identity.kernel}@${r.identity.version}` : r.identity.kernel
-}
-
 export interface LeaderRow {
   kernel: string
-  // The kernel's page in its report: kernelSegment.
+  // The kernel's page in its report: boardSegment.
   segment: string
   name: string
   version: string
@@ -428,15 +454,18 @@ export interface LeaderRow {
   adapter: Adapter | null
   summary: Summary
   time: CaseTime | null
+  // The run the row comes from, and whether that is another run than the board's own.
+  run: string | null
+  override: boolean
 }
 
-// Ranked by the headline alone, ties by name: no kernel gets a place of its own. `all` is every
-// report read, which names each kernel's page.
-export function leaderboard(latest: Report[], all: Report[] = latest): LeaderRow[] {
+// Ranked by the headline alone, ties by name: no kernel gets a place of its own. `boardRun` is the
+// run most rows come from.
+export function leaderboard(latest: Report[], boardRun: string | null = null): LeaderRow[] {
   return latest
     .map(r => ({
       kernel: r.identity.kernel,
-      segment: kernelSegment(all, r),
+      segment: boardSegment(r),
       name: r.identity.name,
       version: r.identity.version,
       suite: r.methodology.suite,
@@ -444,6 +473,8 @@ export function leaderboard(latest: Report[], all: Report[] = latest): LeaderRow
       adapter: r.identity.adapter,
       summary: summarize(r.cases),
       time: caseTime(r),
+      run: r.run.id,
+      override: boardRun !== null && r.run.id !== boardRun,
     }))
     .sort((a, b) => b.summary.passRate - a.summary.passRate || a.kernel.localeCompare(b.kernel))
 }
@@ -553,25 +584,62 @@ export function operationIndex(latest: Report[]): OperationEntry[] {
 // One report of the site: every kernel run on one suite version, at /reports/<suite>/.
 export interface SuiteView {
   suite: string
-  // Every report on the suite, older releases of a kernel included.
+  // Every published report on the suite, older releases and other runs of a kernel included.
   reports: Report[]
-  // Each kernel's latest release on the suite: the ones its pages compare.
+  // Each kernel's leaderboard entry on the suite: the ones its pages compare.
   latest: Report[]
+  // Each kernel release's own page: selectedRuns.
+  selected: Report[]
+  // The run most of the leaderboard comes from; null on a suite with no leaderboard.
+  boardRun: string | null
   kernels: string[]
   leaderboard: LeaderRow[]
   tests: TestEntry[]
   operations: OperationEntry[]
 }
 
-export function suiteView(reports: Report[], suite: string): SuiteView {
+// A suite's leaderboard as reports.json names it (runs.ts boardRuns): each kernel and its run.
+// Refuses a row from another run than the board's own on a different machine or image, and a row
+// whose report did not run every test.
+export function suiteView(
+  reports: Report[],
+  suite: string,
+  board: Map<string, string> = new Map(),
+  boardRun: string | null = null,
+): SuiteView {
   const on = reports.filter(r => r.methodology.suite === suite)
-  const latest = latestByKernel(on)
+  const find = (kernel: string, run: string) =>
+    on.find(r => r.identity.kernel === kernel && r.run.id === run)
+  const latest: Report[] = []
+  for (const [kernel, run] of board) {
+    const r = find(kernel, run)
+    if (!r) throw new Error(`suite ${suite}: no report of ${kernel} from run ${run}`)
+    if (r.run.complete !== true)
+      throw new Error(`suite ${suite}: ${kernel} did not run every test in run ${run}`)
+    latest.push(r)
+  }
+  latest.sort((a, b) => a.identity.kernel.localeCompare(b.identity.kernel))
+  const own = on.find(r => r.run.id === boardRun)
+  for (const r of latest) {
+    if (r.run.id === boardRun) continue
+    const where = `suite ${suite}: ${r.identity.kernel} from run ${r.run.id}`
+    if (!own?.run.machine || !r.run.machine)
+      throw new Error(`${where}: no machine record to compare with run ${boardRun}`)
+    for (const key of MACHINE_KEYS) {
+      if (own.run.machine[key] !== r.run.machine[key])
+        throw new Error(
+          `${where}: ${key} ${r.run.machine[key]} is not run ${boardRun}'s ${own.run.machine[key]}`,
+        )
+    }
+  }
   return {
     suite,
     reports: on,
     latest,
+    selected: selectedRuns(on, latest),
+    boardRun,
     kernels: latest.map(r => r.identity.kernel),
-    leaderboard: leaderboard(latest, reports),
+    leaderboard: leaderboard(latest, boardRun),
     tests: testIndex(latest),
     operations: operationIndex(latest),
   }
@@ -583,9 +651,20 @@ export interface Site extends SuiteView {
   suites: SuiteView[]
 }
 
-export function buildSite(reports: Report[]): Site {
-  const names = [...new Set(reports.map(r => r.methodology.suite))].sort(compareVersions).reverse()
-  const suites = names.map(s => suiteView(reports, s))
-  const current = suites.find(v => v.suite === currentSuite(reports)) ?? suiteView([], '')
-  return { ...current, all: reports, suites }
+// `boards` is each suite's leaderboard (runs.ts boardRuns) and the run it is drawn from; `current`
+// is the suite the home page shows.
+export function buildSite(
+  reports: Report[],
+  boards: Map<string, { run: string; kernels: Map<string, string> }> = new Map(),
+  current = '',
+): Site {
+  const names = [...new Set([...reports.map(r => r.methodology.suite), ...boards.keys()])]
+    .sort(compareVersions)
+    .reverse()
+  const suites = names.map(s => {
+    const b = boards.get(s)
+    return suiteView(reports, s, b?.kernels, b?.run ?? null)
+  })
+  const home = suites.find(v => v.suite === current) ?? suiteView([], '')
+  return { ...home, all: reports, suites }
 }

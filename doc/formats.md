@@ -133,6 +133,70 @@ it was recorded), `ops` (each step's `op`, `outcome` and `ms`, as the results fi
 `group_low_confidence`, and, where files were drawn, `exports`: the `glb` key and the list of `step`
 keys, below the kernel's folder of [Assets](#assets).
 
+With `--bench DIR --run ID`, where `DIR` is the folder a benchmark session left beside the results
+([bench/README.md](../bench/README.md)) and `ID` its workflow run and attempt, the report also
+records what the session did. `run.id` is that run, such as `44984300614-1`. `run.complete` says
+whether the pass ran every test: no suite arguments, NIST's files where the suite version had them,
+and a clean exit. `suite.commit` is the suite's commit, `adapter` holds the `repo` and `commit` of
+the pass's adapter, and `environment.machine` holds the machine's settings as `environment.txt`
+gives them. Without the options, these fields are null or absent.
+
+### Published runs
+
+The results site shows only runs listed in `reports.json` at the repository's root. Each listed
+report is on the CDN at `brep-conformance/reports/<run>/<kernel>-<hash>.json`, where `<hash>` is the
+first 16 hex digits of the file's SHA-256. A file is never replaced with other contents, so its name
+pins it, and the site's build refuses a file that does not hash to its name.
+
+```json
+{
+  "runs": [
+    {
+      "run": "44984300614-1",
+      "suite": "2.0.0",
+      "scope": "all",
+      "reports": {
+        "alpha": {
+          "file": "alpha-0123456789abcdef.json",
+          "complete": true,
+          "seconds": 176
+        }
+      }
+    }
+  ],
+  "leaderboard": { "2.0.0": { "run": "44984300614-1", "kernels": {} } }
+}
+```
+
+- `runs` lists every run the site shows. `scope` is what the run was asked to cover: `all`, every
+  kernel `kernels.json` listed at its commit, or `named`, the kernels the workflow's form named.
+  Each report's `complete` and `seconds` repeat its pass's.
+- `leaderboard` names, per suite version, the run its rows come from. A row comes from that run for
+  every kernel whose report is complete there, and `kernels` moves a kernel's row to another listed
+  run of the same suite. Every row's report must be complete, and a row from another run must share
+  the board run's instance type, image and kernel (`environment.machine`).
+- The home page shows the newest suite version with a `leaderboard` entry.
+
+The Benchmark workflow proposes each run by its scope, never by comparing it with `kernels.json`
+as it stands later:
+
+| Run     | The suite has a leaderboard                       | The suite has none yet                |
+| ------- | ------------------------------------------------- | ------------------------------------- |
+| `all`   | Replaces it, and clears `kernels`                 | Starts it                             |
+| `named` | Sets the rows of its kernels that ran every test  | Listed with its pages; no leaderboard |
+
+A kernel that did not run every test in an `all` run is left off the leaderboard it starts or
+replaces, and keeps no row from an earlier run. A run with no complete report is proposed nowhere.
+
+A kernel that leaves `kernels.json` keeps its published reports and pages, marked as no longer
+registered. It leaves the current suite's leaderboard, and stays on older suites', which record
+those versions.
+
+On the site, a kernel's page in a suite's report is at three addresses: `<kernel>` is its row on the
+leaderboard and never moves; `<kernel>@<version>` is that release's own page, the leaderboard's run
+of it where there is one and its newest run otherwise; `<kernel>@<version>~<run>` is one run, for
+good.
+
 ## Operands
 
 Each operand is a constructor call written as data: the request

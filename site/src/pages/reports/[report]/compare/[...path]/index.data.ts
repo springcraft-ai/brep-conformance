@@ -1,7 +1,7 @@
 import { site } from '@/data/source'
 import { readDoc } from '@/docs/source'
 import {
-  kernelSegment,
+  boardSegment,
   leaderboard,
   type SuiteView,
   type CaseRow,
@@ -55,7 +55,7 @@ export interface CaseOption {
 
 export interface KernelView {
   kernel: string
-  // Its page in the report: kernelSegment.
+  // Its page in the report: boardSegment.
   segment: string
   version: string
   suite: string
@@ -90,7 +90,7 @@ export interface LevelProps {
   suite: string
   level: string
   kernels: string[]
-  // Each kernel's page in the report, in `kernels` order: kernelSegment.
+  // Each kernel's page in the report, in `kernels` order: boardSegment.
   segments: string[]
   // The kernels the table compares at first, as the leaderboard does.
   shown: string[]
@@ -113,8 +113,7 @@ function caseView(c: CaseRow): CaseView {
   }
 }
 
-// `all` is every report read, which names each kernel's page.
-export function propsOf(t: TestEntry, latest: Report[], all: Report[] = latest): TestProps {
+export function propsOf(t: TestEntry, latest: Report[]): TestProps {
   const kernels: KernelView[] = []
   const rowsOf: Map<string, CaseRow>[] = []
   const board = leaderboard(latest).map(r => r.kernel)
@@ -126,7 +125,7 @@ export function propsOf(t: TestEntry, latest: Report[], all: Report[] = latest):
     const worst = rows.find(c => c.grade === k.grade)
     kernels.push({
       kernel: r.identity.kernel,
-      segment: kernelSegment(all, r),
+      segment: boardSegment(r),
       version: r.identity.version,
       suite: r.methodology.suite,
       grade: k.grade,
@@ -196,7 +195,7 @@ export function entries(): PageEntry<Props>[] {
   return s.suites.flatMap(v => [
     ...v.tests.map(t => ({
       params: { report: v.suite, path: t.test },
-      props: propsOf(t, v.latest, s.all),
+      props: propsOf(t, v.latest),
       title: titleOf(t.test),
       description: `${t.test}: each case, each kernel's result on it, and the checks it failed.`,
     })),

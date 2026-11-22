@@ -1,6 +1,7 @@
 #!/bin/bash
 # On the benchmark machine, from the repository's root, after setup.sh: one session over the
-# kernels in `kernels` below, with the settings bench/README.md gives.
+# kernels setup.sh built, in the registry's order, with the settings bench/README.md gives.
+# BENCH_SCOPE is the plan's: all, or named for a run of the kernels the form named.
 # Every pass also writes its kernel's shape files, which the suite draws after judging each case,
 # outside every timed call; they go to a RAM disk, so no pass waits on the root volume, and are
 # moved to assets/<kernel>/ once the last pass ends.
@@ -40,6 +41,8 @@ cp /etc/benchmark-runner/environment results/environment.txt
     echo "threads=$threads"
     echo "suite_args=$*"
     echo "nist=${BENCH_NIST:-true}"
+    echo "kernels=$(cut -d' ' -f1 results/adapters.txt | tr '\n' ' ' | sed 's/ $//')"
+    echo "scope=${BENCH_SCOPE:-all}"
     echo "exports=$shapes"
     echo "adapter_cores=$isolated"
     echo "runner_cores=$(taskset -cp $$ | sed 's/.*: //')"
@@ -84,9 +87,9 @@ one() {
     tail -4 "results/$name.log"
 }
 
-# One pass per kernel. Each adapter is the one kernels.json pins, started as its own program, so it
-# is the suite's child and lets go of its core when the suite replaces it.
-kernels=(springrep arris cadrs cad-kernel next.BREP solidcore opencascade)
+# One pass per kernel setup.sh built. Each adapter is the one kernels.json pins, started as its own
+# program, so it is the suite's child and lets go of its core when the suite replaces it.
+mapfile -t kernels < <(cut -d' ' -f1 results/adapters.txt)
 for kernel in "${kernels[@]}"; do
     one "$kernel" "$@"
 done

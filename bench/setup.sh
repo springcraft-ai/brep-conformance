@@ -1,7 +1,8 @@
 #!/bin/bash
-# On the benchmark machine, from the repository's root: installs the toolchains, checks each
-# kernel's adapter out at the commit kernels.json pins, under adapters/, and builds the suite and
-# every adapter as kernels.json says. Runs on the housekeeping cores; nothing here is timed.
+# On the benchmark machine, from the repository's root: installs the toolchains, checks each of the
+# session's kernels' adapters out at the commit kernels.json pins, under adapters/, and builds the
+# suite and those adapters as kernels.json says. Runs on the housekeeping cores; nothing here is
+# timed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 root=$PWD
@@ -31,7 +32,9 @@ export PATH="$HOME/.local/bin:$PATH"
 
 cargo build --release --locked -p brep-conformance
 mkdir -p results
-python3 -I bench/adapters.py list "$root" > results/adapters.txt
+# BENCH_KERNELS, from the workflow's plan, names the session's kernels; empty is every kernel.
+# shellcheck disable=SC2086
+python3 -I bench/adapters.py list "$root" ${BENCH_KERNELS:-} > results/adapters.txt
 while read -r kernel repo commit; do
     echo "=== $kernel: $repo at $commit"
     rm -rf "adapters/$kernel"

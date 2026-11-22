@@ -22,6 +22,7 @@ describe('the leaderboard as data', () => {
       expect(k.counts.reduce((a, b) => a + b, 0)).toBe(report.cases.length)
       expect(k.version).toBe(report.identity.version)
       expect(k.run.date).toBe(report.environment.date)
+      expect(k.run.id).toBe(report.run.id)
     }
   })
 

@@ -1,22 +1,44 @@
 # bench
 
 How an official benchmark session runs: one bare-metal instance, started for the session, runs the
-suite on every registered kernel and is terminated, and each kernel's shape files are published.
+suite on the registered kernels and is terminated, and each kernel's shape files and report are
+published. The results site changes only when a pull request that lists the run merges.
 
 ## Overview
 
 The [Benchmark workflow](../.github/workflows/benchmark.yml) is started by hand on `main`
-(`workflow_dispatch`). It has four jobs:
+(`workflow_dispatch`). It has six jobs:
 
 | Job       | Runs on         | What it does                                                                       |
 | --------- | --------------- | ---------------------------------------------------------------------------------- |
+| `plan`    | GitHub's runner | Checks the inputs and states what the run will do, before any machine starts       |
 | `start`   | GitHub's runner | Registers a one-time runner, launches the machine, waits for it                    |
 | `bench`   | The machine     | Records the machine, builds, runs the session, keeps the results, stages the files |
 | `stop`    | GitHub's runner | Terminates the machine, also when `bench` failed or was cancelled                  |
 | `publish` | GitHub's runner | Copies each kernel's shape files the CDN lacks, when `bench` succeeded             |
+| `reports` | GitHub's runner | Publishes each pass's report and, for prod, proposes the run: [Reports](#reports)  |
 
-Its inputs: `suite_args`, passed to every pass (such as `--family booleans/overlap/boxes` for a
-short run), and `publish`, the CDN the files go to: `dev`, `prod` or `none`.
+Its inputs, which default to a full run that can go on the site:
+
+| Input         | Default | What it does                                                                     |
+| ------------- | ------- | -------------------------------------------------------------------------------- |
+| `kernels`     | `all`   | `all`, or the kernels to run, comma-separated, as `kernels.json` names them      |
+| `tests`       | `all`   | `all`; `smoke`, the few minutes' subset in [`smoke.txt`](smoke.txt); or `custom` |
+| `custom_args` | empty   | The suite's arguments with `tests: custom`, such as `--family fillets/`          |
+| `nist`        | on      | Runs NIST's STEP files as `step/read-nist` cases                                 |
+| `publish`     | `prod`  | The CDN the files and reports go to: `prod`, `dev` or `none`                     |
+| `fail_bench`  | off     | Fails `bench` on purpose, to test that the machine still ends                    |
+
+The run is named for its kernels, tests and CDN in the list of runs. [`plan.py`](plan.py) fails the
+run, before a machine starts, on a kernel `kernels.json` does not list, on `dev` or `prod` from a
+branch other than `main` or a `v*` tag, and on `custom` with no arguments. Its summary names the
+suite and commit, each kernel's adapter commit, whether the run can go on a leaderboard, and an
+estimate from each kernel's last pass time in `reports.json`.
+
+A run of `all` kernels starts or replaces its suite's leaderboard. A run of named kernels sets
+only their rows, which is how a kernel joins the leaderboard after it registers, or is run again
+after an anomaly; on a suite with no leaderboard yet it is listed with its pages and moves nothing
+([formats.md](../doc/formats.md#published-runs)).
 
 The machine ends in three independent ways: the `stop` job, a lifetime timer armed at first boot,
 and a shutdown that terminates the instance.
@@ -72,7 +94,7 @@ records every commit and tool version.
 
 | Setting  | Value                                                                                                                      |
 | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Order    | springrep, arris, cadrs, cad-kernel, next.BREP, solidcore, OpenCascade: one pass each                                      |
+| Order    | The run's kernels in the order `kernels.json` lists them: one pass each                                                    |
 | Workers  | 24, always passed                                                                                                          |
 | Cores    | The suite's runner on the housekeeping cores; each adapter on an isolated core of its own, through [`pin.sh`](pin.sh)      |
 | Adapters | Started by the registry's command, through [`adapters.py`](adapters.py)                                                    |
@@ -88,6 +110,23 @@ prefix that names the run. `publish` copies each pass's files from there to
 file's type and an immutable cache lifetime. The copy is made inside the storage service, so the
 files do not pass through GitHub. Each report names that folder as `assets`
 ([formats.md](../doc/formats.md#assets)).
+
+## Reports
+
+The [Reports workflow](../.github/workflows/reports.yml) runs after `publish`, and can be started by
+hand with a run's id to publish an earlier Benchmark run's reports again, such as after a failed
+publish. It runs no kernel code. Its `publish` job writes each pass's report with
+[`publish-reports.sh`](publish-reports.sh): `brep-conformance-report --flat --verified`, with the
+session's folder, so the report records the run, its commits and the machine. Each report is named
+by its hash and uploaded to `brep-conformance/reports/<run>-<attempt>/` with an immutable cache
+lifetime ([formats.md](../doc/formats.md#published-runs)).
+
+For `prod`, its `propose` job adds the run to [`reports.json`](../reports.json) as formats.md says
+and opens a pull request with the benchmark's GitHub App. The pull request compares each kernel with its
+row on the leaderboard now. Merging it is the approval: the Pages workflow builds the site from the
+runs `reports.json` lists, and its check on the pull request fails if a listed report is missing or
+altered. A run with no complete report, or one already listed, opens no pull request. To take a run
+back, remove it from `reports.json` in a pull request.
 
 The machine runs kernel code, which must never be able to write to the CDN. So the machine holds one
 cloud credential, and it can only write to staging: it cannot read, list or delete there, and it
@@ -120,12 +159,14 @@ The role and the subnets are secrets so that the public logs mask them, and the 
 them. The jobs also mask the machine's instance ID, and the machine names itself
 `benchmark-runner` in place of its private IP, which the runner would print in the `bench` log.
 
-[`app-token.sh`](app-token.sh) turns the App's key into a token that can only manage this
-repository's runners.
+[`app-token.sh`](app-token.sh) turns the App's key into a token limited to this repository and to
+the permissions a job asks for: `start` asks for its runners only, and the Reports workflow's
+`propose` job for contents and pull requests, to push its branch and open the pull request. The App
+must hold Administration, Contents and Pull requests, each read and write, on this repository.
 
-`publish` reads these from the repository. It declares no environment, because the upload roles
-trust this repository's `main` and `v*` tags with the default token subject. The buckets are
-secrets, so the public logs mask them:
+`publish` and the Reports workflow's `publish` job read these from the repository. Neither
+declares an environment, because the upload roles trust this repository's `main` and `v*` tags with
+the default token subject. The buckets are secrets, so the public logs mask them:
 
 | Name                                | Kind     | What it is                 |
 | ----------------------------------- | -------- | -------------------------- |

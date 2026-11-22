@@ -2,10 +2,12 @@
 //!
 //! ```text
 //! brep-conformance-report RESULTS.json... [--out report.html] [--viewer viewer.wasm]
-//! brep-conformance-report RESULTS.json --flat report.json [--verified]
+//! brep-conformance-report RESULTS.json --flat report.json [--verified] [--bench DIR --run ID]
 //! ```
 //!
 //! `--flat` writes one run's report as the results site reads it: a header and one row per case.
+//! `--bench` names the folder a benchmark session left beside the results, and `--run` the
+//! workflow run and attempt: the report then records the run, the commits it built and the machine.
 //!
 //! `--viewer` embeds the shape viewer, built by
 //! `cargo build --release --target wasm32-unknown-unknown -p brep-conformance-viewer`:
@@ -27,6 +29,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut runs = Vec::new();
     let (mut flat, mut verified) = (None, false);
+    let (mut bench, mut run): (Option<PathBuf>, Option<String>) = (None, None);
     let mut out = PathBuf::from("conformance-report.html");
     let mut viewer: Option<Vec<u8>> = None;
     let mut i = 0;
@@ -37,6 +40,14 @@ fn main() {
                 i += 1;
             }
             "--verified" => verified = true,
+            "--bench" => {
+                bench = Some(PathBuf::from(&args[i + 1]));
+                i += 1;
+            }
+            "--run" => {
+                run = Some(args[i + 1].clone());
+                i += 1;
+            }
             "--viewer" => {
                 let path = &args[i + 1];
                 viewer =
@@ -54,7 +65,19 @@ fn main() {
     assert!(!runs.is_empty(), "name at least one results file");
     if let Some(path) = flat {
         assert!(runs.len() == 1, "--flat takes one results file");
-        let text = serde_json::to_string_pretty(&report::flat(&runs[0], verified)).unwrap();
+        let session = match (bench, run) {
+            (Some(dir), Some(run)) => {
+                let kernel = runs[0]["kernel"]["name"]
+                    .as_str()
+                    .expect("the results name no kernel");
+                report::session(&dir, kernel, &run)
+                    .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
+            }
+            (None, None) => report::Session::default(),
+            _ => panic!("--bench and --run go together"),
+        };
+        let text =
+            serde_json::to_string_pretty(&report::flat(&runs[0], verified, &session)).unwrap();
         std::fs::write(&path, text + "\n").expect("writing the flat report");
         println!("{}", path.display());
         return;

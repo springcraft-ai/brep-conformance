@@ -1,3 +1,5 @@
 .vite/
 dist/
 package-lock.json
+# Hash-pinned: reformatting a report changes the name it is listed under.
+src/fixtures/reports/*/

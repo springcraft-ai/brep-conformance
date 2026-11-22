@@ -212,10 +212,78 @@ pub fn outcomes(results: &Value) -> BTreeMap<String, String> {
 /// The fewest timed cases a group needs for its median to be trusted.
 const TIMED_ENOUGH: usize = 5;
 
+/// What a benchmark session records beside one pass's results (bench/README.md): which run it was,
+/// what it built, and the machine. Each field is absent for a run made anywhere else.
+#[derive(Debug, Default, PartialEq)]
+pub struct Session {
+    /// The Benchmark workflow's run and attempt, such as `44984300614-1`.
+    pub run: Option<String>,
+    pub suite_commit: Option<String>,
+    /// `{"repo", "commit"}` of the pass's adapter.
+    pub adapter: Option<Value>,
+    /// The machine's settings, from `environment.txt`.
+    pub machine: Option<serde_json::Map<String, Value>>,
+    /// The pass ran every test: no suite arguments, NIST's files where the suite had them, and a
+    /// clean exit.
+    pub complete: Option<bool>,
+}
+
+/// `key=value` lines; a line whose key is not a plain word, such as a pass's `name: exit=0`, is not
+/// one.
+fn key_values(text: &str) -> BTreeMap<&str, &str> {
+    text.lines()
+        .filter_map(|l| l.split_once('='))
+        .filter(|(k, _)| !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+        .collect()
+}
+
+/// The session the bench wrote in `dir` (`session.txt`, `build.txt`, `adapters.txt`,
+/// `environment.txt`), for the pass of `kernel` in the run `run`.
+pub fn session(dir: &std::path::Path, kernel: &str, run: &str) -> Result<Session, String> {
+    let read =
+        |name: &str| std::fs::read_to_string(dir.join(name)).map_err(|e| format!("{name}: {e}"));
+    let (session, build, adapters, environment) = (
+        read("session.txt")?,
+        read("build.txt")?,
+        read("adapters.txt")?,
+        read("environment.txt")?,
+    );
+    let runs = key_values(&session);
+    let exit = session
+        .lines()
+        .find_map(|l| l.strip_prefix(&format!("{kernel}: exit=")))
+        .and_then(|rest| rest.split_whitespace().next())
+        .ok_or_else(|| format!("session.txt: no pass of {kernel}"))?;
+    let adapter = adapters
+        .lines()
+        .map(|l| l.split_whitespace().collect::<Vec<_>>())
+        .find(|w| w.len() == 3 && w[0] == kernel)
+        .map(|w| json!({"repo": w[1], "commit": w[2]}))
+        .ok_or_else(|| format!("adapters.txt: no adapter of {kernel}"))?;
+    let machine = key_values(&environment)
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), json!(v)))
+        .collect();
+    // A session written before NIST's files existed has no `nist` line, and ran every test there
+    // was.
+    let complete = exit == "0"
+        && runs.get("suite_args").is_some_and(|a| a.trim().is_empty())
+        && runs.get("nist") != Some(&"false");
+    Ok(Session {
+        run: Some(run.to_string()),
+        suite_commit: key_values(&build)
+            .get("brep_conformance")
+            .map(|c| c.to_string()),
+        adapter: Some(adapter),
+        machine: Some(machine),
+        complete: Some(complete),
+    })
+}
+
 /// One run as the results site reads it: who ran what and where, the totals, and one row per case
 /// with its tier, the reason it is not a pass, its time and its group's median. `verified` says the
-/// run came from the suite's own benchmark machine.
-pub fn flat(results: &Value, verified: bool) -> Value {
+/// run came from the suite's own benchmark machine; `session` is what that machine recorded.
+pub fn flat(results: &Value, verified: bool, session: &Session) -> Value {
     let cases = results["cases"]
         .as_array()
         .map_or(&[][..], |v| v.as_slice());
@@ -288,21 +356,36 @@ pub fn flat(results: &Value, verified: bool) -> Value {
         }
         _ => Value::Null,
     };
+    // An official run's results name the adapter; the bench's passes record it beside them.
+    let adapter = match &results["adapter"] {
+        Value::Null => session.adapter.clone().unwrap_or(Value::Null),
+        a => a.clone(),
+    };
+    let mut environment = results["environment"].clone();
+    if let (Some(env), Some(machine)) = (environment.as_object_mut(), &session.machine) {
+        env.insert("machine".into(), Value::Object(machine.clone()));
+    }
     json!({
         "format": crate::run::RESULTS_FORMAT,
         "kernel": results["kernel"],
-        "adapter": results["adapter"],
+        "adapter": adapter,
         "assets": assets,
-        "suite": {"version": results["suite"], "contract": results["contract"]},
+        "suite": {
+            "version": results["suite"],
+            "contract": results["contract"],
+            "commit": session.suite_commit,
+        },
         "run": {
+            "id": session.run,
             "unix": results["unix"],
             "started_unix": results["started_unix"],
             "wall_ms": results["wall_ms"],
             "calibration_ms": results["calibration_ms"],
             "time_limit_ms": results["time_limit_ms"],
             "verified": verified,
+            "complete": session.complete,
         },
-        "environment": results["environment"],
+        "environment": environment,
         "summary": {
             "cases": rows.len(),
             "pass_1e7": if rows.is_empty() { 0.0 } else { passed as f64 / rows.len() as f64 },
@@ -335,11 +418,12 @@ mod tests {
                     {"op": "a ∪ b", "outcome": "timeout", "ms": 120000.0, "error": "late"}]},
             ],
         });
-        let flat = flat(&results, false);
+        let flat = flat(&results, false, &Session::default());
         assert_eq!(
             flat["run"],
-            json!({"unix": 200, "started_unix": 100, "wall_ms": 100000.0, "calibration_ms": 7.5,
-                   "time_limit_ms": 120000.0, "verified": false})
+            json!({"id": null, "unix": 200, "started_unix": 100, "wall_ms": 100000.0,
+                   "calibration_ms": 7.5, "time_limit_ms": 120000.0, "verified": false,
+                   "complete": null})
         );
         let [a, b] = [&flat["cases"][0], &flat["cases"][1]];
         // A step keeps its label, outcome and time, and nothing it found.
@@ -368,7 +452,7 @@ mod tests {
             case("1e-7", 3.0), case("1e-6", 5.0), case("1e-7", 4.0),
             case("refused", 70.0), case("unsupported", 0.0),
         ]});
-        let flat = flat(&results, true);
+        let flat = flat(&results, true, &Session::default());
         assert_eq!(flat["format"], crate::run::RESULTS_FORMAT);
         assert_eq!(flat["summary"]["cases"], 5);
         assert_eq!(flat["summary"]["pass_1e7"], 0.4);
@@ -386,7 +470,7 @@ mod tests {
         let results = json!({"suite": "1.0.0", "kernel": {"name": "k", "version": "2.1"},
             "cases": [{"id": "a", "test": "t", "result": "1e-7", "exports": ex},
                       {"id": "b", "test": "t", "result": "1e-7"}]});
-        let flat = flat(&results, false);
+        let flat = flat(&results, false, &Session::default());
         assert_eq!(
             flat["assets"],
             format!("{}/1.0.0/k/2.1/", crate::assets::ASSET_BASE)
@@ -396,8 +480,102 @@ mod tests {
             json!({"glb": "t/a.h.glb", "step": ["t/a.h.step"]})
         );
         assert!(flat["cases"][1].get("exports").is_none());
-        let none = super::flat(&json!({"cases": []}), false);
+        let none = super::flat(&json!({"cases": []}), false, &Session::default());
         assert!(none["assets"].is_null());
+    }
+
+    /// A session folder as the bench leaves it, with `session.txt` as given.
+    fn session_dir(session: &str) -> tempfile_dir::Dir {
+        let dir = tempfile_dir::Dir::new();
+        let write = |name: &str, text: &str| std::fs::write(dir.0.join(name), text).unwrap();
+        write("session.txt", session);
+        write(
+            "build.txt",
+            "brep_conformance=29e5bcb\nadapter_k=bf3b059\nrustc=rustc 1.99.0\n",
+        );
+        write(
+            "adapters.txt",
+            "k https://example.com/k-adapter bf3b059\nj https://e.com/j 1\n",
+        );
+        write("environment.txt", "instance_type=c7i.metal-24xl\nsmt=off\n");
+        dir
+    }
+
+    mod tempfile_dir {
+        pub struct Dir(pub std::path::PathBuf);
+        impl Dir {
+            pub fn new() -> Self {
+                use std::sync::atomic::{AtomicUsize, Ordering};
+                static NEXT: AtomicUsize = AtomicUsize::new(0);
+                let n = NEXT.fetch_add(1, Ordering::Relaxed);
+                let dir =
+                    std::env::temp_dir().join(format!("brep-session-{}-{n}", std::process::id()));
+                std::fs::create_dir_all(&dir).unwrap();
+                Dir(dir)
+            }
+        }
+        impl Drop for Dir {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+    }
+
+    #[test]
+    fn a_session_names_the_run_the_commits_and_the_machine() {
+        let dir = session_dir("threads=24\nsuite_args=\nnist=true\nk: exit=0 seconds=176\n");
+        let s = session(&dir.0, "k", "44984300614-1").unwrap();
+        assert_eq!(s.run.as_deref(), Some("44984300614-1"));
+        assert_eq!(s.suite_commit.as_deref(), Some("29e5bcb"));
+        assert_eq!(
+            s.adapter,
+            Some(json!({"repo": "https://example.com/k-adapter", "commit": "bf3b059"}))
+        );
+        let machine = s.machine.as_ref().unwrap();
+        assert_eq!(machine["instance_type"], "c7i.metal-24xl");
+        assert_eq!(machine["smt"], "off");
+        assert_eq!(s.complete, Some(true));
+    }
+
+    #[test]
+    fn a_pass_is_complete_only_with_every_test_and_a_clean_exit() {
+        let complete = |text: &str| session(&session_dir(text).0, "k", "1-1").unwrap().complete;
+        assert_eq!(
+            complete("suite_args=--family boxes\nnist=true\nk: exit=0\n"),
+            Some(false)
+        );
+        assert_eq!(
+            complete("suite_args=\nnist=false\nk: exit=0\n"),
+            Some(false)
+        );
+        assert_eq!(
+            complete("suite_args=\nnist=true\nk: exit=invalid(1 unplaced)\n"),
+            Some(false)
+        );
+        // Before NIST's files, a session wrote no `nist` line and ran every test there was.
+        assert_eq!(complete("suite_args=\nk: exit=0 seconds=182\n"), Some(true));
+        assert!(session(&session_dir("suite_args=\nj: exit=0\n").0, "k", "1-1").is_err());
+    }
+
+    #[test]
+    fn a_flat_report_carries_what_the_session_recorded() {
+        let dir = session_dir("suite_args=\nnist=true\nk: exit=0\n");
+        let s = session(&dir.0, "k", "7-2").unwrap();
+        let results = json!({"suite": "2.0.0", "contract": "2.0.0", "cases": [],
+            "kernel": {"name": "k", "version": "0.2.9"}, "environment": {"os": "linux"}});
+        let flat = flat(&results, true, &s);
+        assert_eq!(flat["run"]["id"], "7-2");
+        assert_eq!(flat["run"]["complete"], true);
+        assert_eq!(flat["suite"]["commit"], "29e5bcb");
+        assert_eq!(flat["adapter"]["commit"], "bf3b059");
+        assert_eq!(flat["environment"]["os"], "linux");
+        assert_eq!(
+            flat["environment"]["machine"]["instance_type"],
+            "c7i.metal-24xl"
+        );
+        // An official run's own record of its adapter is kept.
+        let official = json!({"adapter": {"repo": "r", "commit": "c"}, "environment": {}});
+        assert_eq!(super::flat(&official, true, &s)["adapter"]["commit"], "c");
     }
 
     #[test]

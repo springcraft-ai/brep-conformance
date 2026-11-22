@@ -66,11 +66,13 @@ look, not its results, so it never names a kernel. To change it, edit
 `CHROME` where it is not in the usual place), upload it under a new name, and point `SHARE_IMAGE` at
 that name: the CDN caches each name for good.
 
-The site reads `<suite>/<kernel>/<version>/report.json` under `BREP_REPORTS_DIR`, and has no results
-when it is unset. The tests read two reports for invented kernels in
-[`src/fixtures/reports/`](src/fixtures/reports/). `SITE_BASE` sets the path the site is served
-under, such as `/brep-conformance/`. The dev server reads the reports once, so restart it after they
-change.
+The site reads `reports.json` and the reports it lists, `<run>/<kernel>-<hash>.json`, under
+`BREP_REPORTS_DIR`, and has no results when it is unset.
+`node scripts/reports.ts fetch ../reports.json DIR` fills a folder from the CDN, checking each file
+against the hash in its name. The tests read one run of two invented kernels in
+[`src/fixtures/reports/`](src/fixtures/reports/), whose files prettier leaves alone because their
+names pin their bytes. `SITE_BASE` sets the path the site is served under, such as
+`/brep-conformance/`. The dev server reads the reports once, so restart it after they change.
 
 A report shows its shape files from the CDN. For a run not yet published, set `BREP_ASSETS_DIR` to a
 folder laid out as the CDN is, `<suite>/<kernel>/<version>/<key>`, with each folder filled by
@@ -95,10 +97,12 @@ A page module is loaded in the browser when it hydrates, so it never imports `so
 ## Deployment
 
 `npm run build` writes `dist/site`, which GitHub Pages serves as it is.
-[`pages.yml`](../.github/workflows/pages.yml) checks, builds and deploys it on every push to `main`.
-It builds from the reports in [`reports/`](../reports/), each written by
-`brep-conformance-report --flat --verified` from a [Benchmark](../.github/workflows/benchmark.yml)
-run's results. A check that every asset a report names exists is not set up yet.
+[`pages.yml`](../.github/workflows/pages.yml) checks, builds and deploys it on every push to `main`,
+and checks and builds it on every pull request. It builds from the runs
+[`reports.json`](../reports.json) lists, fetched from the CDN; the
+[Benchmark](../.github/workflows/benchmark.yml) workflow publishes each run's reports there and
+proposes the run in a pull request ([bench/README.md](../bench/README.md#reports)). A check that
+every asset a report names exists is not set up yet.
 
 ## Additional Information
 

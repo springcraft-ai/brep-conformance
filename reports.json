@@ -1,0 +1,83 @@
+{
+  "runs": [
+    {
+      "run": "44234625654-1",
+      "suite": "1.0.0",
+      "scope": "all",
+      "reports": {
+        "springrep": {
+          "file": "springrep-9f0c525c3de0172c.json",
+          "complete": true,
+          "seconds": 182
+        },
+        "arris": {
+          "file": "arris-935c09211acca096.json",
+          "complete": true,
+          "seconds": 1050
+        },
+        "solidcore": {
+          "file": "solidcore-cd8f13bcf5aabfad.json",
+          "complete": true,
+          "seconds": 952
+        },
+        "opencascade": {
+          "file": "opencascade-7a51cd0783543ffb.json",
+          "complete": true,
+          "seconds": 792
+        }
+      }
+    },
+    {
+      "run": "44984300614-1",
+      "suite": "2.0.0",
+      "scope": "all",
+      "reports": {
+        "springrep": {
+          "file": "springrep-0fb006e8f48711fa.json",
+          "complete": true,
+          "seconds": 150
+        },
+        "arris": {
+          "file": "arris-b424938f736c14b9.json",
+          "complete": true,
+          "seconds": 1052
+        },
+        "cadrs": {
+          "file": "cadrs-ed17fabece268eb8.json",
+          "complete": true,
+          "seconds": 176
+        },
+        "cad-kernel": {
+          "file": "cad-kernel-fbb5b17750be5961.json",
+          "complete": true,
+          "seconds": 166
+        },
+        "next.BREP": {
+          "file": "next.BREP-dab492d0c84b087c.json",
+          "complete": true,
+          "seconds": 414
+        },
+        "solidcore": {
+          "file": "solidcore-8465c227a11ff9f2.json",
+          "complete": true,
+          "seconds": 972
+        },
+        "opencascade": {
+          "file": "opencascade-775b1755a1b0c01e.json",
+          "complete": true,
+          "seconds": 798
+        }
+      }
+    }
+  ],
+  "leaderboard": {
+    "1.0.0": {
+      "run": "44234625654-1",
+      "kernels": {}
+    },
+    "2.0.0": {
+      "run": "44984300614-1",
+      "kernels": {}
+    }
+  }
+}

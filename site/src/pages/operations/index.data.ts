@@ -1,4 +1,4 @@
-import { kernelSegment } from '@/data/results'
+import { boardSegment } from '@/data/results'
 import { site } from '@/data/source'
 import type { PageEntry } from '@/site/page'
 import { AREA_SECTION } from '../reports/[report]/compare/[...path]/definition'
@@ -7,7 +7,7 @@ import { operations } from './doc'
 // A kernel's column is one run: the version it ran, against which suite, on which day.
 export interface KernelColumn {
   kernel: string
-  // Its page in its report: kernelSegment.
+  // Its leaderboard page in its report: boardSegment.
   segment: string
   version: string
   suite: string
@@ -44,7 +44,7 @@ export function propsOf(): Props {
   const ops = operations().operations
   const kernels: KernelColumn[] = s.latest.map(r => ({
     kernel: r.identity.kernel,
-    segment: kernelSegment(s.all, r),
+    segment: boardSegment(r),
     version: r.identity.version,
     suite: r.methodology.suite,
     date: r.environment.date,

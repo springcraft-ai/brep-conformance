@@ -64,10 +64,12 @@ export interface GridGroup {
 export interface BoardRow {
   rank: number
   kernel: string
-  // The kernel's page in the report: kernelSegment.
+  // The kernel's page in the report: boardSegment.
   segment: string
   version: string
   suite: string
+  // The day its run ended, where the row comes from another run than the rest of the board.
+  otherRun: string | null
   rate: number
   passing: number
   total: number
@@ -113,6 +115,7 @@ export function boardRows(board: LeaderRow[]): BoardRow[] {
       segment: r.segment,
       version: r.version,
       suite: r.suite,
+      otherRun: r.override ? r.date.slice(0, 10) || '–' : null,
       rate: r.summary.passRate,
       passing: r.summary.passing,
       total: r.summary.total,

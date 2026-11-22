@@ -6,17 +6,19 @@
       "asset_step": true,
       "exports": {
         "glb": "booleans/overlap/boxes/box-box-0a1b2c3d4e5f6071.1111111111111111.glb",
-        "step": ["booleans/overlap/boxes/box-box-0a1b2c3d4e5f6071.1111111111111111.step"]
+        "step": [
+          "booleans/overlap/boxes/box-box-0a1b2c3d4e5f6071.1111111111111111.step"
+        ]
       },
       "failure": null,
       "group_low_confidence": false,
-      "group_median_ms": 10.0,
+      "group_median_ms": 10,
       "id": "box-box-0a1b2c3d4e5f6071",
       "kind": "exact",
       "operation": "booleans",
       "result": "1e-7",
       "test": "booleans/overlap/boxes",
-      "time_ms": 11.0,
+      "time_ms": 11,
       "why": null
     },
     {
@@ -24,17 +26,19 @@
       "asset_step": true,
       "exports": {
         "glb": "booleans/overlap/boxes/box-box-1b2c3d4e5f607182.2222222222222222.glb",
-        "step": ["booleans/overlap/boxes/box-box-1b2c3d4e5f607182.2222222222222222.step"]
+        "step": [
+          "booleans/overlap/boxes/box-box-1b2c3d4e5f607182.2222222222222222.step"
+        ]
       },
       "failure": null,
       "group_low_confidence": false,
-      "group_median_ms": 10.0,
+      "group_median_ms": 10,
       "id": "box-box-1b2c3d4e5f607182",
       "kind": "exact",
       "operation": "booleans",
       "result": "1e-6",
       "test": "booleans/overlap/boxes",
-      "time_ms": 12.0,
+      "time_ms": 12,
       "why": null
     },
     {
@@ -46,13 +50,13 @@
       },
       "failure": null,
       "group_low_confidence": false,
-      "group_median_ms": 10.0,
+      "group_median_ms": 10,
       "id": "fillet-chains-tight-2c3d4e5f60718293",
       "kind": "sound",
       "operation": "fillets",
       "result": "refused",
       "test": "fillets/top-loop-bigger-than-corner-rounds",
-      "time_ms": 13.0,
+      "time_ms": 13,
       "why": null
     },
     {
@@ -64,13 +68,13 @@
       },
       "failure": null,
       "group_low_confidence": false,
-      "group_median_ms": 10.0,
+      "group_median_ms": 10,
       "id": "fillet-variable-3d4e5f60718293a4",
       "kind": "sound",
       "operation": "fillets",
       "result": "unsupported",
       "test": "fillets/variable-radius",
-      "time_ms": 14.0,
+      "time_ms": 14,
       "why": null
     },
     {
@@ -82,13 +86,13 @@
       },
       "failure": "geometry",
       "group_low_confidence": false,
-      "group_median_ms": 10.0,
+      "group_median_ms": 10,
       "id": "fillet-over-limit-4e5f60718293a4b5",
       "kind": "rejection",
       "operation": "fillets",
       "result": "fail",
       "test": "fillets/rejects-radius-past-half-width",
-      "time_ms": 15.0,
+      "time_ms": 15,
       "why": null
     },
     {
@@ -96,17 +100,19 @@
       "asset_step": true,
       "exports": {
         "glb": null,
-        "step": ["chamfers/prism-side-edges/chamfer-prisms-5f60718293a4b5c6.6666666666666666.step"]
+        "step": [
+          "chamfers/prism-side-edges/chamfer-prisms-5f60718293a4b5c6.6666666666666666.step"
+        ]
       },
       "failure": null,
       "group_low_confidence": false,
-      "group_median_ms": 10.0,
+      "group_median_ms": 10,
       "id": "chamfer-prisms-5f60718293a4b5c6",
       "kind": "exact",
       "operation": "chamfers",
       "result": "1e-7",
       "test": "chamfers/prism-side-edges",
-      "time_ms": 16.0,
+      "time_ms": 16,
       "why": null
     }
   ],
@@ -114,7 +120,12 @@
     "arch": "x86_64",
     "cores": 4,
     "os": "linux",
-    "threads": 4
+    "threads": 4,
+    "machine": {
+      "instance_type": "m1.test",
+      "ami_id": "ami-0000",
+      "kernel": "1.0.0-test"
+    }
   },
   "kernel": {
     "configuration": "",
@@ -123,15 +134,21 @@
     "version": "2.1.0"
   },
   "run": {
+    "id": "1-1",
     "unix": 1800000000,
-    "verified": false
+    "verified": false,
+    "complete": true
   },
   "stand_ins": {
     "sphere": "revolve"
   },
   "suite": {
     "contract": "1.0",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "commit": "0000000000000000000000000000000000000000"
   },
-  "unsupported": ["fillet_variable", "sphere"]
+  "unsupported": [
+    "fillet_variable",
+    "sphere"
+  ]
 }

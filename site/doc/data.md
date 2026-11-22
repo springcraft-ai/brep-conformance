@@ -111,11 +111,13 @@ link to it keeps naming the same results once a newer suite is published:
 | --------------------------------------- | ------------------------------------------------------ |
 | `/`                                     | The current suite's leaderboard                        |
 | `/reports/<suite>/`                     | That suite's leaderboard                               |
-| `/reports/<suite>/<kernel>/`            | One kernel release on it                               |
+| `/reports/<suite>/<kernel>/`            | One kernel's row on that suite's leaderboard           |
 | `/reports/<suite>/compare/<test path>/` | One test, every kernel; the path as the suite names it |
 | `/reports/<suite>/compare/<level>/`     | The table of the tests under a level of that path      |
 
-A kernel's segment is its name, or `<kernel>@<version>` where the suite has more than one release of
-it. A level is any part of a test's path above the test, such as `booleans` or
-`booleans/degenerate`. A compare page's breadcrumb leads up through the page of each level to the
-report. `/reports/` has no page.
+A kernel's page has three segments. Its name is its row on the leaderboard and never moves;
+`<kernel>@<version>` is that release's own page, the leaderboard's run of it where there is one and
+its newest run otherwise; `<kernel>@<version>~<run>` is one run, for good. Each page lists the
+kernel's other runs, and what another run of the same release did differently. A level is any part
+of a test's path above the test, such as `booleans` or `booleans/degenerate`. A compare page's
+breadcrumb leads up through the page of each level to the report. `/reports/` has no page.

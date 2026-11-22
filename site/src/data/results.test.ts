@@ -1,26 +1,37 @@
 import { describe, expect, it } from 'vitest'
 import {
   ASSET_BASE,
+  buildSite,
   caseTime,
   compareRuns,
   compareVersions,
-  latestByKernel,
-  latestReports,
   leaderboard,
   parseReport,
+  runSegment,
+  selectedRuns,
+  suiteView,
   summarize,
   testIndex,
+  versionSegment,
 } from './results'
 
 type RawCase = Record<string, unknown>
 
 // A flat report as `brep-conformance-report --flat` writes it.
-function raw(kernel: string, version: string, cases: RawCase[], suite = '0.9.0', unix = 1) {
+function raw(
+  kernel: string,
+  version: string,
+  cases: RawCase[],
+  suite = '0.9.0',
+  unix = 1,
+  run = '1-1',
+  machine: Record<string, string> = { instance_type: 'm1', ami_id: 'ami-1', kernel: '7.0' },
+) {
   return {
     kernel: { name: kernel, version, tolerance: 1e-7, configuration: 'default' },
-    suite: { version: suite, contract: '0.8' },
-    run: { unix, verified: false },
-    environment: { os: 'linux', arch: 'x86_64', cores: 8, threads: 4 },
+    suite: { version: suite, contract: '0.8', commit: 'c0ffee0' },
+    run: { id: run, unix, verified: false, complete: true, calibration_ms: 20 },
+    environment: { os: 'linux', arch: 'x86_64', cores: 8, threads: 4, machine },
     summary: { cases: cases.length, pass_1e7: 0, results: {} },
     unsupported: ['torus'],
     stand_ins: { torus: 'revolve' },
@@ -176,45 +187,85 @@ describe('summarize', () => {
   })
 })
 
-describe('latestReports', () => {
-  it('orders a version that is not a release number by when it ran', () => {
-    const reports = [raw('s', 'beef', [], '0.9.0', 2), raw('s', 'abcd', [], '0.9.0', 1)]
-    expect(latestReports(reports.map(r => parseReport(r)))[0]!.identity.version).toBe('beef')
-  })
-
-  it('keeps each kernel’s newest release on the current suite only', () => {
-    const reports = [
-      raw('a', '0.9.0', []),
-      raw('a', '0.10.0', []),
-      raw('a', '2.0.0', [], '0.8.0'),
-      raw('b', '1.0.0', [], '0.9.0'),
-    ].map(r => parseReport(r))
-    const latest = latestReports(reports)
-    expect(latest.map(r => `${r.identity.kernel} ${r.identity.version}`)).toEqual([
-      'a 0.10.0',
-      'b 1.0.0',
-    ])
+describe('compareRuns', () => {
+  it('orders release numbers by number and anything else by when it ran', () => {
+    expect(compareRuns({ version: '0.10.0', date: '1' }, { version: '0.9.0', date: '2' })).toBe(1)
+    expect(compareRuns({ version: 'aaaa', date: '2' }, { version: 'ffff', date: '1' })).toBe(1)
     expect(compareVersions('0.10.0', '0.9.0')).toBe(1)
   })
 })
 
-describe('compareRuns and latestByKernel', () => {
-  it('orders release numbers by number and anything else by when it ran', () => {
-    expect(compareRuns({ version: '0.10.0', date: '1' }, { version: '0.9.0', date: '2' })).toBe(1)
-    expect(compareRuns({ version: 'aaaa', date: '2' }, { version: 'ffff', date: '1' })).toBe(1)
-  })
+describe('suiteView', () => {
+  const a1 = parseReport(raw('a', '1.0.0', [], '0.9.0', 10, '10-1'))
+  const b1 = parseReport(raw('b', '1.0.0', [], '0.9.0', 10, '10-1'))
+  const b2 = parseReport(raw('b', '2.0.0', [], '0.9.0', 20, '11-1'))
+  const board = (entries: [string, string][]) => new Map(entries)
 
-  it('keeps a kernel whose newest run is on an older suite', () => {
-    const reports = [
-      raw('a', '1.0.0', [], '0.10.0'),
-      raw('b', '1.0.0', [], '0.9.0'),
-      raw('b', '2.0.0', [], '0.9.0'),
-    ].map(r => parseReport(r))
-    expect(latestByKernel(reports).map(r => `${r.identity.kernel} ${r.identity.version}`)).toEqual([
+  it('draws the leaderboard reports.json names, and marks a row from another run', () => {
+    const v = suiteView(
+      [a1, b1, b2],
+      '0.9.0',
+      board([
+        ['a', '10-1'],
+        ['b', '11-1'],
+      ]),
+      '10-1',
+    )
+    expect(v.latest.map(r => `${r.identity.kernel} ${r.identity.version}`)).toEqual([
       'a 1.0.0',
       'b 2.0.0',
     ])
-    expect(latestReports(reports).map(r => r.identity.kernel)).toEqual(['a'])
+    expect(v.leaderboard.map(r => [r.kernel, r.run, r.override])).toEqual([
+      ['a', '10-1', false],
+      ['b', '11-1', true],
+    ])
+  })
+
+  it('refuses a row from a run on another machine or image than the board’s own', () => {
+    const other = { instance_type: 'm1', ami_id: 'ami-2', kernel: '7.0' }
+    const elsewhere = parseReport(raw('b', '2.0.0', [], '0.9.0', 20, '12-1', other))
+    expect(() =>
+      suiteView(
+        [a1, elsewhere],
+        '0.9.0',
+        board([
+          ['a', '10-1'],
+          ['b', '12-1'],
+        ]),
+        '10-1',
+      ),
+    ).toThrow(/ami_id ami-2 is not run 10-1's ami-1/)
+  })
+
+  it('refuses a row whose report did not run every test', () => {
+    const partial = raw('a', '1.0.0', [], '0.9.0', 10, '13-1')
+    partial.run.complete = false
+    expect(() =>
+      suiteView([parseReport(partial)], '0.9.0', board([['a', '13-1']]), '13-1'),
+    ).toThrow(/did not run every test/)
+  })
+
+  it('gives a release run twice one page of its own, and each run a page for good', () => {
+    const again = parseReport(raw('a', '1.0.0', [], '0.9.0', 30, '14-1'))
+    expect(selectedRuns([a1, again], []).map(r => r.run.id)).toEqual(['14-1'])
+    // The leaderboard's run of a release is its page even when a newer run of it exists.
+    expect(selectedRuns([a1, again], [a1]).map(r => r.run.id)).toEqual(['10-1'])
+    expect([versionSegment(a1), runSegment(a1), runSegment(again)]).toEqual([
+      'a@1.0.0',
+      'a@1.0.0~10-1',
+      'a@1.0.0~14-1',
+    ])
+  })
+
+  it('shows the suite the home page names, not the newest with a report', () => {
+    const newer = parseReport(raw('a', '1.0.0', [], '1.0.0', 40, '15-1'))
+    const boards = new Map([['0.9.0', { run: '10-1', kernels: board([['a', '10-1']]) }]])
+    const s = buildSite([a1, newer], boards, '0.9.0')
+    expect(s.suite).toBe('0.9.0')
+    expect(s.suites.map(v => [v.suite, v.latest.length])).toEqual([
+      ['1.0.0', 0],
+      ['0.9.0', 1],
+    ])
   })
 })
 

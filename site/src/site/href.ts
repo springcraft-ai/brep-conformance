@@ -11,7 +11,8 @@ export const url = {
   home: () => href('/'),
   // A report: every kernel run on one suite version.
   report: (report: string) => href(`/reports/${e(report)}/`),
-  // One kernel in a report; `kernel` is its segment, the name or name@version (kernelSegment).
+  // One kernel in a report; `kernel` is its segment: the name, name@version or name@version~run
+  // (boardSegment, versionSegment and runSegment in results.ts).
   kernel: (report: string, kernel: string) => href(`/reports/${e(report)}/${e(kernel)}/`),
   // One test across a report's kernels, by its path, such as booleans/degenerate/equal-cylinders.
   compare: (report: string, test: string) =>

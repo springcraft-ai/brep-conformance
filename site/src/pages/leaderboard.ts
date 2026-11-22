@@ -13,6 +13,8 @@ export interface LeaderboardKernel {
   // Case times in milliseconds over the kernel's passed cases; null when it passed none.
   time: CaseTime | null
   run: {
+    // The Benchmark workflow's run and attempt the row comes from; null for a report without one.
+    id: string | null
     // When the run ended, as an ISO date and time; empty when the report has no time.
     date: string
     os: string
@@ -48,6 +50,7 @@ export function leaderboardOf(v: SuiteView): Leaderboard {
         counts: GRADES.map(g => row.summary.grades[g]),
         time: row.time,
         run: {
+          id: report.run.id,
           date: env.date,
           os: env.os,
           arch: env.arch,
