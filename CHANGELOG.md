@@ -3,7 +3,18 @@
 Every release of the suite, newest first. [doc/versioning.md](doc/versioning.md) says what each
 number promises and what an entry records.
 
-## 2.0.0 (unreleased)
+## 2.0.1 (unreleased)
+
+Verdicts and scores on 2.0.0 stand. Case times do not compare with 2.0.0's.
+
+### Timing
+
+- A case's `time_ms` leaves out the B17 round trip through STEP, which only kernels that read and
+  write STEP run, so every kernel is timed on the same work; its time is the case's new `step_ms`,
+  null where none ran. The site shows the median of `step_ms` beside the median case time. No
+  verdict changes.
+
+## 2.0.0 (2026-11-22)
 
 Results on 1.0.0 do not compare with results on 2.0.0: every case has a new id, and two checks score
 a refused blend differently.
@@ -42,10 +53,6 @@ a refused blend differently.
   significant digits, with any magnitude below a picometre as zero, and the generator uses the same
   maths on every platform. So the same seed draws the same cases and ids on every platform. The
   cases themselves are the same as before to within their last bits, and no verdict changes.
-- A case's `time_ms` leaves out the B17 round trip through STEP, which only kernels that read and
-  write STEP run; its time is the case's new `step_ms`, null where none ran. The site shows the
-  median of `step_ms` beside the median case time. Times from earlier results files count the round
-  trip and do not compare with later ones. No verdict changes.
 
 ### Tests added
 

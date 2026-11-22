@@ -55,6 +55,10 @@ stops meaning what it meant.
 A fix that cannot name the tests it touches is not a patch. A fix to a check that every case shares
 is a change to the scoring, and raises the major number.
 
+A fix to how results are timed or reported, which changes no verdict and no count, is a patch too.
+Its entry says what changed under **Timing** or **Reporting**, and which numbers do not compare
+across it.
+
 A family that changes what it draws gets new case ids, as [formats.md](formats.md) says. That change
 is a patch when it corrects the tests the family feeds, and a minor release when it widens them.
 
@@ -71,7 +75,8 @@ date. An entry says what a reader with results on the version before must know:
 - **Tests added**: the new tests, by path or by directory.
 - **Tests fixed**: each affected test by path, what was wrong, and which way results move.
 
-A major or minor entry carries the sections that apply. A patch entry carries only **Tests fixed**.
+A major or minor entry carries the sections that apply. A patch entry carries **Tests fixed**,
+or **Timing** or **Reporting** for a fix to how results are timed or reported.
 
 The version itself is `SUITE_VERSION` in [`run.rs`](../suite/src/run.rs), which every results file
 records as `suite`. A release raises it in the commit that adds the entry.
