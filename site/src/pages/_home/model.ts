@@ -68,8 +68,6 @@ export interface BoardRow {
   segment: string
   version: string
   suite: string
-  // The day its run ended, where the row comes from another run than the rest of the board.
-  otherRun: string | null
   rate: number
   passing: number
   total: number
@@ -115,7 +113,6 @@ export function boardRows(board: LeaderRow[]): BoardRow[] {
       segment: r.segment,
       version: r.version,
       suite: r.suite,
-      otherRun: r.override ? r.date.slice(0, 10) || '–' : null,
       rate: r.summary.passRate,
       passing: r.summary.passing,
       total: r.summary.total,
@@ -250,4 +247,15 @@ export function matchesQuery(test: GridTest, operation: string, q: string): bool
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const hay = `${operation} ${test.test} ${test.slug}`.toLowerCase()
   return words.every(w => hay.includes(w))
+}
+
+// An SPDX expression in a few words: "/" between licences a user picks from, "&" between licences
+// that all apply, "+" for "or any later version", and "+ exception" for an added exception.
+export function shortLicense(spdx: string): string {
+  return spdx
+    .replace(/-only\b/g, '')
+    .replace(/-or-later\b/g, '+')
+    .replace(/ WITH [\w.-]+/g, ' + exception')
+    .replace(/ OR /g, ' / ')
+    .replace(/ AND /g, ' & ')
 }

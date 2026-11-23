@@ -6,6 +6,7 @@ import {
   boardRows,
   caseTitle,
   distinctFilters,
+  shortLicense,
   drawn,
   grid,
   keep,
@@ -135,12 +136,6 @@ describe('boardRows', () => {
     expect(rows[1]!.medianMs).toBe(Number.POSITIVE_INFINITY)
     expect(rows[0]!.medianMs).toBe(4)
     expect(rows[0]!.counts[at('1e-6')]).toBe(1)
-    expect(rows[0]!.otherRun).toBeNull()
-  })
-
-  it('names the day of a row that comes from another run than the board', () => {
-    const [r] = boardRows([{ ...row('a', true), run: '2-1', override: true }])
-    expect(r!.otherRun).toBe('2026-11-09')
   })
 
   it('states a known kernel’s license and leaves an unknown one empty', () => {
@@ -257,5 +252,16 @@ describe('bandGrades', () => {
     expect(bandGrades('fail')).toEqual(['1e-3', 'fail', 'crash'])
     expect(bandGrades('crash')).toEqual(['1e-3', 'fail', 'crash'])
     expect(bandGrades('refused')).toEqual(['refused', 'timeout'])
+  })
+})
+
+describe('shortLicense', () => {
+  it('sets each registered kind of expression in a few words', () => {
+    expect(shortLicense('MIT OR Apache-2.0')).toBe('MIT / Apache-2.0')
+    expect(shortLicense('AGPL-3.0-or-later AND BSD-3-Clause AND MIT')).toBe(
+      'AGPL-3.0+ & BSD-3-Clause & MIT',
+    )
+    expect(shortLicense('LGPL-2.1-only WITH OCCT-exception-1.0')).toBe('LGPL-2.1 + exception')
+    expect(shortLicense('Apache-2.0')).toBe('Apache-2.0')
   })
 })
