@@ -66,7 +66,7 @@ export default function ReportPage(props: Props) {
             ? [
                 <a className="rp-source sc-focus" href={props.source}>
                   {/^https:\/\/github\.com\//.test(props.source) && <GitHubMark />}
-                  source
+                  repository
                 </a>,
               ]
             : undefined
