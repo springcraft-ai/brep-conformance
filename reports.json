@@ -122,6 +122,23 @@
           "seconds": 227
         }
       }
+    },
+    {
+      "run": "45259371420-1",
+      "suite": "2.0.1",
+      "scope": "named",
+      "reports": {
+        "anvil-brep": {
+          "file": "anvil-brep-ab8fdb3064d04d2d.json",
+          "complete": true,
+          "seconds": 405
+        },
+        "springrep": {
+          "file": "springrep-4fdb7372b32fdae9.json",
+          "complete": true,
+          "seconds": 110
+        }
+      }
     }
   ],
   "leaderboard": {
@@ -136,7 +153,9 @@
     "2.0.1": {
       "run": "45083601338-1",
       "kernels": {
-        "kentron": "45204786615-1"
+        "kentron": "45204786615-1",
+        "anvil-brep": "45259371420-1",
+        "springrep": "45259371420-1"
       }
     }
   }
