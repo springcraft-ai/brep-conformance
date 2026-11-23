@@ -6,15 +6,16 @@ import {
   boardRows,
   caseTitle,
   distinctFilters,
-  shortLicense,
   drawn,
   grid,
   keep,
+  licenseTitle,
   matchesQuery,
-  underPrefix,
-  shownShare,
   relativeTimes,
+  shortLicense,
+  shownShare,
   toggleCompare,
+  underPrefix,
   type Cell,
   type GridTest,
 } from './model'
@@ -124,7 +125,6 @@ describe('boardRows', () => {
     summary,
     time: timed ? { median: 4, q1: 3, q3: 5, cases: 2, step: null } : null,
     run: '1-1',
-    override: false,
   })
 
   it('keeps the leaderboard order as rank and sorts a missing time last', () => {
@@ -261,7 +261,22 @@ describe('shortLicense', () => {
     expect(shortLicense('AGPL-3.0-or-later AND BSD-3-Clause AND MIT')).toBe(
       'AGPL-3.0+ & BSD-3-Clause & MIT',
     )
-    expect(shortLicense('LGPL-2.1-only WITH OCCT-exception-1.0')).toBe('LGPL-2.1 + exception')
+    expect(shortLicense('LGPL-2.1-only WITH OCCT-exception-1.0')).toBe('LGPL-2.1 with exception')
     expect(shortLicense('Apache-2.0')).toBe('Apache-2.0')
+  })
+})
+
+describe('licenseTitle', () => {
+  it('says what an expression’s one operator means', () => {
+    expect(licenseTitle('MIT OR Apache-2.0')).toBe(
+      'MIT OR Apache-2.0: either licence, at your choice',
+    )
+    expect(licenseTitle('MIT AND BSD-3-Clause')).toBe('MIT AND BSD-3-Clause: every licence applies')
+    expect(licenseTitle('Apache-2.0')).toBe('Apache-2.0')
+  })
+
+  it('adds no note to an expression that mixes operators', () => {
+    const mixed = 'MIT AND (Apache-2.0 OR BSD-3-Clause)'
+    expect(licenseTitle(mixed)).toBe(mixed)
   })
 })

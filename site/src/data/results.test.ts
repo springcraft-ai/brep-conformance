@@ -215,9 +215,9 @@ describe('suiteView', () => {
       'a 1.0.0',
       'b 2.0.0',
     ])
-    expect(v.leaderboard.map(r => [r.kernel, r.run, r.override])).toEqual([
-      ['a', '10-1', false],
-      ['b', '11-1', true],
+    expect(v.leaderboard.map(r => [r.kernel, r.run])).toEqual([
+      ['a', '10-1'],
+      ['b', '11-1'],
     ])
   })
 

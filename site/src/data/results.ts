@@ -454,14 +454,12 @@ export interface LeaderRow {
   adapter: Adapter | null
   summary: Summary
   time: CaseTime | null
-  // The run the row comes from, and whether that is another run than the board's own.
+  // The run the row comes from.
   run: string | null
-  override: boolean
 }
 
-// Ranked by the headline alone, ties by name: no kernel gets a place of its own. `boardRun` is the
-// run most rows come from.
-export function leaderboard(latest: Report[], boardRun: string | null = null): LeaderRow[] {
+// Ranked by the headline alone, ties by name: no kernel gets a place of its own.
+export function leaderboard(latest: Report[]): LeaderRow[] {
   return latest
     .map(r => ({
       kernel: r.identity.kernel,
@@ -474,7 +472,6 @@ export function leaderboard(latest: Report[], boardRun: string | null = null): L
       summary: summarize(r.cases),
       time: caseTime(r),
       run: r.run.id,
-      override: boardRun !== null && r.run.id !== boardRun,
     }))
     .sort((a, b) => b.summary.passRate - a.summary.passRate || a.kernel.localeCompare(b.kernel))
 }
@@ -639,7 +636,7 @@ export function suiteView(
     selected: selectedRuns(on, latest),
     boardRun,
     kernels: latest.map(r => r.identity.kernel),
-    leaderboard: leaderboard(latest, boardRun),
+    leaderboard: leaderboard(latest),
     tests: testIndex(latest),
     operations: operationIndex(latest),
   }

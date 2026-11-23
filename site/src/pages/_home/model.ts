@@ -250,12 +250,25 @@ export function matchesQuery(test: GridTest, operation: string, q: string): bool
 }
 
 // An SPDX expression in a few words: "/" between licences a user picks from, "&" between licences
-// that all apply, "+" for "or any later version", and "+ exception" for an added exception.
+// that all apply, "+" for "or any later version", and "with exception" for an added exception.
 export function shortLicense(spdx: string): string {
   return spdx
     .replace(/-only\b/g, '')
     .replace(/-or-later\b/g, '+')
-    .replace(/ WITH [\w.-]+/g, ' + exception')
+    .replace(/ WITH [\w.-]+/g, ' with exception')
     .replace(/ OR /g, ' / ')
     .replace(/ AND /g, ' & ')
+}
+
+const LICENSE_NOTES: [RegExp, string][] = [
+  [/ OR /, 'either licence, at your choice'],
+  [/ AND /, 'every licence applies'],
+  [/ WITH /, 'the licence with an added exception'],
+]
+
+// The whole expression, and what its one operator means; an expression mixing operators is left
+// to speak for itself, since no one note is true of all of it.
+export function licenseTitle(spdx: string): string {
+  const notes = LICENSE_NOTES.filter(([op]) => op.test(spdx))
+  return notes.length === 1 ? `${spdx}: ${notes[0]![1]}` : spdx
 }

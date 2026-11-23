@@ -3,24 +3,15 @@ import { fmt, GradeMark, groupLabel, markGroups } from '@/components'
 import { GRADES, type Grade } from '@/data/results'
 import { url } from '@/site/href'
 import { BarCard, tipAt } from './BarCard'
-import { bandGrades, drawn, shortLicense, type BoardRow } from './model'
+import { bandGrades, drawn, licenseTitle, shortLicense, type BoardRow } from './model'
 import { TierBar } from './TierBar'
 
 const n = (x: number) => x.toLocaleString('en-US')
 
 // A build with no release number reports its commit; it shows as a short revision.
 
-// An SPDX expression in a few words, as shortLicense sets it. The whole expression is the title.
 function License({ spdx }: { spdx: string }) {
-  const short = shortLicense(spdx)
-  const title = spdx.includes(' OR ')
-    ? `${spdx}: either licence, at your choice`
-    : spdx.includes(' WITH ')
-      ? `${spdx}: the licence with an added exception`
-      : spdx.includes(' AND ')
-        ? `${spdx}: every licence applies`
-        : spdx
-  return <span title={title}>{short}</span>
+  return <span title={licenseTitle(spdx)}>{shortLicense(spdx)}</span>
 }
 
 // The share of a kernel's cases that pass at `tier` or tighter.
