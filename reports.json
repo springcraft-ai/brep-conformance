@@ -110,6 +110,18 @@
           "seconds": 152
         }
       }
+    },
+    {
+      "run": "45204786615-1",
+      "suite": "2.0.1",
+      "scope": "named",
+      "reports": {
+        "kentron": {
+          "file": "kentron-45872118d7c2afee.json",
+          "complete": true,
+          "seconds": 227
+        }
+      }
     }
   ],
   "leaderboard": {
@@ -123,7 +135,9 @@
     },
     "2.0.1": {
       "run": "45083601338-1",
-      "kernels": {}
+      "kernels": {
+        "kentron": "45204786615-1"
+      }
     }
   }
 }
