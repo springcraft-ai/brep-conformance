@@ -1,4 +1,5 @@
 export * as fmt from './format'
+export { GitHubMark } from './GitHubMark'
 export { GradeLabel, GradeLegend, GradeMark, gradeLabel, groupLabel, markGroups } from './Grade'
 export { SearchBox } from './SearchBox'
 export { Annot, Hatched, PageHead, Section, Stat, type Crumb } from './layout'

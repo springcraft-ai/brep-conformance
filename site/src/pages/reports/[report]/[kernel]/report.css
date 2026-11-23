@@ -12,6 +12,27 @@
   color: var(--void-ink-2);
   overflow-wrap: anywhere;
 }
+/* The kernel's own repository, as the chrome's link to the suite's is set. */
+.rp-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 10px;
+  border: var(--hair) solid var(--void-ink-3);
+  color: var(--void-ink-1);
+  font: var(--fw-voice) var(--fs-voice-2) / 1 var(--font-voice);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.rp-source:hover {
+  border-color: var(--void-ink-1);
+}
+.rp-source svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}
 
 /* ---- result: headline left, counts, grade distribution right ---- */
 

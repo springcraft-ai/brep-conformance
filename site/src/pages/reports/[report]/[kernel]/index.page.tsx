@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import type { ReactNode } from 'react'
-import { Annot, fmt, GradeLabel, PageHead, Section } from '@/components'
+import { Annot, fmt, GitHubMark, GradeLabel, PageHead, Section } from '@/components'
 import { repoName } from '@/data/kernels'
 import { GRADES, type Grade } from '@/data/results'
 import { url } from '@/site/href'
@@ -60,6 +60,16 @@ export default function ReportPage(props: Props) {
           <>
             {id.name} <span className="rp-version">{fmt.version(id.version)}</span>
           </>
+        }
+        corner={
+          props.source
+            ? [
+                <a className="rp-source sc-focus" href={props.source}>
+                  {/^https:\/\/github\.com\//.test(props.source) && <GitHubMark />}
+                  source
+                </a>,
+              ]
+            : undefined
         }
       />
       <section className="bc-section" aria-label="result">

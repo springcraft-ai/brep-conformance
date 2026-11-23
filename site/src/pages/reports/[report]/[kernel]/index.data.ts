@@ -53,6 +53,8 @@ export interface Props {
   // Every case's time added up: the time the run spent in the kernel.
   totalMs: number
   license: string | null
+  // Where the kernel's own source is.
+  source: string | null
   adapterLicense: string | null
   // The kernel's own maintainers who review its adapter; null for a kernel not in the registry.
 }
@@ -142,6 +144,7 @@ function entryOf(
       shown: v.latest.includes(r),
       totalMs: totalTimeMs(r.cases),
       license: kernelInfo(id.kernel)?.license ?? null,
+      source: kernelInfo(id.kernel)?.source ?? null,
       adapterLicense: kernelInfo(id.kernel)?.adapter.license ?? null,
     },
     title: `${id.name} ${id.version}`,
