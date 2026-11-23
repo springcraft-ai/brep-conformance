@@ -68,6 +68,48 @@
           "seconds": 798
         }
       }
+    },
+    {
+      "run": "45083601338-1",
+      "suite": "2.0.1",
+      "scope": "all",
+      "reports": {
+        "arris": {
+          "file": "arris-a8edcf1f4ab91855.json",
+          "complete": true,
+          "seconds": 1050
+        },
+        "cad-kernel": {
+          "file": "cad-kernel-b8abcbfeff5aec1c.json",
+          "complete": true,
+          "seconds": 166
+        },
+        "cadrs": {
+          "file": "cadrs-70df646f7934aab5.json",
+          "complete": true,
+          "seconds": 176
+        },
+        "next.BREP": {
+          "file": "next.BREP-9632e89bca6e3a31.json",
+          "complete": true,
+          "seconds": 422
+        },
+        "opencascade": {
+          "file": "opencascade-5cd0d1369268a52e.json",
+          "complete": true,
+          "seconds": 798
+        },
+        "solidcore": {
+          "file": "solidcore-3868320cf31b67d9.json",
+          "complete": true,
+          "seconds": 972
+        },
+        "springrep": {
+          "file": "springrep-57b1597e303820ff.json",
+          "complete": true,
+          "seconds": 152
+        }
+      }
     }
   ],
   "leaderboard": {
@@ -77,6 +119,10 @@
     },
     "2.0.0": {
       "run": "44984300614-1",
+      "kernels": {}
+    },
+    "2.0.1": {
+      "run": "45083601338-1",
       "kernels": {}
     }
   }
