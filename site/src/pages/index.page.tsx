@@ -30,11 +30,7 @@ export default function Home({
   const [q, setQ] = useUrlQuery()
   const head = home ? (
     <PageHead
-      title={
-        <>
-          B-rep conformance <span className="hm-version">{suite}</span>
-        </>
-      }
+      title={<>B-rep conformance{suite && <span className="hm-version"> {suite}</span>}</>}
     />
   ) : (
     <PageHead
