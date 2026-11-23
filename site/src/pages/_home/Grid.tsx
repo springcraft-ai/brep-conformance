@@ -53,31 +53,6 @@ function usePlayOnLoad(root: React.RefObject<HTMLDivElement | null>) {
   }, [root])
 }
 
-// A row's one winner, the only cell in it marked in the accent: the highest share passing at 1e-7,
-// a tie going to the faster cell, or on an operation's row, which has no time of its own, to the
-// kernel that wins more of its tests. Still level, the first listed. -1 where nothing passed.
-const shareOf = (c: Cell | null) => (c && total(c) ? passing(c) / total(c) : -1)
-function winner(cells: (Cell | null)[], tiebreak: (i: number) => number): number {
-  let w = -1
-  cells.forEach((c, i) => {
-    const s = shareOf(c)
-    if (s <= 0) return
-    const ws = w < 0 ? -1 : shareOf(cells[w]!)
-    if (s > ws || (s === ws && tiebreak(i) < tiebreak(w))) w = i
-  })
-  return w
-}
-const testWinner = (cells: (Cell | null)[]) =>
-  winner(cells, i => cells[i]?.medianMs ?? Number.POSITIVE_INFINITY)
-function opWinner(g: GridGroup): number {
-  const wins = g.cells.map(() => 0)
-  for (const t of g.tests) {
-    const w = testWinner(t.cells)
-    if (w >= 0) wins[w]!++
-  }
-  return winner(g.cells, i => -wins[i]!)
-}
-
 // Every test against the kernels compared, one <details> per operation so it reads without JS.
 // Hydrated, it adds the kernel picker, a filter, the search, and open/close all. A cell opens that
 // kernel's cases on the test.
@@ -146,18 +121,13 @@ export function Grid({
   )
   const shownFilter = filters.includes(filter) ? filter : 'all'
   const searching = q.trim() !== ''
-  // Each row's winner is taken over every kernel and, on an operation's row, over every one of its
-  // tests, before the kernels are picked and the tests searched: a column is marked only for the
-  // kernel that is best of all, never for the best of those shown. `best` is that kernel's column
-  // among those shown, or -1 where it is hidden.
   const visible = groups
     .map(g => ({
       ...g,
-      best: cols.indexOf(opWinner(g)),
       cells: pick(g.cells),
       tests: g.tests
         .filter(t => matchesQuery(t, g.operation, q))
-        .map(t => ({ ...t, best: cols.indexOf(testWinner(t.cells)), cells: pick(t.cells) }))
+        .map(t => ({ ...t, cells: pick(t.cells) }))
         .filter(t => keep(t, shownFilter, scope)),
     }))
     .filter(g => g.tests.length)
@@ -259,10 +229,9 @@ export function Grid({
                   </span>
                   {g.cells.map((c, i) => (
                     <span key={names[i]} className="hm-cell">
-                      <Share cell={c} best={i === g.best} />
+                      <Share cell={c} />
                       <TierBar
                         thin
-                        top={i === g.best}
                         counts={c?.counts ?? []}
                         label={caseTitle(names[i]!, g.operation, c)}
                       />
@@ -279,7 +248,7 @@ export function Grid({
     </div>
   )
 
-  function testRow(t: GridTest & { best: number }, name: string) {
+  function testRow(t: GridTest, name: string) {
     const rel = relativeTimes(t.cells)
     const timed = rel.filter(r => r !== null).length
     return (
@@ -306,8 +275,8 @@ export function Grid({
               href={caseLink(names[i]!, t.test)}
               title={`${title} · open these cases`}
             >
-              <Frac cell={c} best={i === t.best} />
-              <TierBar thin top={i === t.best} counts={c.counts} label={title} />
+              <Frac cell={c} />
+              <TierBar thin counts={c.counts} label={title} />
               <Time cell={c} rel={rel[i]!} compared={timed > 1} />
             </a>
           )
@@ -317,20 +286,20 @@ export function Grid({
   }
 }
 
-function Share({ cell, best }: { cell: Cell | null; best: boolean }) {
+function Share({ cell }: { cell: Cell | null }) {
   if (!cell || !total(cell)) return null
   const share = shownShare(passing(cell), total(cell))
   return (
-    <span className={`hm-frac bc-machine${best ? ' is-best' : ''}`} data-to={share * 100}>
+    <span className="hm-frac bc-machine" data-to={share * 100}>
       {fmt.pct(share)}
     </span>
   )
 }
 
-function Frac({ cell, best }: { cell: Cell | null; best: boolean }) {
+function Frac({ cell }: { cell: Cell | null }) {
   if (!cell) return null
   return (
-    <span className={`hm-frac bc-machine${best ? ' is-best' : ''}`}>
+    <span className="hm-frac bc-machine">
       {passing(cell)}/{total(cell)}
     </span>
   )
@@ -342,14 +311,12 @@ function Time({ cell, rel, compared }: { cell: Cell; rel: number | null; compare
   if (cell.medianMs === null || !passing(cell)) return null
   if (cell.medianMs === 0) return <span className="hm-time bc-machine">&lt;0.01 ms</span>
   if (rel === null) return <span className="hm-time bc-machine">{fmt.ms(cell.medianMs)}</span>
-  const best = compared && rel === 1
   return (
-    <span className={`hm-time bc-machine${best ? ' hm-time--best' : ''}`}>
+    <span className="hm-time bc-machine">
       {fmt.ms(cell.medianMs)}
       {compared && (
         <span className="hm-time__rel">
-          <span className="hm-time__sep"> · </span>
-          {best ? 'fastest' : `×${rel.toFixed(1)}`}
+          <span className="hm-time__sep"> · </span>×{rel.toFixed(1)}
         </span>
       )}
     </span>

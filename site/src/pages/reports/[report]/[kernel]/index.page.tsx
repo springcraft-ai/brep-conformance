@@ -12,7 +12,6 @@ import {
   keeps,
   NO_FILTER,
   onlyGrade,
-  ordinal,
   unpackCases,
   type Filter,
 } from './cases'
@@ -23,7 +22,7 @@ import './report.css'
 export const hydrate = true
 
 export default function ReportPage(props: Props) {
-  const { identity, environment, methodology, summary, standing } = props
+  const { identity, environment, methodology, summary } = props
   const rows = useMemo(() => unpackCases(props.cases), [props.cases])
   const [filter, setFilter] = useState<Filter>(NO_FILTER)
   const [details, setDetails] = useState(false)
@@ -113,11 +112,6 @@ export default function ReportPage(props: Props) {
             {/* The suite's machine runs every kernel of a report; a run elsewhere says so here. */}
             {!env.verified && <span className="rp-unverified">unverified run</span>}
             {!props.registered && <span className="rp-unverified">no longer registered</span>}
-            {standing && (
-              <a className="rp-standing" href={url.report(m.suite)}>
-                {ordinal(standing.place)} of {standing.of} kernels
-              </a>
-            )}
             <button
               type="button"
               className="rp-details__toggle sc-focus"

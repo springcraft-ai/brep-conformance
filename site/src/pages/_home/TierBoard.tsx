@@ -29,22 +29,6 @@ function License({ spdx }: { spdx: string }) {
 export const within = (r: BoardRow, tier: Grade) =>
   r.counts.slice(0, GRADES.indexOf(tier) + 1).reduce((a, b) => a + b, 0) / r.total
 
-// Each column's one winner, the only figure in it marked in the accent: the highest share passing,
-// a tie going to the faster kernel, and the lowest time. Still level, the first listed.
-export function bests(board: BoardRow[]) {
-  const time = (r: BoardRow) => r.time?.median ?? Number.POSITIVE_INFINITY
-  const top = (score: (r: BoardRow) => number) =>
-    board.reduce((w, r) =>
-      score(r) > score(w) || (score(r) === score(w) && time(r) < time(w)) ? r : w,
-    ).kernel
-  return {
-    rate: top(r => r.rate),
-    loose: top(r => within(r, '1e-5')),
-    time: board.reduce((w, r) => (time(r) < time(w) ? r : w)).kernel,
-  }
-}
-const best = (on: boolean) => (on ? ' is-best' : '')
-
 function Ruler() {
   return (
     <span className="hm-ruler" aria-hidden="true">
@@ -85,7 +69,7 @@ const decimals = (s: string) => s.split('.')[1]?.length ?? 0
 
 // The median time of the kernel's passed cases, its unit set small; its hover card gives P25 and
 // P75, and that failed tests are left out.
-function Speed({ r, isBest }: { r: BoardRow; isBest: boolean }) {
+function Speed({ r }: { r: BoardRow }) {
   const [tip, setTip] = useState<{ x: number; y: number } | null>(null)
   if (!r.time) return <span className="hm-fig hm-fig--none">–</span>
   const [value, unit] = fmt.ms(r.time.median).split(' ')
@@ -95,7 +79,7 @@ function Speed({ r, isBest }: { r: BoardRow; isBest: boolean }) {
   }
   return (
     <span
-      className={`hm-fig hm-speed${best(isBest)}`}
+      className="hm-fig hm-speed"
       tabIndex={0}
       aria-label={`P50 ${fmt.ms(r.time.median)} per case; P25 ${fmt.ms(r.time.q1)}, P75 ${fmt.ms(r.time.q3)}${r.time.step === null ? '' : `; STEP round trip P50 ${fmt.ms(r.time.step)}, timed apart`}; failed tests excluded`}
       onMouseMove={e => setTip({ x: e.clientX, y: e.clientY })}
@@ -142,8 +126,8 @@ export function BoardKey({ board }: { board: BoardRow[] }) {
   )
 }
 
-// The leaderboard: each kernel's cases split by the tightest tolerance passed, its pass rate at
-// 1e-7 and at 1e-5, and its speed, ranked by the 1e-7 rate. A bar's hover card lists its cases.
+// The board: each kernel's cases split by the tightest tolerance passed, its pass rate at 1e-7 and
+// at 1e-5, and its speed, in order of the 1e-7 rate. A bar's hover card lists its cases.
 export function TierBoard({
   board,
   picked,
@@ -154,7 +138,6 @@ export function TierBoard({
   picked: string[] | null
   onCompare: (kernel: string) => void
 }) {
-  const b = bests(board)
   return (
     <div className={`hm-board hm-board--tiers${picked ? ' hm-board--compare' : ''}`}>
       <table aria-label="Each kernel’s cases by the tightest tolerance passed">
@@ -224,7 +207,6 @@ export function TierBoard({
                     <TierBar
                       counts={r.counts}
                       label={`${r.kernel}: ${n(r.passing)} of ${n(r.total)} cases at 1e-7`}
-                      top={r.kernel === b.rate}
                       href={g =>
                         `${url.kernel(r.suite, r.segment)}?result=${bandGrades(g).join(',')}#cases`
                       }
@@ -234,7 +216,7 @@ export function TierBoard({
                 </td>
                 <td>
                   <span
-                    className={`hm-fig hm-fig--lead${best(r.kernel === b.rate)}`}
+                    className="hm-fig hm-fig--lead"
                     title={`${n(r.passing)} of ${n(r.total)} cases hold at 1e-7 mm`}
                   >
                     <Count value={r.rate * 100} digits={1} suffix="%" />
@@ -242,14 +224,14 @@ export function TierBoard({
                 </td>
                 <td>
                   <span
-                    className={`hm-fig${best(r.kernel === b.loose)}`}
+                    className="hm-fig"
                     title={`${fmt.pct(loose)} of cases hold at 1e-5 mm or tighter`}
                   >
                     <Count value={loose * 100} digits={1} suffix="%" />
                   </span>
                 </td>
                 <td>
-                  <Speed r={r} isBest={!!r.time && r.kernel === b.time} />
+                  <Speed r={r} />
                 </td>
               </tr>
             )

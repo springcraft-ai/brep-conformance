@@ -7,6 +7,6 @@ export function entries(): PageEntry<Props>[] {
     params: { report: v.suite },
     props: propsOf(v, false),
     title: `Report ${v.suite}`,
-    description: `Every kernel run on suite ${v.suite} of the B-rep conformance suite, ranked.`,
+    description: `Every kernel run on suite ${v.suite} of the B-rep conformance suite.`,
   }))
 }

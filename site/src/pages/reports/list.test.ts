@@ -45,7 +45,7 @@ describe('reportRows', () => {
     expect(rows[2]!.runs).toEqual([])
   })
 
-  it('names the first kernel on the leaderboard and counts the kernels and cases', () => {
+  it('counts the kernels and cases', () => {
     const [row] = reportRows(
       [
         view('1.0.0', [
@@ -55,7 +55,6 @@ describe('reportRows', () => {
       ],
       '1.0.0',
     )
-    expect(row).toMatchObject({ kernels: 2, cases: 10, leader: { kernel: 'a', rate: 0.9 } })
-    expect(reportRows([view('1.0.0', [])], '1.0.0')[0]!.leader).toBeNull()
+    expect(row).toMatchObject({ kernels: 2, cases: 10 })
   })
 })

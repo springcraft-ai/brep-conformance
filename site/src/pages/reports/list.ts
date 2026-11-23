@@ -11,8 +11,6 @@ export interface ReportRow {
   runs: string[]
   kernels: number
   cases: number
-  // The first kernel on its leaderboard, with its share of cases passed at 1e-7; null with none.
-  leader: { kernel: string; rate: number } | null
 }
 
 // Every report, newest run first: by the last day any of its runs ended, then by suite version,
@@ -26,7 +24,6 @@ export function reportRows(suites: SuiteView[], current: string): ReportRow[] {
       runs: runDays(v.leaderboard.map(r => r.date)),
       kernels: v.leaderboard.length,
       cases: top?.summary.total ?? 0,
-      leader: top ? { kernel: top.kernel, rate: top.summary.passRate } : null,
     }
   })
   const last = (r: ReportRow) => r.runs[r.runs.length - 1] ?? ''

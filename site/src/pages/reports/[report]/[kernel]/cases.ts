@@ -334,13 +334,6 @@ export function byOperation(rows: Row[]): OperationRow[] {
     }))
 }
 
-// A place in a ranking as it is said: 1st, 2nd, 3rd, 4th, 11th, 22nd.
-export function ordinal(n: number): string {
-  const tens = n % 100
-  const suffix = tens >= 11 && tens <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')
-  return `${n}${suffix}`
-}
-
 export function totalTimeMs(cases: CaseRow[]): number {
   return cases.reduce((n, c) => n + (c.timeMs ?? 0), 0)
 }

@@ -95,7 +95,7 @@ function share(title: string, description: string | undefined, path: string): st
     meta('og:image:height', '630'),
     meta(
       'og:image:alt',
-      'brep-conformance: the B-rep kernel leaderboard, with bars of cases by the tightest tolerance passed',
+      'brep-conformance: B-rep kernel conformance results, with bars of cases by the tightest tolerance passed',
     ),
     '<meta name="twitter:card" content="summary_large_image">',
   ]

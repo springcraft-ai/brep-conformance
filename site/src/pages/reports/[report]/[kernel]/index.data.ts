@@ -55,8 +55,6 @@ export interface Props {
   license: string | null
   adapterLicense: string | null
   // The kernel's own maintainers who review its adapter; null for a kernel not in the registry.
-  // Where the results page ranks this report, when it is the kernel's release ranked there.
-  standing: { place: number; of: number } | null
 }
 
 export function entries(): PageEntry<Props>[] {
@@ -129,7 +127,6 @@ function entryOf(
       }
     })
     .sort((a, b) => compareRuns(b, a))
-  const at = v.latest.includes(r) ? v.leaderboard.findIndex(l => l.kernel === id.kernel) : -1
   return {
     props: {
       identity: id,
@@ -146,7 +143,6 @@ function entryOf(
       totalMs: totalTimeMs(r.cases),
       license: kernelInfo(id.kernel)?.license ?? null,
       adapterLicense: kernelInfo(id.kernel)?.adapter.license ?? null,
-      standing: at < 0 ? null : { place: at + 1, of: v.leaderboard.length },
     },
     title: `${id.name} ${id.version}`,
     description:

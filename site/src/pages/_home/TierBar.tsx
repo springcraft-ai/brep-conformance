@@ -12,15 +12,12 @@ export function TierBar({
   counts,
   label,
   thin,
-  top,
   href,
   each,
 }: {
   counts: Counts
   label: string
   thin?: boolean
-  // The bar of the kernel with the best pass rate, its 1e-7 block in the accent.
-  top?: boolean
   // Makes each segment a link, to that grade's cases; its own card then names it, not a title.
   href?: (grade: Grade) => string
   // A block for every grade, where the leaderboard draws 1e-6 with 1e-5 and 1e-3 with the fails.
@@ -38,7 +35,7 @@ export function TierBar({
   return (
     // With links it is a group of them, since an image may not hold controls.
     <span
-      className={`hm-bar${thin ? ' hm-bar--thin' : ''}${top ? ' hm-bar--top' : ''}`}
+      className={`hm-bar${thin ? ' hm-bar--thin' : ''}`}
       role={href ? 'group' : 'img'}
       aria-label={label}
     >

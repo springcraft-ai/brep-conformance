@@ -63,19 +63,6 @@ export default function Reports({ reports }: Props) {
               sortable: false,
               format: (n: number) => n.toLocaleString('en-US'),
             },
-            {
-              key: 'leader',
-              label: 'first place',
-              sortable: false,
-              render: r =>
-                r.leader ? (
-                  <span className="rl-nowrap">
-                    {r.leader.kernel} · {fmt.pct(r.leader.rate)} at 1e-7
-                  </span>
-                ) : (
-                  '–'
-                ),
-            },
           ]}
         />
       </div>

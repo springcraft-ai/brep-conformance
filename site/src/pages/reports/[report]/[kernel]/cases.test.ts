@@ -10,7 +10,6 @@ import {
   groupByTest,
   matches,
   NO_FILTER,
-  ordinal,
   packCases,
   reasonOf,
   shortCase,
@@ -281,23 +280,6 @@ describe('byOperation', () => {
       expect(o.passing).toBe(
         rows.filter(r => r.operation === o.operation && r.grade === '1e-7').length,
       )
-  })
-})
-
-describe('ordinal', () => {
-  it('says a place as it is spoken', () => {
-    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 103].map(ordinal)).toEqual([
-      '1st',
-      '2nd',
-      '3rd',
-      '4th',
-      '11th',
-      '12th',
-      '13th',
-      '21st',
-      '22nd',
-      '103rd',
-    ])
   })
 })
 
