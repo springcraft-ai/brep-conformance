@@ -122,13 +122,13 @@
     },
     {
       "kernel": "springrep",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "license": "MIT",
       "source": "https://github.com/springcraft-ai/springrep",
       "maintained_by_suite": true,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-springrep",
-        "commit": "084346dc58d55d9667fd39b7965f2c69a88f03ec",
+        "commit": "feaf7ef2b9231f4f22b1992031cd7a1aa414ea30",
         "license": "MIT",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/springrep-adapter"
