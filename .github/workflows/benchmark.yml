@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Checks the inputs, starts the benchmark machine, runs one session on it, terminates it, publishes
 # each kernel's shape files and report to the CDN, and proposes the run for the site:
 # bench/README.md. Run unchanged, the form benchmarks every kernel on every test and publishes to

@@ -110,4 +110,6 @@ let kernel = Remote::new(vec!["path/to/adapter".into()], Duration::from_secs(60)
 
 ## Licence
 
-MIT. The licence covers this crate and not a kernel that an adapter drives.
+MIT or Apache-2.0, at your option: [LICENSE-MIT](LICENSE-MIT) and
+[LICENSE-APACHE](LICENSE-APACHE). The licence covers this crate and not a kernel that an adapter
+drives.

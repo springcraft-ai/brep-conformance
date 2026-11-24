@@ -62,4 +62,7 @@ which its build fetches by the hash of a release.
 
 ## Licence of contributions
 
-Contributions are accepted under this repository's [MIT licence](../LICENSE).
+Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion
+in this repository, as defined in the Apache License, Version 2.0, is licensed under both the
+[MIT licence](../LICENSE-MIT) and the [Apache License, Version 2.0](../LICENSE-APACHE), without
+any additional terms or conditions.

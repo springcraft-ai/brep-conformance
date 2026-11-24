@@ -43,8 +43,9 @@ is measured the same way, each adapter in an official run is reviewed against
 pins the commit reviewed. The tests are the suite's and not the adapter's, so a stale adapter binary
 still runs the current tests.
 
-The suite and its adapters are under the MIT licence. That licence covers an adapter and not the
-kernel it drives: each kernel keeps its own licence.
+The suite is under the MIT licence or the Apache License, Version 2.0, at your option. Each
+adapter's licence is in its own repository; it covers the adapter and not the kernel it drives:
+each kernel keeps its own licence.
 
 Cases describe primitive solids by parameters in a frame, and each adapter builds them with its own
 constructors; some operands are booleans of others, built with the kernel under test. Every case
@@ -103,6 +104,7 @@ kernel's release or configuration change. Run it once per such change, keep its 
 
 See [doc/intro.md](doc/intro.md).
 
-The suite is under the MIT licence: [LICENSE](LICENSE). The report embeds three.js, under its own
-MIT licence: [suite/assets/NOTICE](suite/assets/NOTICE). NIST's STEP files are downloaded, not held
-here: [nist/NOTICE](nist/NOTICE).
+The suite is under either the MIT licence ([LICENSE-MIT](LICENSE-MIT)) or the Apache License,
+Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE)), at your option. The report embeds three.js, under
+its own MIT licence: [suite/assets/NOTICE](suite/assets/NOTICE). NIST's STEP files are
+downloaded, not held here: [nist/NOTICE](nist/NOTICE).

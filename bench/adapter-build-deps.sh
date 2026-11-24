@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Installs the system libraries an adapter's build needs on GitHub's Ubuntu runner: OpenCascade's
 # libraries, as its Python package ships them, load a graphics toolkit that needs libgl1.
 set -euo pipefail

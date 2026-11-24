@@ -2,7 +2,7 @@
 name = "brep-protocol"
 version = "2.0.1"
 edition = "2024"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 description = "The B-rep operations a conformance suite calls: their data types, the kernel trait, and its JSON-lines binding"
 publish = true
 readme = "README.md"

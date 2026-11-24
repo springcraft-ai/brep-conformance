@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Builds an adapter's checkout with the commands kernels.json gives it, as adapter_update.py plan
 # printed them. Usage: adapter-build.sh <adapter> <plan.json>
 set -euo pipefail

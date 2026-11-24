@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # First-boot setup of the benchmark machine, run once as root: bench/README.md. The Benchmark
 # workflow sets RUNNER_VERSION and RUNNER_JITCONFIG ahead of this script; without them the machine
 # gets no runner.

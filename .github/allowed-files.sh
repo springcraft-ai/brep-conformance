@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Fails when a tracked file below the current folder is a binary, or is of a type that is not
 # listed here, unless it is in a folder named `fixtures`.
 #
@@ -8,7 +8,7 @@
 set -euo pipefail
 
 ALLOWED_EXTENSIONS=" cpp css h html js json jsonl lock md mjs py rs sh svg toml ts tsx txt yaml yml "
-ALLOWED_NAMES=" .gitignore .prettierignore CODEOWNERS LICENSE NOTICE "
+ALLOWED_NAMES=" .gitignore .prettierignore CODEOWNERS LICENSE-APACHE LICENSE-MIT NOTICE "
 
 refused=()
 while IFS= read -r -d '' entry; do

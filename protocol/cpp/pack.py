@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 """Packs the C++ binding into brep_protocol-<version>.tar.xz, the release asset adapters fetch, and
 prints its path and SHA-256. The same files give the same bytes on one Python and xz library.
 
@@ -17,7 +17,8 @@ HERE = pathlib.Path(__file__).resolve().parent
 FILES = {
     "CMakeLists.txt": HERE / "CMakeLists.txt",
     "README.md": HERE / "README.md",
-    "LICENSE": HERE.parent.parent / "LICENSE",
+    "LICENSE-APACHE": HERE.parent.parent / "LICENSE-APACHE",
+    "LICENSE-MIT": HERE.parent.parent / "LICENSE-MIT",
     "include/brep_protocol/brep_protocol.h": HERE / "include/brep_protocol/brep_protocol.h",
     "examples/box_kernel.cpp": HERE / "examples/box_kernel.cpp",
 }

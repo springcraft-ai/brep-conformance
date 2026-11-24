@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Moves adapters the suite maintains to newer releases of their kernels, and has Claude make each
 # adapter use what its release changed. Opens a pull request in each adapter's repository and
 # merges nothing; the Registry update workflow moves kernels.json once they merge: bench/README.md.

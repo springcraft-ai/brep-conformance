@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Prints an installation token of a GitHub App, limited to one repository and to the permissions
 # given as JSON; by default the benchmark's App's self-hosted runners on this repository. Reads
 # APP_CLIENT_ID, APP_PRIVATE_KEY and GITHUB_REPOSITORY.

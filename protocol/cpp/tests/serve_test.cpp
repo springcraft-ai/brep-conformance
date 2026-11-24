@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
 // The binding's own tests: what `answer` and `reply` make of requests, with kernels that do
 // nothing.
 #include <brep_protocol/brep_protocol.h>

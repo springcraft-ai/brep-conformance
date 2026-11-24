@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # The C++ binding of the protocol: one header, and nlohmann/json for the lines of JSON.
 cmake_minimum_required(VERSION 3.24)
 project(brep_protocol VERSION 2.0.1 LANGUAGES CXX)

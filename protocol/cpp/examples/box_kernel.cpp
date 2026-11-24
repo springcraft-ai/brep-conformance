@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
 // The smallest adapter in C++: a "kernel" that makes boxes and nothing else, answering the protocol
 // through brep_protocol::serve. A real adapter has the same shape, with each method one call of its
 // kernel. protocol/cpp/README.md says how to build it and run the suite on it.

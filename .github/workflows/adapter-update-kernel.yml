@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # One kernel's part of the Adapter update workflow, which runs this once for each kernel: moves the
 # kernel's adapter to a newer release, has Claude make the adapter use it, and opens a pull request
 # in the adapter's repository: bench/README.md.

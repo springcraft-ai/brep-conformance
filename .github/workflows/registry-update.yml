@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Moves the kernels.json entries of adapters the suite maintains to each adapter's main and the
 # kernel release it pins, in one pull request. It merges the pull request once its checks pass if
 # the App may bypass review on main, and leaves it for review if not: bench/README.md.

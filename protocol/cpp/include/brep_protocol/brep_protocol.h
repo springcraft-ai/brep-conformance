@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
 // The operations of doc/api.md as a C++ API and as a protocol: the shapes a kernel is asked to
 // make, the `Kernel` class a kernel implements, and `serve`, which answers the protocol over stdin
 // and stdout with any implementation. The C++ counterpart of the Rust crate `brep-protocol`.

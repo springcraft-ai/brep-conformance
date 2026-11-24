@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 name: Registry
 
 # The runner's tests check kernels.json's shape; this checks that each adapter commit it pins is in

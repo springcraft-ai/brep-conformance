@@ -32,8 +32,8 @@ exception is a crash, and the worker carries on. An adapter whose kernel throws 
 overrides `refusal_for` to read it as a refusal.
 
 The binding's one dependency is [nlohmann/json](https://github.com/nlohmann/json), under the MIT
-licence. The binding itself is under the MIT licence, which covers it and not a kernel that an
-adapter drives.
+licence. The binding itself is under the MIT licence or the Apache License, Version 2.0, at your
+option, which covers it and not a kernel that an adapter drives.
 
 ## Usage
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Checks a packed release of the C++ binding as an adapter uses it: built on its own from the
 # archive, and fetched by an adapter's CMake build by URL and pinned by its hash.
 # usage: check-package.sh <brep_protocol-<version>.tar.xz> <its SHA-256>

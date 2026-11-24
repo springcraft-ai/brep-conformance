@@ -2,7 +2,7 @@
 name = "brep-conformance-viewer"
 version = "0.1.0"
 edition = "2024"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 description = "The suite's exact shapes meshed for the report's viewer, built to WebAssembly"
 publish = false
 

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Writes the flat report of each pass of a Benchmark run, uploads each to the CDN under
 # reports/<run>-<attempt>/ named by its hash, and, for prod, opens a pull request that adds the run
 # to reports.json: bench/README.md. The Benchmark workflow calls it once the shape files are

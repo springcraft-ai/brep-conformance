@@ -55,7 +55,7 @@ export function Shell({ path, nav, suite, children }: ShellProps) {
       <footer className="bc-foot">
         <span className="bc-annot">Maintained by Springcraft</span>
         <span className="bc-annot">
-          suite {suite} · MIT · <a href={SUITE_URL}>source</a>
+          suite {suite} · MIT / Apache-2.0 · <a href={SUITE_URL}>source</a>
         </span>
       </footer>
     </>

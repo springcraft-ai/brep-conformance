@@ -44,7 +44,7 @@ export function entries(): PageEntry<Props>[] {
       fullTitle: `Open conformance test suite for B-rep CAD kernels | ${SITE_NAME}`,
       description:
         'An open conformance test suite for B-rep CAD kernels. Every kernel runs the same cases, ' +
-        'with right answers worked out from the math. MIT licensed.',
+        'with right answers worked out from the math. MIT or Apache-2.0 licensed.',
       social: { title: SOCIAL_TITLE, description: SOCIAL_DESCRIPTION },
     },
   ]

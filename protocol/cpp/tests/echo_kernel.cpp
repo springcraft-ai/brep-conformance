@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: MIT OR Apache-2.0
 // A "kernel" that answers every function with the arguments it was handed, for the wire parity test
 // in protocol/parity. Its Rust twin, protocol/examples/echo_kernel.rs, computes the same answers, so
 // any difference in their replies is a difference in how the two bindings read a request or write a

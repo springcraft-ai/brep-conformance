@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: MIT OR Apache-2.0
 # Writes the flat report of each pass of a benchmark session, named by its hash, and the run's entry
 # for reports.json (doc/formats.md), from the session's results folder. Uploads nothing.
 # Usage: publish-reports.sh <results dir> <run>-<attempt> <out dir>
