@@ -78,7 +78,8 @@ jobs:
     if: needs.target.outputs.moved == 'true'
     runs-on: ubuntu-24.04
     environment: adapter-claude
-    timeout-minutes: 330
+    # The builds, Claude's 30 minutes, and the run on the smoke families and Claude's.
+    timeout-minutes: 90
     permissions:
       contents: read
       id-token: write # for the Claude API's workload identity federation
@@ -131,11 +132,11 @@ jobs:
       - uses: anthropics/claude-code-action/base-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
         id: claude
         continue-on-error: true
-        timeout-minutes: 270
+        timeout-minutes: 30
         with:
           prompt_file: suite/bench/adapter-update-prompt.md
           claude_args: >-
-            --model opus --max-turns 400
+            --model opus --max-turns 120
             --allowedTools Bash,Read,Edit,Write,Glob,Grep
           anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
           anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}

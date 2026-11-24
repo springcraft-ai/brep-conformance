@@ -40,6 +40,10 @@ answer it with a kernel call.
 
 ## What to do
 
+You have 30 minutes, and then you are stopped wherever you are. Do the steps in this order, so
+that a run cut short still leaves the pins moved and the adapter building, and write
+`work/report.md` as you go, not at the end.
+
 1. **Read what the release says it changed.** Start from the kernel's changelog or release notes, in
    `work/new/` or at its repository in `work/kernel.json`, for every release after `from` up to and
    including `to`. Then diff `work/old/` and `work/new/`: public items, their docs and their tests.
