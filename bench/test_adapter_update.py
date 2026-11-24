@@ -7,7 +7,7 @@ import unittest
 from unittest import mock
 
 from adapter_update import (bump, compare, kernel_crates, kernel_packages, kernels, load, pin,
-                            plan, read, registry, report, write)
+                            pinned, plan, read, registry, report, write)
 
 MANIFEST = """[package]
 name = "kernel-adapter"
@@ -57,6 +57,7 @@ def fake_github(path):
     replies = {
         "repos/owner/kernel/commits/07e083bb": {"sha": OLD},
         "repos/owner/kernel/commits/v0.2.9": {"sha": NEW},
+        "repos/owner/kernel/commits/deadbeef": {"sha": "4" * 40},
         "repos/owner/kernel/tags?per_page=100": [
             {"name": "v0.3.0-rc.1", "commit": {"sha": "3" * 40}},
             {"name": "v0.2.9", "commit": {"sha": NEW}},
@@ -271,6 +272,30 @@ class Kernels(unittest.TestCase):
                 self.run_with(asked)
 
 
+class Pinned(unittest.TestCase):
+    def pinned_in(self, files):
+        with tempfile.TemporaryDirectory() as d:
+            for name, text in files.items():
+                write(os.path.join(d, name), text)
+            with mock.patch("adapter_update.github", fake_github):
+                return pinned(d)
+
+    def test_the_first_kernel_crate_or_package_names_the_release(self):
+        self.assertEqual(self.pinned_in({"Cargo.toml": MANIFEST}), "0.24.0")
+        self.assertEqual(self.pinned_in({"pyproject.toml": PYPROJECT}), "8.0.1.1.0")
+
+    def test_a_rev_names_the_release_tagged_at_it(self):
+        self.assertEqual(self.pinned_in({"Cargo.toml": GIT}), "0.2.8")
+
+    def test_a_rev_no_release_is_tagged_at_is_refused(self):
+        with self.assertRaises(SystemExit):
+            self.pinned_in({"Cargo.toml": GIT.replace("07e083bb", "deadbeef")})
+
+    def test_an_adapter_that_pins_no_kernel_is_refused(self):
+        with self.assertRaises(SystemExit):
+            self.pinned_in({"Cargo.toml": '[dependencies]\nbrep-protocol = "2"\n'})
+
+
 class Registry(unittest.TestCase):
     def test_moves_version_and_commit_of_the_one_entry(self):
         old = "a" * 40
@@ -280,13 +305,12 @@ class Registry(unittest.TestCase):
         ]}
         with tempfile.TemporaryDirectory() as d:
             write(os.path.join(d, "kernels.json"), json.dumps(reg, indent=2))
-            r = os.path.join(d, "r.json")
-            results(r, "0.27.0", [])
-            self.assertEqual(registry(d, "kernel", r, "c" * 40), "0.27.0")
+            self.assertTrue(registry(d, "kernel", "0.27.0", "c" * 40))
             got = load(os.path.join(d, "kernels.json"))["kernels"]
             self.assertEqual(got[0], reg["kernels"][0])
             self.assertEqual((got[1]["version"], got[1]["adapter"]["commit"]),
                              ("0.27.0", "c" * 40))
+            self.assertFalse(registry(d, "kernel", "0.27.0", "c" * 40))
 
 
 if __name__ == "__main__":

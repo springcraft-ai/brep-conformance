@@ -11,9 +11,10 @@ Reads kernels.json at <root>.
                                               newest, with the version the adapter reports
   adapter_update.py compare <before> <after>  a Markdown table of what changed between two
                                               results files
-  adapter_update.py registry <root> <kernel> <results> <commit>
-                                              moves the kernel's entry to the release the results
-                                              report and to the adapter commit
+  adapter_update.py pinned <adapter>          the kernel release an adapter's checkout pins
+  adapter_update.py registry <root> <kernel> <version> <commit>
+                                              moves the kernel's entry to the release and the
+                                              adapter commit; prints whether it changed
 
 A kernel crate is a dependency of the adapter, other than brep-protocol, pinned to one release:
 exactly, `=X.Y.Z`, from crates.io, or by `rev` from a GitHub repository, whose releases are then its
@@ -324,11 +325,29 @@ def compare(before, after):
     return "\n".join(lines) + "\n"
 
 
-def registry(root, kernel, results, commit):
-    """Moves the kernel's entry in kernels.json, keeping the file's own formatting."""
-    reported = load(results)["kernel"]
-    if reported.get("name") != kernel:
-        sys.exit(f"the adapter reports {reported.get('name')}, not {kernel}")
+def pinned(adapter):
+    """The kernel release the adapter's checkout pins, read from its manifest without building it:
+    the first kernel crate's or package's version, or the tag of the GitHub release its rev is."""
+    path = os.path.join(adapter, "Cargo.toml")
+    crates = kernel_crates(read(path)) if os.path.exists(path) else []
+    if crates and "version" in crates[0]:
+        return crates[0]["version"]
+    if crates:
+        slug, rev = crates[0]["slug"], crates[0]["rev"]
+        tag = tag_of(slug, github(f"repos/{slug}/commits/{rev}")["sha"])
+        if tag is None:
+            sys.exit(f"{slug} has no release at {rev}")
+        return tag.removeprefix("v")
+    path = os.path.join(adapter, "pyproject.toml")
+    packages = kernel_packages(read(path)) if os.path.exists(path) else []
+    if packages:
+        return packages[0][1]
+    sys.exit("the adapter pins no kernel crate or package to a release")
+
+
+def registry(root, kernel, version, commit):
+    """Moves the kernel's entry in kernels.json to the release and the adapter commit, keeping the
+    file's own formatting; returns whether it changed."""
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         sys.exit(f"{commit} is not a full commit hash")
     path = os.path.join(root, "kernels.json")
@@ -337,11 +356,10 @@ def registry(root, kernel, results, commit):
     start = text.index(f'"kernel": "{kernel}"')
     end = text.index(pinned["adapter"]["commit"], start) + len(pinned["adapter"]["commit"])
     old = text[start:end]
-    new = old.replace(f'"version": "{pinned["version"]}"',
-                      f'"version": "{reported["version"]}"', 1)
+    new = old.replace(f'"version": "{pinned["version"]}"', f'"version": "{version}"', 1)
     new = new.replace(pinned["adapter"]["commit"], commit)
     write(path, text[:start] + new + text[end:])
-    return reported["version"]
+    return new != old
 
 
 def main():
@@ -354,8 +372,10 @@ def main():
         print(json.dumps(bump(args[1], args[2] if len(args) == 3 and args[2] else None)))
     elif args[:1] == ["compare"] and len(args) == 3:
         sys.stdout.write(compare(args[1], args[2]))
+    elif args[:1] == ["pinned"] and len(args) == 2:
+        print(pinned(args[1]))
     elif args[:1] == ["registry"] and len(args) == 5:
-        print(registry(*args[1:]))
+        print("moved" if registry(*args[1:]) else "same")
     else:
         sys.exit(__doc__)
 

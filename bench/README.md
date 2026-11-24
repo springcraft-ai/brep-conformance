@@ -197,17 +197,18 @@ Only `propose`, which runs no kernel code, holds the App's key.
 Once adapters' pull requests merge, the [Registry update
 workflow](../.github/workflows/registry-update.yml) moves their entries in
 [`kernels.json`](../kernels.json). Started by hand on `main`, with the same `kernels` input and a
-`dry_run`, it builds each adapter's `main` and runs the smoke tests to read the release it reports,
-in a job that holds nothing. Then one job, holding the App's key and running no kernel code, moves
-every entry whose adapter's `main` or release changed to them, and opens one pull request with a
-row for each, linking the adapter's changes since its last pin.
+`dry_run`, it resolves each adapter's `main` and reads the kernel release its manifest pins,
+building nothing: the adapter's own pull request checked that it reports that release, and an
+official run refuses one that does not. It moves every entry whose adapter commit or release
+changed, and opens one pull request with a row for each, linking the adapter's changes since its
+last pin.
 
 Each adapter's changes were reviewed in its own repository when they merged there, so the
 registry's pull request is the record of the move more than a second review. The workflow waits for
 its checks and then tries to merge it. With the App on the `main` ruleset's bypass list, for pull
 requests only, it merges; without, it is refused, and the pull request waits for a maintainer as
-[process.md](../doc/process.md#the-registry) says. An adapter whose `main` does not build or run is
-left where it is, and named.
+[process.md](../doc/process.md#the-registry) says. An adapter whose `main` pins no release is left
+where it is, and named.
 
 ## Setup
 
