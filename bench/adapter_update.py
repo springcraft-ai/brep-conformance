@@ -12,6 +12,8 @@ registry entry. Reads kernels.json at <root>. Changes no adapter: Claude moves t
                                               to move to, the given one or the newest, with each
                                               pin's move and each release's licence
   adapter_update.py check <adapter> <target>  fails unless the checkout pins what the target says
+  adapter_update.py licences <old> <new>      each way the kernel licences two checkouts of an
+                                              adapter pin differ, one line each; none if alike
   adapter_update.py summary <results>         a Markdown summary of a results file
   adapter_update.py pinned <adapter>          the kernel release an adapter's checkout pins
   adapter_update.py registry <root> <kernel> <version> <commit>
@@ -274,6 +276,40 @@ def target(adapter, version=None):
     return {"from": first["from"], "to": first["to"], "pins": moves, "licence_changed": changed}
 
 
+def licence_of(pin):
+    """The licence the pinned release declares, where its source says."""
+    if pin["source"] == "git":
+        return git_licence(pin["slug"], github(f"repos/{pin['slug']}/commits/{pin['rev']}")["sha"])
+    if pin["source"] == "crates.io":
+        return crate_licence(pin["name"], pin["version"])
+    return {f["version"]: f["attrs"].get("license") for f in conda_files(pin["name"])}.get(
+        pin["version"])
+
+
+def licences(old, new):
+    """What differs between the kernel licences two checkouts of an adapter pin, one line for
+    each; none when each pin's release declares the licence the other's does. A checkout whose
+    pins cannot be read, or a pin one has and the other does not, is a difference: a person reads
+    those."""
+    def read_pins(adapter):
+        try:
+            return {p["name"]: p for p in pins(adapter)}
+        except SystemExit:
+            return None
+
+    was, now = read_pins(old), read_pins(new)
+    if was is None or now is None:
+        return [f"the {'old' if was is None else 'new'} adapter pins no release this can read"]
+    lines = [f"{n}: pinned in only one of the two" for n in sorted(set(was) ^ set(now))]
+    for name in sorted(set(was) & set(now)):
+        a, b = licence_of(was[name]), licence_of(now[name])
+        if a is None or b is None:
+            lines.append(f"{name}: no licence for {'the old' if a is None else 'the new'} release")
+        elif a != b:
+            lines.append(f"{name}: {a} → {b}")
+    return lines
+
+
 def check(adapter, wanted):
     """What the checkout pins that the target does not say: one line for each, none when the
     checkout pins each release the target moves to."""
@@ -356,6 +392,9 @@ def main():
     elif args[:1] == ["check"] and len(args) == 3:
         if problems := check(args[1], load(args[2])):
             sys.exit("\n".join(problems))
+    elif args[:1] == ["licences"] and len(args) == 3:
+        for line in licences(args[1], args[2]):
+            print(line)
     elif args[:1] == ["summary"] and len(args) == 2:
         sys.stdout.write(summary(args[1]))
     elif args[:1] == ["pinned"] and len(args) == 2:

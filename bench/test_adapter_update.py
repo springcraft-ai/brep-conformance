@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from adapter_update import (check, conda_packages, kernel_crates, kernels, load, pinned, plan,
-                            read, registry, summary, target, write)
+from adapter_update import (check, conda_packages, kernel_crates, kernels, licences, load, pinned,
+                            plan, read, registry, summary, target, write)
 
 MANIFEST = """[package]
 name = "kernel-adapter"
@@ -186,6 +186,37 @@ class Check(unittest.TestCase):
                               "conda-forge\nocct=8.0.1\nninja=1.12.1\n")
         self.assertEqual(len(problems), 3)
         self.assertEqual(len(self.check(GIT, "")), 2)
+
+
+class Licences(unittest.TestCase):
+    def compare(self, old, new):
+        with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+            for d, files in ((a, old), (b, new)):
+                for name, text in files.items():
+                    write(os.path.join(d, name), text)
+            with mock.patch("adapter_update.github", fake_github), \
+                    mock.patch("adapter_update.fetch", fake_fetch):
+                return licences(a, b)
+
+    def test_releases_under_one_licence_are_alike_however_a_registry_spells_it(self):
+        old = {"Cargo.toml": '[dependencies]\nkernel = { package = "Kernel_core", version = "=0.24.0" }\n'}
+        new = {"Cargo.toml": old["Cargo.toml"].replace("0.24.0", "0.26.0")}
+        self.assertEqual(self.compare(old, new), [])
+        self.assertEqual(self.compare({"build.sh": BUILD.replace("    ninja=1.12.1\n", "")},
+                                      {"build.sh": BUILD.replace("8.0.1", "8.0.2")
+                                       .replace("    ninja=1.12.1\n", "")}), [])
+
+    def test_a_relicensed_release_is_named_with_both_licences(self):
+        old = {"Cargo.toml": '[dependencies]\nkernel = { package = "Kernel_core", version = "=0.24.0" }\n'}
+        new = {"Cargo.toml": old["Cargo.toml"].replace("0.24.0", "0.27.0")}
+        self.assertEqual(self.compare(old, new), ["Kernel_core: MIT → MIT OR Apache-2.0"])
+
+    def test_a_kernel_from_another_source_or_pins_that_cannot_be_read_go_to_a_person(self):
+        crates = {"Cargo.toml": '[dependencies]\nkernel = { package = "Kernel_core", version = "=0.24.0" }\n'}
+        conda = {"build.sh": BUILD.replace("    ninja=1.12.1\n", "")}
+        self.assertEqual(len(self.compare(crates, conda)), 2)
+        self.assertEqual(self.compare({"pyproject.toml": "[project]\n"}, conda),
+                         ["the old adapter pins no release this can read"])
 
 
 class Summary(unittest.TestCase):

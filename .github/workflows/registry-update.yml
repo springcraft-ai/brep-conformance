@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
 # Moves the kernels.json entries of adapters the suite maintains to each adapter's main and the
 # kernel release it pins, in one pull request. It merges the pull request once its checks pass if
-# the App may bypass review on main, and leaves it for review if not: bench/README.md.
+# the App may bypass review on main and no licence changed, and leaves it for review if not:
+# bench/README.md.
 name: Registry update
 run-name: Registry update · ${{ inputs.kernels || 'all' }}${{ inputs.dry_run && ' · dry run' || '' }}
 
@@ -46,15 +47,16 @@ jobs:
         env:
           KERNELS: ${{ inputs.kernels }}
         run: |
-          rows="$RUNNER_TEMP/rows.md"
+          rows="$RUNNER_TEMP/rows.md" licences="$RUNNER_TEMP/licences.txt"
           : > "$rows"
+          : > "$licences"
           moved=() unread=()
           for kernel in $(python3 -I bench/adapter_update.py kernels . "$KERNELS" | jq -r '.[]'); do
               read -r was was_commit repo <<<"$(jq -r --arg k "$kernel" '.kernels[]
                   | select(.kernel == $k) | "\(.version) \(.adapter.commit) \(.adapter.repo)"' \
                   kernels.json)"
               dir="$RUNNER_TEMP/adapters/$kernel"
-              git clone -q --depth 1 "$repo" "$dir"
+              git clone -q "$repo" "$dir"
               commit=$(git -C "$dir" rev-parse HEAD)
               if ! version=$(python3 -I bench/adapter_update.py pinned "$dir"); then
                   unread+=("$kernel")
@@ -65,6 +67,25 @@ jobs:
                   continue
               fi
               moved+=("$kernel $version")
+              # Each source spells a licence its own way, and kernels.json the suite's: so the
+              # releases the two adapter commits pin are compared with each other, and a person
+              # writes kernels.json's licence when they differ.
+              git -C "$dir" worktree add -q "$dir.was" "$was_commit"
+              if ! kernel_licences=$(python3 -I bench/adapter_update.py licences "$dir.was" \
+                  "$dir"); then
+                  kernel_licences="its releases' licences could not be read"
+              fi
+              {
+                  while IFS= read -r line; do
+                      [ -z "$line" ] || echo "$kernel's kernel: $line"
+                  done <<<"$kernel_licences"
+                  git -C "$dir" diff --quiet "$was_commit" HEAD -- 'LICENSE*' 'LICENCE*' \
+                      'COPYING*' || echo "$kernel's adapter: its licence files changed"
+                  if git -C "$dir" diff "$was_commit" HEAD -- Cargo.toml \
+                      | grep -qE '^[-+]license'; then
+                      echo "$kernel's adapter: its manifest's licence changed"
+                  fi
+              } >> "$licences"
               echo "| $kernel | \`$was\` → \`$version\` | [\`${was_commit::7}\` →" \
                   "\`${commit::7}\`]($repo/compare/$was_commit...$commit) |" >> "$rows"
           done
@@ -83,6 +104,15 @@ jobs:
               echo "| --- | --- | --- |"
               cat "$rows"
               echo
+              if [ -s "$licences" ]; then
+                  echo "## Licence changed"
+                  echo
+                  sed 's/^/- /' "$licences"
+                  echo
+                  echo "Each line compares what one source says of the two releases. Write the"
+                  echo "licence \`kernels.json\` gives each in this pull request; it waits for review."
+                  echo
+              fi
               if [ "${#unread[@]}" -gt 0 ]; then
                   echo "Not moved, since the adapter's \`main\` pins no release:" \
                       "${unread[*]}."
@@ -90,8 +120,11 @@ jobs:
               fi
               echo "Opened by the [Registry update]($run) workflow."
           } > "$RUNNER_TEMP/body.md"
-          echo "title=[registry] Move $names, each adapter pinned at its main" >> "$GITHUB_OUTPUT"
-          echo "open=true" >> "$GITHUB_OUTPUT"
+          {
+              echo "title=[registry] Move $names, each adapter pinned at its main"
+              echo "open=true"
+              echo "licence=$([ -s "$licences" ] && echo changed || echo same)"
+          } >> "$GITHUB_OUTPUT"
           cat "$RUNNER_TEMP/body.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Open the pull request, and merge it once its checks pass
@@ -100,6 +133,7 @@ jobs:
           APP_CLIENT_ID: ${{ vars.ADAPTER_APP_CLIENT_ID }}
           APP_PRIVATE_KEY: ${{ secrets.ADAPTER_APP_PRIVATE_KEY }}
           TITLE: ${{ steps.move.outputs.title }}
+          LICENCE: ${{ steps.move.outputs.licence }}
           GH_REPO: ${{ github.repository }}
           READ_TOKEN: ${{ github.token }}
         run: |
@@ -125,6 +159,11 @@ jobs:
               fi
               sleep 5
           done
+          if [ "$LICENCE" = changed ]; then
+              echo "::warning::a licence changed in $url; it waits for review" \
+                  | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+          fi
           if ! GH_TOKEN=$READ_TOKEN gh pr checks "$url" --watch --interval 20 > /dev/null; then
               echo "::error::a check failed on $url; it waits for review" \
                   | tee -a "$GITHUB_STEP_SUMMARY"

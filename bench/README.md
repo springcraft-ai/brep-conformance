@@ -216,6 +216,15 @@ requests only, it merges; without, it is refused, and the pull request waits for
 [process.md](../doc/process.md#the-registry) says. An adapter whose `main` pins no release is left
 where it is, and named.
 
+A licence change always waits for a maintainer. For each entry it moves, the workflow compares the
+licence each pin's release declares at the registry's adapter commit with the one at `main`, each
+from the pin's own source, and diffs the adapter's licence files and its manifest's `license`
+between the two. Sources spell licences their own ways, and `kernels.json` the suite's, so nothing
+compares a source with `kernels.json`, and the workflow never writes its `license`. A pin it cannot
+read on either side, such as one whose kernel now comes from elsewhere, counts as a change. Any
+change is listed in the pull request, which is then left for review, for a maintainer to write the
+licence `kernels.json` gives.
+
 ## Setup
 
 The workflow reads these from the `benchmark` environment, which allows only `main`:
