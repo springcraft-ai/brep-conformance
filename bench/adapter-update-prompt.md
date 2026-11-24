@@ -89,9 +89,9 @@ call of the kernel. Each of these breaks that rule, however reasonable it looks:
 - **A number of your own that decides something.** A threshold, a tolerance, an epsilon or a count
   that the kernel does not have, such as a law given as radii sampled at a count you chose, or a
   matrix taken apart with a cut-off of your own to choose between two kernel calls.
-- **Choosing between answers.** When a point lies within 10·ε of several edges or faces, the call
-  is `unsupported`: never take the nearest. A retry with other settings, a vote, and a fallback to
-  another call are the same.
+- **Choosing between answers.** A retry with other settings, a vote, and a fallback to another call
+  are each a choice the kernel did not make. So is choosing between edges or faces for a point:
+  see [Points](#points).
 - **Repair.** A call after the kernel's call that fixes its result, such as turning a solid round
   or healing it.
 - **Working around a kernel bug.** A kernel that gets a case wrong gets it wrong in its score.
@@ -109,6 +109,22 @@ edge or a face through its distance query at 10·ε, the empty solid read from t
 saying a result is empty, and a solid made again where the kernel consumes its operand. The
 protocol's crate already has helpers for some of this, such as `view_axes` and a profile's
 `scaled`; use them rather than writing your own.
+
+### Points
+
+`api.md` says, function by function, what a point within 10·ε of the boundary means. Follow it, not
+a rule of your own:
+
+- A point names the edge, or the face, that passes within 10·ε of it; the tests place such points
+  on one edge or face. Find it through the kernel's distance query, and refuse a point that names
+  none as `invalid`.
+- `normal` and `curvature` answer null at a crease and more than 10·ε off the boundary, and give
+  the normal two faces share where they meet smoothly. Where the kernel says which, pass it on.
+  Where the kernel answers on one face and the point lies on several, the call is `unsupported`:
+  never take the nearest.
+- `classify` may answer `in`, `out` or `on` for a point between ε and 10·ε of the boundary.
+- The suite itself merges a mesh's vertices, a section's pieces and a ray's crossings within 10·ε.
+  The adapter merges nothing.
 
 ### Looser: drawing what the kernel made
 
