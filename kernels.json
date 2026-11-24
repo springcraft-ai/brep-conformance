@@ -92,13 +92,13 @@
     },
     {
       "kernel": "opencascade",
-      "version": "8.0.1.1.0",
+      "version": "8.0.2",
       "license": "LGPL-2.1-only WITH OCCT-exception-1.0",
       "source": "https://github.com/Open-Cascade-SAS/OCCT",
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-occt",
-        "commit": "448db18d60eb82490b5ba13a12fc4219d9252530",
+        "commit": "625e95439d0e8afcf450b9eb75c6c1b1a08d87ed",
         "license": "MIT OR Apache-2.0",
         "build": ["./build.sh"],
         "run": "{dir}/build/occt-adapter"
