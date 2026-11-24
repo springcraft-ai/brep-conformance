@@ -106,17 +106,17 @@
       "reviewers": []
     },
     {
-      "kernel": "solidcore",
-      "version": "1.0.1",
+      "kernel": "solidcraft",
+      "version": "0.47.0",
       "license": "Apache-2.0",
-      "source": "https://github.com/tangency-labs/solidcore",
+      "source": "https://github.com/tangency-labs/solidcraft",
       "maintained_by_suite": false,
       "adapter": {
-        "repo": "https://github.com/springcraft-ai/brep-conformance-solidcore",
-        "commit": "93ee953685669a768671d3f585b1434992ac2c6e",
-        "license": "MIT",
+        "repo": "https://github.com/springcraft-ai/brep-conformance-solidcraft",
+        "commit": "7d62c34f8fbecd3527b64ffe6ed3c9c154dd4743",
+        "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
-        "run": "{dir}/target/release/solidcore-adapter"
+        "run": "{dir}/target/release/solidcraft-adapter"
       },
       "reviewers": []
     },

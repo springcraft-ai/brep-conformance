@@ -139,7 +139,7 @@ describe('boardRows', () => {
   })
 
   it('states a known kernel’s license and leaves an unknown one empty', () => {
-    expect(boardRows([row('solidcore', true)])[0]!.license).toBe('Apache-2.0')
+    expect(boardRows([row('solidcraft', true)])[0]!.license).toBe('Apache-2.0')
     expect(boardRows([row('nope', true)])[0]!.license).toBeNull()
   })
 })

@@ -27,7 +27,7 @@ per contract clause. It is not run on every pull request: it runs in release, by
   [cadrs](https://github.com/springcraft-ai/brep-conformance-cadrs),
   [kentron](https://github.com/rsz269/brep-conformance-kentron),
   [next.BREP](https://github.com/springcraft-ai/brep-conformance-next-brep),
-  [solidcore](https://github.com/springcraft-ai/brep-conformance-solidcore) and
+  [solidcraft](https://github.com/springcraft-ai/brep-conformance-solidcraft) and
   [springrep](https://github.com/springcraft-ai/brep-conformance-springrep).
 - [`site/`](site/) is the public results site, built from the kernels' reports for GitHub Pages.
 

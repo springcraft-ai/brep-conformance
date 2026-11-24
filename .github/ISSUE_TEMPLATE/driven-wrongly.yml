@@ -20,7 +20,7 @@ body:
         - kentron
         - next.BREP
         - opencascade
-        - solidcore
+        - solidcraft
         - springrep
     validations:
       required: true

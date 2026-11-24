@@ -228,7 +228,7 @@ mod tests {
                 "kentron",
                 "next.BREP",
                 "opencascade",
-                "solidcore",
+                "solidcraft",
                 "springrep"
             ]
         );
