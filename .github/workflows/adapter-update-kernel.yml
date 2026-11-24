@@ -198,6 +198,25 @@ jobs:
           anthropic_service_account_id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
           anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
 
+      # The action hides Claude's output, so without this a run the API refuses shows no reason.
+      - name: Say why Claude stopped
+        if: steps.claude.outcome != 'success'
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          if [ ! -f "$EXECUTION_FILE" ]; then
+              echo "Claude left no output file"
+              exit 0
+          fi
+          {
+              printf '## Claude stopped\n\n```\n'
+              jq -rs '.. | objects | select(.type? == "result")
+                  | "\(.subtype) after \(.num_turns) turns", (.result // empty),
+                      (.errors[]? | tostring)' \
+                  "$EXECUTION_FILE"
+              printf '```\n'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       # The pull request carries what this step measures, not what Claude says it measured.
       - name: Check Claude's change and run the suite on it
         env:
