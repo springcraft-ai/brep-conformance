@@ -144,18 +144,22 @@ in `results/staged.txt`, and `publish` refuses to copy unless staging holds exac
 
 ## Adapter update
 
-The [Adapter update workflow](../.github/workflows/adapter-update.yml) moves an adapter the suite
-maintains to a newer release of its kernel. It is started by hand on `main`, for one kernel, and
-opens pull requests; it merges nothing. An adapter its kernel's own maintainers keep, or one whose
-repository is not the suite's, is not offered: its maintainers move it by pull request.
+The [Adapter update workflow](../.github/workflows/adapter-update.yml) moves the adapters the suite
+maintains to newer releases of their kernels. It is started by hand on `main`, and opens a pull
+request in each adapter's repository whose kernel has a newer release; it merges nothing. An
+adapter its kernel's own maintainers keep, or one whose repository is not the suite's, is not
+offered: its maintainers move it by pull request.
 
-| Input     | Default   | What it does                                                                  |
-| --------- | --------- | ----------------------------------------------------------------------------- |
-| `kernel`  | —         | The kernel whose adapter to update                                            |
-| `step`    | `adapter` | `adapter`, the adapter's pull request; `registry`, the registry's, after that |
-| `version` | empty     | The release to move to; empty for the newest published one                    |
-| `claude`  | on        | Has Claude make the adapter use the release; off for the pins alone           |
-| `dry_run` | off       | Opens no pull request; the change and its report stay as the run's artifact   |
+| Input     | Default | What it does                                                                     |
+| --------- | ------- | -------------------------------------------------------------------------------- |
+| `kernels` | `all`   | `all` or empty for every adapter it can update, or kernels separated by commas   |
+| `version` | empty   | The release to move to, for one kernel; empty for each one's newest published    |
+| `claude`  | on      | Has Claude make each adapter use its release; off for the pins alone             |
+| `dry_run` | off     | Opens no pull request; each change and its report stay as the run's artifacts    |
+
+Each kernel runs on its own, in
+[`adapter-update-kernel.yml`](../.github/workflows/adapter-update-kernel.yml), so one adapter that
+fails stops no other.
 
 [`adapter_update.py`](adapter_update.py) does the mechanical part. It moves a kernel only between
 published releases, never to a branch, a draft or a pre-release, and the adapter's own pin says
@@ -171,7 +175,7 @@ The version `fn version` returns moves with the pins where the adapter writes it
 builds with the commands `kernels.json` gives it, through [`adapter-build.sh`](adapter-build.sh):
 cargo, or the adapter's own `build.sh`.
 
-The `adapter` step has three jobs:
+Each kernel has three jobs:
 
 | Job       | Holds          | What it does                                                                 |
 | --------- | -------------- | ---------------------------------------------------------------------------- |
@@ -184,14 +188,26 @@ two releases' sources, and what to report. The pull request shows the workflow's
 Claude's, and opens as a draft when the adapter does not build, reports another release, or Claude
 did not finish.
 
-Once that pull request merges, the `registry` step builds the adapter's `main`, reads the release
-it reports, and opens a pull request here moving the kernel's entry in
-[`kernels.json`](../kernels.json) to it, for review as [process.md](../doc/process.md#the-registry)
-says.
-
 `bump` and `adapt` build and run kernel code. Neither can write to a repository: `bump` holds
 nothing, and `adapt` only a Claude token that expires in minutes and is good for one workspace.
 Only `propose`, which runs no kernel code, holds the App's key.
+
+## Registry update
+
+Once adapters' pull requests merge, the [Registry update
+workflow](../.github/workflows/registry-update.yml) moves their entries in
+[`kernels.json`](../kernels.json). Started by hand on `main`, with the same `kernels` input and a
+`dry_run`, it builds each adapter's `main` and runs the smoke tests to read the release it reports,
+in a job that holds nothing. Then one job, holding the App's key and running no kernel code, moves
+every entry whose adapter's `main` or release changed to them, and opens one pull request with a
+row for each, linking the adapter's changes since its last pin.
+
+Each adapter's changes were reviewed in its own repository when they merged there, so the
+registry's pull request is the record of the move more than a second review. The workflow waits for
+its checks and then tries to merge it. With the App on the `main` ruleset's bypass list, for pull
+requests only, it merges; without, it is refused, and the pull request waits for a maintainer as
+[process.md](../doc/process.md#the-registry) says. An adapter whose `main` does not build or run is
+left where it is, and named.
 
 ## Setup
 
@@ -229,10 +245,11 @@ the default token subject. The buckets are secrets, so the public logs mask them
 
 `bench` reads the staging bucket's name too, for the one step that sends the files.
 
-The Adapter update workflow has its own App, which holds Contents and Pull requests, read and
-write, and nothing else, on this repository and the adapter repositories the suite maintains. Its
-`propose` jobs read it from the `adapter-update` environment, and its `adapt` job reads the Claude
-workspace from the `adapter-claude` environment; both allow only `main`:
+The Adapter update and Registry update workflows have their own App, which holds Contents and Pull
+requests, read and write, and nothing else, on this repository and the adapter repositories the
+suite maintains. Their `propose` jobs read it from the `adapter-update` environment, and the
+`adapt` job reads the Claude workspace from the `adapter-claude` environment; both allow only
+`main`:
 
 | Name                           | Kind     | Environment      | What it is                         |
 | ------------------------------ | -------- | ---------------- | ---------------------------------- |

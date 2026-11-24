@@ -2,7 +2,10 @@
 its kernel, compares the suite's results before and after, and moves the kernel's registry entry.
 Reads kernels.json at <root>.
 
-  adapter_update.py plan <root> <kernel>      fails unless the workflow can update the kernel's
+  adapter_update.py kernels <root> <kernels>  the kernels to run, as a JSON list: every one whose
+                                              adapter the workflows can update for `all` or
+                                              nothing, or those named, separated by commas
+  adapter_update.py plan <root> <kernel>      fails unless the workflows can update the kernel's
                                               adapter; prints its repository, build and binary
   adapter_update.py bump <adapter> [version]  pins each kernel crate to the release, or to its
                                               newest, with the version the adapter reports
@@ -74,20 +77,43 @@ def entry(root, kernel):
     sys.exit(f"adapter_update.py: no kernel {kernel} in kernels.json")
 
 
+def refusal(adapter):
+    """Why the workflows cannot update this adapter, or None."""
+    if not adapter["repo"].startswith(OWNER):
+        return (f"its adapter is {adapter['repo']}, which the suite does not maintain; its "
+                "maintainers move it by pull request")
+    if adapter["build"] not in BUILDS:
+        return f"its adapter builds with {adapter['build']}, which the workflows do not run"
+    if not re.fullmatch(r"\{dir\}/[A-Za-z0-9_./-]+", adapter["run"]) or ".." in adapter["run"]:
+        return f"its adapter runs as {adapter['run']}, not a binary in its checkout"
+    return None
+
+
 def plan(root, kernel):
     """The adapter's repository, its build commands and the path of the binary they make inside
-    its checkout, or exits when the workflow cannot update it."""
+    its checkout, or exits when the workflows cannot update it."""
     adapter = entry(root, kernel)["adapter"]
-    if not adapter["repo"].startswith(OWNER):
-        sys.exit(f"{kernel}'s adapter is {adapter['repo']}, which the suite does not maintain; "
-                 "its maintainers move it by pull request")
-    if adapter["build"] not in BUILDS:
-        sys.exit(f"{kernel}'s adapter builds with {adapter['build']}, which this workflow does "
-                 "not run")
-    if not re.fullmatch(r"\{dir\}/[A-Za-z0-9_./-]+", adapter["run"]) or ".." in adapter["run"]:
-        sys.exit(f"{kernel}'s adapter runs as {adapter['run']}, not a binary in its checkout")
+    if why := refusal(adapter):
+        sys.exit(f"{kernel}: {why}")
     return {"repo": adapter["repo"], "build": adapter["build"],
             "binary": adapter["run"].removeprefix("{dir}/")}
+
+
+def kernels(root, asked):
+    """The kernels to run: every one the workflows can update, for `all` or nothing, or those
+    named, in the registry's order. Exits naming each one asked for that cannot be run."""
+    registry = load(os.path.join(root, "kernels.json"))["kernels"]
+    asked = asked.strip()
+    if asked in ("", "all"):
+        return [k["kernel"] for k in registry if refusal(k["adapter"]) is None]
+    names = [n.strip() for n in asked.split(",") if n.strip()]
+    known = {k["kernel"]: k for k in registry}
+    problems = [f"{n}: not in kernels.json" for n in names if n not in known]
+    problems += [f"{n}: {why}" for n in names if n in known
+                 if (why := refusal(known[n]["adapter"]))]
+    if problems:
+        sys.exit("\n".join(problems))
+    return [k["kernel"] for k in registry if k["kernel"] in names]
 
 
 def kernel_crates(manifest):
@@ -320,7 +346,9 @@ def registry(root, kernel, results, commit):
 
 def main():
     args = sys.argv[1:]
-    if args[:1] == ["plan"] and len(args) == 3:
+    if args[:1] == ["kernels"] and len(args) in (2, 3):
+        print(json.dumps(kernels(args[1], args[2] if len(args) == 3 else "")))
+    elif args[:1] == ["plan"] and len(args) == 3:
         print(json.dumps(plan(args[1], args[2])))
     elif args[:1] == ["bump"] and len(args) in (2, 3):
         print(json.dumps(bump(args[1], args[2] if len(args) == 3 and args[2] else None)))

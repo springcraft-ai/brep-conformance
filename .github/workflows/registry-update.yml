@@ -1,0 +1,217 @@
+# SPDX-License-Identifier: MIT
+# Moves the kernels.json entries of adapters the suite maintains to each adapter's main and the
+# release it reports, in one pull request. It merges the pull request once its checks pass if the
+# App may bypass review on main, and leaves it for review if not: bench/README.md.
+name: Registry update
+run-name: Registry update · ${{ inputs.kernels || 'all' }}${{ inputs.dry_run && ' · dry run' || '' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernels:
+        description: all, or the kernels to move, comma-separated, as kernels.json names them
+        type: string
+        default: all
+      dry_run:
+        description: Open no pull request; say what would move
+        type: boolean
+        default: false
+
+# A job with no permissions block inherits these, so a job added later gets nothing by default.
+permissions: {}
+
+concurrency:
+  group: registry-update
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      kernels: ${{ steps.plan.outputs.kernels }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Name the kernels
+        id: plan
+        env:
+          KERNELS: ${{ inputs.kernels }}
+        run: |
+          kernels=$(python3 -I bench/adapter_update.py kernels . "$KERNELS")
+          echo "kernels=$kernels" >> "$GITHUB_OUTPUT"
+
+  # Builds and runs each adapter's main to read the release it reports, holding nothing.
+  read:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel: ${{ fromJSON(needs.plan.outputs.kernels) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      KERNEL: ${{ matrix.kernel }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: suite
+          persist-credentials: false
+      - name: Check out the adapter's main
+        id: plan
+        run: |
+          mkdir work
+          python3 -I suite/bench/adapter_update.py plan suite "$KERNEL" > work/plan.json
+          git clone -q "$(jq -r .repo work/plan.json)" adapter
+          echo "binary=$(jq -r .binary work/plan.json)" >> "$GITHUB_OUTPUT"
+          git -C adapter rev-parse HEAD > work/commit.txt
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            suite -> target
+            adapter -> target
+      - name: Read the release it reports
+        env:
+          BINARY: ${{ steps.plan.outputs.binary }}
+        run: |
+          suite/bench/adapter-build-deps.sh
+          (cd suite && cargo build --release --locked -p brep-conformance)
+          suite/bench/adapter-build.sh adapter work/plan.json
+          read -ra smoke < suite/bench/smoke.txt
+          suite/target/release/brep-conformance --adapter "adapter/$BINARY" \
+              --threads 4 --out work/smoke.json "${smoke[@]}" > /dev/null
+          echo "$KERNEL: main $(cut -c1-7 work/commit.txt) reports" \
+              "$(jq -r .kernel.version work/smoke.json)" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: read-${{ matrix.kernel }}
+          path: |
+            work/commit.txt
+            work/smoke.json
+
+  # Runs no kernel code. Moves every entry whose adapter read cleanly, opens one pull request, and
+  # merges it once its checks pass; where the App may not merge, the pull request waits for review.
+  propose:
+    needs: [plan, read]
+    if: >-
+      always() && needs.plan.result == 'success' && needs.read.result != 'cancelled'
+      && needs.read.result != 'skipped'
+    runs-on: ubuntu-24.04
+    environment: adapter-update
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      checks: read # to wait for the pull request's checks
+      pull-requests: read
+    steps:
+      # The push below takes the App's token; a persisted read-only one would be sent instead.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: read-*
+          path: read
+      - name: Move the entries
+        id: move
+        env:
+          KERNELS: ${{ needs.plan.outputs.kernels }}
+        run: |
+          rows="$RUNNER_TEMP/rows.md"
+          : > "$rows"
+          moved=()
+          unread=()
+          for kernel in $(jq -r '.[]' <<<"$KERNELS"); do
+              dir=read/read-$kernel
+              if [ ! -f "$dir/smoke.json" ]; then
+                  unread+=("$kernel")
+                  continue
+              fi
+              commit=$(cat "$dir/commit.txt")
+              before=$(jq -r --arg k "$kernel" '.kernels[] | select(.kernel == $k)
+                  | "\(.version) \(.adapter.commit) \(.adapter.repo)"' kernels.json)
+              read -r was was_commit repo <<<"$before"
+              version=$(python3 -I bench/adapter_update.py registry . "$kernel" \
+                  "$dir/smoke.json" "$commit")
+              [ "$was $was_commit" = "$version $commit" ] && continue
+              moved+=("$kernel $version")
+              echo "| $kernel | \`$was\` → \`$version\` | [\`${was_commit::7}\` →" \
+                  "\`${commit::7}\`]($repo/compare/$was_commit...$commit) |" >> "$rows"
+          done
+          if [ "${#moved[@]}" = 0 ]; then
+              echo "Every entry is at its adapter's main already" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "open=false" >> "$GITHUB_OUTPUT"
+              exit 0
+          fi
+          names=$(printf '%s\n' "${moved[@]}" | paste -sd, - | sed 's/,/, /g')
+          {
+              echo "Moves each adapter the suite maintains to its \`main\`, with the release it"
+              echo "reports. Each adapter's changes were reviewed in its own repository."
+              echo
+              echo "| Kernel | Version | Adapter commit |"
+              echo "| --- | --- | --- |"
+              cat "$rows"
+              echo
+              if [ "${#unread[@]}" -gt 0 ]; then
+                  echo "Not moved, since the adapter's \`main\` did not build or run:" \
+                      "${unread[*]}."
+                  echo
+              fi
+              run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+              echo "Opened by the [Registry update]($run) workflow."
+          } > "$RUNNER_TEMP/body.md"
+          echo "title=[registry] Move $names, each adapter pinned at its main" >> "$GITHUB_OUTPUT"
+          echo "open=true" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/body.md" >> "$GITHUB_STEP_SUMMARY"
+          git diff --stat
+
+      - name: Open the pull request, and merge it once its checks pass
+        if: steps.move.outputs.open == 'true' && !inputs.dry_run
+        env:
+          APP_CLIENT_ID: ${{ vars.ADAPTER_APP_CLIENT_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.ADAPTER_APP_PRIVATE_KEY }}
+          TITLE: ${{ steps.move.outputs.title }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          token=$(bench/app-token.sh '{"contents": "write", "pull_requests": "write"}')
+          echo "::add-mask::$token"
+          branch="registry/update-$GITHUB_RUN_ID"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -q -c "$branch"
+          git add kernels.json
+          git commit -q -m "$TITLE"
+          git push -q "https://x-access-token:$token@github.com/$GITHUB_REPOSITORY.git" "$branch"
+          url=$(GH_TOKEN=$token gh pr create --base main --head "$branch" --title "$TITLE" \
+              --body-file "$RUNNER_TEMP/body.md")
+          echo "$url" | tee -a "$GITHUB_STEP_SUMMARY"
+
+          # The checks take a moment to register; then wait for all of them to finish.
+          deadline=$((SECONDS + 300))
+          until GH_TOKEN=${{ github.token }} gh pr checks "$url" > /dev/null 2>&1 \
+              || [ $? = 8 ]; do
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                  echo "::error::no checks reported on $url"
+                  exit 1
+              fi
+              sleep 5
+          done
+          if ! GH_TOKEN=${{ github.token }} gh pr checks "$url" --watch --interval 20 \
+              > /dev/null; then
+              echo "::error::a check failed on $url; it waits for review" \
+                  | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 1
+          fi
+          if GH_TOKEN=$token gh pr merge "$url" --squash --delete-branch; then
+              echo "Merged" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+              echo "::warning::the App may not merge $url; it waits for review"
+              echo "Waits for review: the App may not merge it" >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from adapter_update import (bump, compare, kernel_crates, kernel_packages, load, pin, plan, read,
-                            registry, report, write)
+from adapter_update import (bump, compare, kernel_crates, kernel_packages, kernels, load, pin,
+                            plan, read, registry, report, write)
 
 MANIFEST = """[package]
 name = "kernel-adapter"
@@ -243,6 +243,32 @@ class Plan(unittest.TestCase):
                       adapter("https://github.com/springcraft-ai/x", run="{dir}/../k")):
             with self.assertRaises(SystemExit):
                 self.check(entry)
+
+
+class Kernels(unittest.TestCase):
+    OURS = "https://github.com/springcraft-ai/brep-conformance-"
+
+    def run_with(self, asked):
+        entries = [dict(adapter(self.OURS + "a"), kernel="a"),
+                   dict(adapter("https://github.com/someone/b"), kernel="b"),
+                   dict(adapter(self.OURS + "c", "./build.sh", "{dir}/build/c"), kernel="c"),
+                   dict(adapter(self.OURS + "d", build="make"), kernel="d")]
+        with tempfile.TemporaryDirectory() as d:
+            write(os.path.join(d, "kernels.json"), json.dumps({"kernels": entries}))
+            return kernels(d, asked)
+
+    def test_all_or_nothing_is_every_kernel_the_workflows_can_update(self):
+        self.assertEqual(self.run_with("all"), ["a", "c"])
+        self.assertEqual(self.run_with(" "), ["a", "c"])
+
+    def test_named_kernels_run_alone_in_the_registry_order_whatever_the_spacing(self):
+        self.assertEqual(self.run_with("c, a"), ["a", "c"])
+        self.assertEqual(self.run_with("c,,a ,"), ["a", "c"])
+
+    def test_a_kernel_that_cannot_be_run_or_is_unknown_is_refused(self):
+        for asked in ("a,b", "d", "a,zz"):
+            with self.assertRaises(SystemExit):
+                self.run_with(asked)
 
 
 class Registry(unittest.TestCase):
