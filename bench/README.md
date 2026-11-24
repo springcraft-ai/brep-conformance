@@ -264,3 +264,8 @@ suite maintains. Their `propose` jobs read it from the `adapter-update` environm
 There is no Claude key: the `adapt` job trades GitHub's token for the run for a Claude token that
 lasts minutes. The rule grants one only to a manual run of this repository's `main` in the
 `adapter-claude` environment, and the workspace's spending limit caps what a run can cost.
+
+The [Claude check workflow](../.github/workflows/claude-check.yml) asks Claude one question from
+that environment and prints the answer, or the reason there is none. Run it after a change to the
+rule, the workspace or the variables: it takes a minute, where an Adapter update reaches Claude
+only after a suite run.

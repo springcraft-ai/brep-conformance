@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# Asks Claude one question the way the Adapter update's adapt job reaches it, to test the federation
+# rule and the workspace in a minute, without a suite run: bench/README.md.
+name: Claude check
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ask:
+    runs-on: ubuntu-24.04
+    environment: adapter-claude
+    timeout-minutes: 5
+    permissions:
+      id-token: write # for the Claude API's workload identity federation
+    steps:
+      - uses: anthropics/claude-code-action/base-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
+        id: claude
+        continue-on-error: true
+        with:
+          prompt: Reply with the one word ok.
+          claude_args: --model opus --max-turns 1
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          anthropic_service_account_id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+
+      # The action hides Claude's output, so without this a run the API refuses shows no reason.
+      - name: Say what Claude answered
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+          CLAUDE: ${{ steps.claude.outcome }}
+        run: |
+          {
+              printf '## Claude step: %s\n\n```\n' "$CLAUDE"
+              if [ -f "$EXECUTION_FILE" ]; then
+                  jq -rs '.. | objects | select(.type? == "result")
+                      | "\(.subtype) after \(.num_turns) turns", (.result // empty),
+                          (.errors[]? | tostring)' \
+                      "$EXECUTION_FILE"
+              else
+                  echo "Claude left no output file"
+              fi
+              printf '```\n'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$CLAUDE" = success ]
