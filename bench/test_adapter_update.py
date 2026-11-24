@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from adapter_update import (bump, compare, kernel_crates, kernel_packages, kernels, load, pin,
-                            pinned, plan, read, registry, report, write)
+from adapter_update import (check, conda_packages, kernel_crates, kernels, load, pinned, plan,
+                            read, registry, summary, target, write)
 
 MANIFEST = """[package]
 name = "kernel-adapter"
@@ -24,17 +24,6 @@ fromgit = { git = "https://example.com/k", rev = "bb09c367" }
 
 [dev-dependencies]
 tested = "=9.9.9"
-"""
-
-SOURCE = """impl brep_protocol::Kernel for K {
-    fn name(&self) -> String {
-        "kernel".into()
-    }
-
-    fn version(&self) -> String {
-        "0.24.0".into()
-    }
-}
 """
 
 
@@ -64,6 +53,8 @@ def fake_github(path):
             {"name": "v0.2.8", "commit": {"sha": OLD}},
         ],
         "repos/owner/kernel/releases/latest": {"tag_name": "v0.2.9"},
+        f"repos/owner/kernel/license?ref={OLD}": {"license": {"spdx_id": "MIT"}},
+        f"repos/owner/kernel/license?ref={NEW}": {"license": {"spdx_id": "MIT"}},
         "repos/owner/kernel/releases?per_page=100": [
             {"tag_name": "v0.3.0-rc.1", "draft": False, "prerelease": True},
             {"tag_name": "v0.2.9", "draft": False, "prerelease": False},
@@ -89,133 +80,135 @@ class Crates(unittest.TestCase):
                      'k = { git = "https://github.com/owner/k", branch = "main" }'):
             self.assertEqual(kernel_crates(f"[dependencies]\n{line}\n"), [])
 
-    def test_pinning_moves_only_the_named_crates_and_keeps_the_rest(self):
-        moved = pin(MANIFEST, {"Kernel_core": ("0.24.0", "0.27.0"),
-                               "Kernel_blend": ("0.24.0", "0.27.0")})
-        self.assertIn('kernel = { package = "Kernel_core", version = "=0.27.0" }', moved)
-        self.assertIn('blend = { package = "Kernel_blend", version = "=0.27.0" }', moved)
-        self.assertIn('brep-protocol = "=2.0.1"', moved)
-        self.assertIn('helper = "=1.0.0"', moved)
-        self.assertIn('tested = "=9.9.9"', moved)
-        self.assertIn("# The same release's blend crate.", moved)
 
-    def test_a_plain_pin_moves(self):
-        self.assertEqual(pin('[dependencies]\nspringrep = "=2.0.0"\n',
-                             {"springrep": ("2.0.0", "2.1.0")}),
-                         '[dependencies]\nspringrep = "=2.1.0"\n')
-
-
-class Reported(unittest.TestCase):
-    def test_the_literal_version_moves_with_the_kernel(self):
-        text, changed = report(SOURCE, "0.24.0", "0.27.0")
-        self.assertTrue(changed)
-        self.assertIn('"0.27.0".into()', text)
-        self.assertIn('"kernel".into()', text)
-
-    def test_a_constant_or_another_version_is_left_alone(self):
-        constant = SOURCE.replace('"0.24.0".into()', "kernel::VERSION.into()")
-        self.assertEqual(report(constant, "0.24.0", "0.27.0"), (constant, False))
-        self.assertEqual(report(SOURCE, "0.23.0", "0.27.0"), (SOURCE, False))
-
-    def test_a_bump_to_a_given_version_moves_pins_and_report_together(self):
-        with tempfile.TemporaryDirectory() as d:
-            os.mkdir(os.path.join(d, "src"))
-            write(os.path.join(d, "Cargo.toml"), MANIFEST.replace('helper = "=1.0.0"\n', ""))
-            write(os.path.join(d, "src", "main.rs"), SOURCE)
-            moved = bump(d, "0.26.0")
-            self.assertEqual(moved["from"], "0.24.0")
-            self.assertEqual(moved["to"], "0.26.0")
-            self.assertEqual(moved["reported_in"], ["src/main.rs"])
-            self.assertEqual(set(moved["crates"]), {"Kernel_core", "Kernel_blend"})
-            self.assertIn('"0.26.0".into()', read(os.path.join(d, "src", "main.rs")))
-
-
-class Git(unittest.TestCase):
-    def bump(self, version=None):
-        with tempfile.TemporaryDirectory() as d:
-            os.mkdir(os.path.join(d, "src"))
-            write(os.path.join(d, "Cargo.toml"), GIT)
-            write(os.path.join(d, "src", "main.rs"), SOURCE.replace(
-                '"0.24.0".into()', "kernel_core::VERSION.into()"))
-            with mock.patch("adapter_update.github", fake_github):
-                return bump(d, version), read(os.path.join(d, "Cargo.toml"))
-
-    def test_moves_to_the_newest_release_and_its_tagged_commit(self):
-        moved, manifest = self.bump()
-        self.assertEqual((moved["from"], moved["to"]), ("0.2.8", "0.2.9"))
-        self.assertEqual(moved["crates"]["kernel_core"]["to_commit"], NEW)
-        self.assertIn('kernel_core = { git = "https://github.com/owner/kernel", rev = "bb09c367" }',
-                      manifest)
-        self.assertIn("/releases/tag/v0.2.9, with", manifest)
-        self.assertEqual(moved["reported_in"], [])
-
-    def test_a_pre_release_is_not_a_release(self):
-        with self.assertRaises(SystemExit):
-            self.bump("0.3.0-rc.1")
-        self.assertEqual(self.bump("0.2.9")[0]["to"], "0.2.9")
-
-
-class Compare(unittest.TestCase):
-    def test_tallies_and_each_test_whose_result_moved(self):
-        with tempfile.TemporaryDirectory() as d:
-            a, b = os.path.join(d, "a.json"), os.path.join(d, "b.json")
-            results(a, "0.24.0", [("1", "fillets/hole-rim", "unsupported"),
-                                  ("2", "fillets/hole-rim", "unsupported"),
-                                  ("3", "booleans/boxes", "1e-7")])
-            results(b, "0.27.0", [("1", "fillets/hole-rim", "1e-7"),
-                                  ("2", "fillets/hole-rim", "1e-7"),
-                                  ("3", "booleans/boxes", "1e-7")])
-            table = compare(a, b)
-            self.assertIn("| 1e-7 | 1 | 3 |", table)
-            self.assertIn("| unsupported | 2 | 0 |", table)
-            self.assertIn("| `fillets/hole-rim` | unsupported | 1e-7 | 2 |", table)
-            self.assertNotIn("booleans/boxes", table)
-
-    def test_no_change_says_so(self):
-        with tempfile.TemporaryDirectory() as d:
-            a = os.path.join(d, "a.json")
-            results(a, "1.0.0", [("1", "t", "1e-7")])
-            self.assertIn("No case changed its result.", compare(a, a))
-
-
-PYPROJECT = """[project]
-name = "kernel-adapter"
-version = "0.1.0"
-requires-python = ">=3.12,<3.13"
-dependencies = ["kernel-libs==8.0.1.1.0", "helper>=1"]
+BUILD = """#!/bin/bash
+# The release of conda-forge's occt package the adapter links.
+occt=8.0.1
+    ninja=1.12.1
+"$mamba" create -c conda-forge "occt=$occt=novtk*"
 """
 
 
-def fake_pypi(url):
-    """PyPI's record of a package with final releases up to 8.0.2.0.0, a yanked 8.0.3.0.0, a
-    pre-release, and a release with no files."""
-    file, yanked = [{"yanked": False}], [{"yanked": True}]
-    return {"releases": {"8.0.1.0.0": file, "8.0.1.1.0": file, "8.0.2.0.0": file,
-                         "8.0.3.0.0": yanked, "8.1.0.0.0rc1": file, "9.0.0.0.0": []}}
+def fake_fetch(url):
+    """crates.io with Kernel_core and Kernel_blend 0.24.0 to 0.27.0, a yanked 0.28.0 and a
+    pre-release, relicensed at 0.27.0; and conda-forge with occt 8.0.1 and 8.0.2 for linux-64, an
+    8.1.0 for another platform, and a release named another way."""
+    crates = {"0.24.0": "MIT", "0.26.0": "MIT", "0.27.0": "MIT OR Apache-2.0", "0.28.0": "MIT",
+              "0.29.0-rc.1": "MIT"}
+    for name in ("Kernel_core", "Kernel_blend"):
+        if url == f"https://crates.io/api/v1/crates/{name}/versions":
+            return {"versions": [{"num": v, "yanked": v == "0.28.0"} for v in crates]}
+        for v, licence in crates.items():
+            if url == f"https://crates.io/api/v1/crates/{name}/{v}":
+                return {"version": {"license": licence}}
+    if url == "https://api.anaconda.org/package/conda-forge/occt":
+        file = lambda v, subdir="linux-64": {"version": v, "attrs": {
+            "subdir": subdir, "license": "LGPL-2.1-only"}}
+        return {"files": [file("8.0.1"), file("8.0.2"), file("8_0_3"), file("8.1.0", "osx-arm64")]}
+    raise AssertionError(url)
 
 
-class Packages(unittest.TestCase):
-    def bump(self, version=None):
+class Conda(unittest.TestCase):
+    def test_a_line_of_its_own_in_a_script_that_installs_from_conda_forge_is_a_pin(self):
+        self.assertEqual(conda_packages(BUILD), [("occt", "8.0.1"), ("ninja", "1.12.1")])
+
+    def test_a_script_that_installs_nothing_from_conda_forge_pins_nothing(self):
+        self.assertEqual(conda_packages("#!/bin/bash\nocct=8.0.1\n"), [])
+
+
+class Target(unittest.TestCase):
+    def target(self, files, version=None):
         with tempfile.TemporaryDirectory() as d:
-            write(os.path.join(d, "pyproject.toml"), PYPROJECT)
-            with mock.patch("adapter_update.fetch", fake_pypi):
-                return bump(d, version), read(os.path.join(d, "pyproject.toml"))
+            for name, text in files.items():
+                write(os.path.join(d, name), text)
+            with mock.patch("adapter_update.github", fake_github), \
+                    mock.patch("adapter_update.fetch", fake_fetch):
+                return target(d, version)
 
-    def test_only_exact_pins_in_the_dependencies_are_the_kernel(self):
-        self.assertEqual(kernel_packages(PYPROJECT), [("kernel-libs", "8.0.1.1.0")])
+    def test_moves_each_crate_to_the_newest_stable_release_and_names_a_licence_change(self):
+        manifest = MANIFEST.replace('helper = "=1.0.0"\n', "")
+        moved = self.target({"Cargo.toml": manifest})
+        self.assertEqual((moved["from"], moved["to"]), ("0.24.0", "0.27.0"))
+        self.assertEqual(set(moved["pins"]), {"Kernel_core", "Kernel_blend"})
+        self.assertEqual(moved["licence_changed"][0],
+                         {"name": "Kernel_core", "from": "MIT", "to": "MIT OR Apache-2.0"})
 
-    def test_moves_to_the_newest_final_release_with_files(self):
-        moved, pyproject = self.bump()
-        self.assertEqual((moved["from"], moved["to"]), ("8.0.1.1.0", "8.0.2.0.0"))
-        self.assertEqual(moved["crates"]["kernel-libs"]["pypi"], True)
-        self.assertIn('dependencies = ["kernel-libs==8.0.2.0.0", "helper>=1"]', pyproject)
-        self.assertIn('version = "0.1.0"', pyproject)
-
-    def test_a_named_release_must_be_final_and_published(self):
-        self.assertEqual(self.bump("8.0.1.0.0")[0]["to"], "8.0.1.0.0")
-        for version in ("8.0.3.0.0", "8.1.0.0.0rc1", "9.0.0.0.0", "7.0"):
+    def test_a_given_release_must_be_published_and_stable(self):
+        manifest = MANIFEST.replace('helper = "=1.0.0"\n', "")
+        moved = self.target({"Cargo.toml": manifest}, "0.26.0")
+        self.assertEqual((moved["to"], moved["licence_changed"]), ("0.26.0", []))
+        for version in ("0.28.0", "0.29.0-rc.1", "0.25.0"):
             with self.assertRaises(SystemExit):
-                self.bump(version)
+                self.target({"Cargo.toml": manifest}, version)
+
+    def test_a_crate_from_git_moves_to_the_newest_release_and_its_tagged_commit(self):
+        moved = self.target({"Cargo.toml": GIT})
+        self.assertEqual((moved["from"], moved["to"]), ("0.2.8", "0.2.9"))
+        self.assertEqual(moved["pins"]["kernel_core"]["to_commit"], NEW)
+        self.assertEqual(moved["pins"]["kernel_core"]["repository"],
+                         "https://github.com/owner/kernel")
+        with self.assertRaises(SystemExit):
+            self.target({"Cargo.toml": GIT}, "0.3.0-rc.1")
+
+    def test_a_conda_forge_package_moves_to_its_newest_stable_release_for_linux(self):
+        moved = self.target({"build.sh": BUILD.replace("    ninja=1.12.1\n", "")})
+        self.assertEqual((moved["from"], moved["to"]), ("8.0.1", "8.0.2"))
+        self.assertEqual(moved["pins"]["occt"]["licence"],
+                         {"from": "LGPL-2.1-only", "to": "LGPL-2.1-only"})
+        with self.assertRaises(SystemExit):
+            self.target({"build.sh": BUILD}, "8.1.0")
+
+    def test_changes_nothing_in_the_checkout(self):
+        with tempfile.TemporaryDirectory() as d:
+            write(os.path.join(d, "Cargo.toml"), GIT)
+            with mock.patch("adapter_update.github", fake_github):
+                target(d)
+            self.assertEqual(read(os.path.join(d, "Cargo.toml")), GIT)
+
+
+class Check(unittest.TestCase):
+    WANTED = {"pins": {"kernel_core": {"source": "git", "to": "0.2.9", "to_commit": NEW},
+                       "occt": {"source": "conda-forge", "to": "8.0.2"}}}
+
+    def check(self, manifest, script):
+        with tempfile.TemporaryDirectory() as d:
+            write(os.path.join(d, "Cargo.toml"), manifest)
+            write(os.path.join(d, "build.sh"), script)
+            return check(d, self.WANTED)
+
+    def test_a_checkout_that_pins_each_release_passes(self):
+        manifest = GIT.replace("07e083bb", NEW[:8])
+        self.assertEqual(self.check(manifest, "conda-forge\nocct=8.0.2\n"), [])
+        self.assertEqual(self.check(GIT.replace("07e083bb", NEW), "conda-forge\nocct=8.0.2\n"), [])
+
+    def test_each_pin_left_behind_dropped_cut_short_or_added_is_named(self):
+        problems = self.check(GIT.replace("07e083bb", NEW[:6]),
+                              "conda-forge\nocct=8.0.1\nninja=1.12.1\n")
+        self.assertEqual(len(problems), 3)
+        self.assertEqual(len(self.check(GIT, "")), 2)
+
+
+class Summary(unittest.TestCase):
+    def test_tallies_and_each_test_with_a_case_that_did_not_answer(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "r.json")
+            results(path, "0.27.0", [("1", "fillets/hole-rim", "1e-5"),
+                                     ("2", "fillets/hole-rim", "fail"),
+                                     ("3", "booleans/boxes", "1e-7"),
+                                     ("4", "slabs/box", "unsupported"),
+                                     ("5", "step/read", "crash")])
+            text = summary(path)
+            self.assertIn("kernel 0.27.0, 5 cases", text)
+            self.assertLess(text.index("| 1e-7 | 1 |"), text.index("| 1e-5 | 1 |"))
+            self.assertIn("| `fillets/hole-rim` | fail | 1 |", text)
+            self.assertIn("| `step/read` | crash | 1 |", text)
+            self.assertNotIn("`slabs/box`", text)
+
+    def test_a_run_with_every_supported_case_answered_says_so(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "r.json")
+            results(path, "1.0.0", [("1", "t", "1e-7"), ("2", "u", "unsupported")])
+            self.assertIn("Every case it supports answered.", summary(path))
 
 
 def adapter(repo, build="cargo build --release --locked", run="{dir}/target/release/k-adapter"):
@@ -282,7 +275,8 @@ class Pinned(unittest.TestCase):
 
     def test_the_first_kernel_crate_or_package_names_the_release(self):
         self.assertEqual(self.pinned_in({"Cargo.toml": MANIFEST}), "0.24.0")
-        self.assertEqual(self.pinned_in({"pyproject.toml": PYPROJECT}), "8.0.1.1.0")
+        self.assertEqual(self.pinned_in({"build.sh": BUILD}), "8.0.1")
+        self.assertEqual(self.pinned_in({"Cargo.toml": MANIFEST, "build.sh": BUILD}), "0.24.0")
 
     def test_a_rev_names_the_release_tagged_at_it(self):
         self.assertEqual(self.pinned_in({"Cargo.toml": GIT}), "0.2.8")

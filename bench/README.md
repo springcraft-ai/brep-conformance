@@ -144,53 +144,59 @@ in `results/staged.txt`, and `publish` refuses to copy unless staging holds exac
 
 ## Adapter update
 
-The [Adapter update workflow](../.github/workflows/adapter-update.yml) moves the adapters the suite
-maintains to newer releases of their kernels. It is started by hand on `main`, and opens a pull
-request in each adapter's repository whose kernel has a newer release; it merges nothing. An
-adapter its kernel's own maintainers keep, or one whose repository is not the suite's, is not
-offered: its maintainers move it by pull request.
+The [Adapter update workflow](../.github/workflows/adapter-update.yml) has Claude move each adapter
+the suite maintains to its kernel's newer release, and use what the release changed. It is started
+by hand on `main`, and opens a pull request in each adapter's repository whose kernel has a newer
+release; it merges nothing. An adapter its kernel's own maintainers keep, or one whose repository is
+not the suite's, is not offered: its maintainers move it by pull request.
 
 | Input     | Default | What it does                                                                     |
 | --------- | ------- | -------------------------------------------------------------------------------- |
 | `kernels` | `all`   | `all` or empty for every adapter it can update, or kernels separated by commas   |
 | `version` | empty   | The release to move to, for one kernel; empty for each one's newest published    |
-| `claude`  | on      | Has Claude make each adapter use its release; off for the pins alone             |
 | `dry_run` | off     | Opens no pull request; each change and its report stay as the run's artifacts    |
 
 Each kernel runs on its own, in
 [`adapter-update-kernel.yml`](../.github/workflows/adapter-update-kernel.yml), so one adapter that
 fails stops no other.
 
-[`adapter_update.py`](adapter_update.py) does the mechanical part. It moves a kernel only between
-published releases, never to a branch, a draft or a pre-release, and the adapter's own pin says
-where those come from:
+[`adapter_update.py`](adapter_update.py) finds the release to move to, and changes nothing. It moves
+a kernel only between published releases, never to a branch, a draft or a pre-release, and the
+adapter's own pin says where those come from:
 
-| The adapter pins its kernel                     | Its newest release                         |
-| ----------------------------------------------- | ------------------------------------------ |
-| Exactly, `=X.Y.Z`, from crates.io               | The newest on crates.io                    |
-| By `rev` from GitHub, publishing no crate       | The tagged commit of its newest GitHub one |
-| Exactly, `name==X.Y.Z`, in `pyproject.toml`     | The newest on PyPI with files              |
+| The adapter pins its kernel                 | Its newest release                         |
+| ------------------------------------------- | ------------------------------------------ |
+| Exactly, `=X.Y.Z`, from crates.io           | The newest on crates.io                    |
+| By `rev` from GitHub, publishing no crate   | The tagged commit of its newest GitHub one |
+| In `build.sh`, `package=X.Y.Z`, conda-forge | The newest on conda-forge for Linux        |
 
-The version `fn version` returns moves with the pins where the adapter writes it out. The adapter
-builds with the commands `kernels.json` gives it, through [`adapter-build.sh`](adapter-build.sh):
-cargo, or the adapter's own `build.sh`.
+It also reads the licence each pin's two releases declare, from the same place, so a licence named
+two ways in two places is no change.
 
 Each kernel has three jobs:
 
-| Job       | Holds          | What it does                                                                 |
-| --------- | -------------- | ---------------------------------------------------------------------------- |
-| `bump`    | Nothing        | Runs the whole suite on the adapter, moves the pins, and runs it again       |
-| `adapt`   | A Claude token | Claude makes the adapter build and use the release; the job runs it again    |
-| `propose` | The App's key  | Opens the pull request in the adapter's repository, with the runs' table     |
+| Job       | Holds          | What it does                                                             |
+| --------- | -------------- | ------------------------------------------------------------------------ |
+| `target`  | Nothing        | Finds the release to move to, and stops if the adapter is at it already  |
+| `update`  | A Claude token | Claude moves the adapter to the release; the job checks it and runs some |
+| `propose` | The App's key  | Opens the pull request in the adapter's repository, or updates its own   |
 
-Claude follows [`adapter-update-prompt.md`](adapter-update-prompt.md): the contract's rules, the
-two releases' sources, and what to report. The pull request shows the workflow's own run, not
-Claude's, and opens as a draft when the adapter does not build, reports another release, or Claude
-did not finish.
+Claude follows [`adapter-update-prompt.md`](adapter-update-prompt.md): what the contract allows an
+adapter and how it applies, the two releases' sources, and what to report. It builds the adapter and
+runs the families it changes, never the whole suite. The job then builds the change once more and
+runs the families in [`smoke.txt`](smoke.txt) and those Claude names, and the pull request shows
+that run, not Claude's. The adapter's own CI runs on the pull request as on any other. The whole
+suite runs in the adapter's weekly CI, and on the benchmark machine once Registry update moves
+`kernels.json`.
 
-`bump` and `adapt` build and run kernel code. Neither can write to a repository: `bump` holds
-nothing, and `adapt` only a Claude token that expires in minutes and is good for one workspace.
-Only `propose`, which runs no kernel code, holds the App's key.
+Claude may change the adapter's source, build files, README and manifests, and nothing else. The
+pull request opens as a draft when the adapter does not build, does not pin the release, reports
+another, the kernel's licence changed, or Claude did not finish. Run again for the same release, the
+workflow replaces its own branch and updates its pull request, unless someone else has pushed to it.
+
+`target` runs no kernel code and holds nothing. `update` builds and runs kernel code, and holds only
+a Claude token that expires in minutes and is good for one workspace. Only `propose`, which runs no
+kernel code, holds the App's key.
 
 ## Registry update
 
@@ -249,7 +255,7 @@ the default token subject. The buckets are secrets, so the public logs mask them
 The Adapter update and Registry update workflows have their own App, which holds Contents and Pull
 requests, read and write, and nothing else, on this repository and the adapter repositories the
 suite maintains. Their `propose` jobs read it from the `adapter-update` environment, and the
-`adapt` job reads the Claude workspace from the `adapter-claude` environment; both allow only
+`update` job reads the Claude workspace from the `adapter-claude` environment; both allow only
 `main`:
 
 | Name                           | Kind     | Environment      | What it is                         |
@@ -261,7 +267,7 @@ suite maintains. Their `propose` jobs read it from the `adapter-update` environm
 | `ANTHROPIC_SERVICE_ACCOUNT_ID` | Variable | `adapter-claude` | The account the tokens act as      |
 | `ANTHROPIC_WORKSPACE_ID`       | Variable | `adapter-claude` | The workspace they are good for    |
 
-There is no Claude key: the `adapt` job trades GitHub's token for the run for a Claude token that
+There is no Claude key: the `update` job trades GitHub's token for the run for a Claude token that
 lasts minutes. The rule grants one only to a manual run of this repository's `main` in the
 `adapter-claude` environment, and the workspace's spending limit caps what a run can cost.
 

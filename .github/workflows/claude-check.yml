@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
-# Asks Claude one question the way the Adapter update's adapt job reaches it, to test the federation
+# Asks Claude one question the way the Adapter update's update job reaches it, to test the federation
 # rule and the workspace in a minute, without a suite run: bench/README.md.
 name: Claude check
 

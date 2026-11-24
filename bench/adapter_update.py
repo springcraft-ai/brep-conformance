@@ -1,25 +1,27 @@
-"""The Adapter update workflow's steps: moves an adapter the suite maintains to a newer release of
-its kernel, compares the suite's results before and after, and moves the kernel's registry entry.
-Reads kernels.json at <root>.
+"""The Adapter update workflow's steps: finds the release an adapter the suite maintains can move
+to, checks that the adapter now pins it, sums up the suite's run on it, and moves the kernel's
+registry entry. Reads kernels.json at <root>. Changes no adapter: Claude moves the pins.
 
   adapter_update.py kernels <root> <kernels>  the kernels to run, as a JSON list: every one whose
                                               adapter the workflows can update for `all` or
                                               nothing, or those named, separated by commas
   adapter_update.py plan <root> <kernel>      fails unless the workflows can update the kernel's
                                               adapter; prints its repository, build and binary
-  adapter_update.py bump <adapter> [version]  pins each kernel crate to the release, or to its
-                                              newest, with the version the adapter reports
-  adapter_update.py compare <before> <after>  a Markdown table of what changed between two
-                                              results files
+  adapter_update.py target <adapter> [version]
+                                              the release the adapter's checkout pins and the one
+                                              to move to, the given one or the newest, with each
+                                              pin's move and each release's licence
+  adapter_update.py check <adapter> <target>  fails unless the checkout pins what the target says
+  adapter_update.py summary <results>         a Markdown summary of a results file
   adapter_update.py pinned <adapter>          the kernel release an adapter's checkout pins
   adapter_update.py registry <root> <kernel> <version> <commit>
                                               moves the kernel's entry to the release and the
                                               adapter commit; prints whether it changed
 
-A kernel crate is a dependency of the adapter, other than brep-protocol, pinned to one release:
-exactly, `=X.Y.Z`, from crates.io, or by `rev` from a GitHub repository, whose releases are then its
-GitHub releases. An adapter that links its kernel from a Python package pins it in pyproject.toml,
-`"name==X.Y.Z"`, and that package's releases on PyPI are the kernel's.
+A kernel pin is one of the adapter's dependencies, other than brep-protocol, pinned to one release:
+in Cargo.toml exactly, `=X.Y.Z`, from crates.io, or by `rev` from a GitHub repository, whose
+releases are then its GitHub releases; or in build.sh, as a line `package=X.Y.Z`, from conda-forge.
+The first pin names the kernel's release.
 """
 
 import collections
@@ -39,12 +41,13 @@ PLAIN = re.compile(r'^(?P<key>[A-Za-z0-9_-]+)\s*=\s*"=(?P<version>[^"]+)"\s*(#.*
 TABLE = re.compile(r'^(?P<key>[A-Za-z0-9_-]+)\s*=\s*\{(?P<body>.*)\}\s*(#.*)?$')
 FIELD = re.compile(r'\b(?P<name>package|version|git|rev|path)\s*=\s*"(?P<value>[^"]*)"')
 GITHUB = re.compile(r"^https://github\.com/(?P<slug>[^/]+/[^/]+?)(\.git)?/?$")
-REPORTED = re.compile(r'(fn version\(&self\) -> String \{\s*)"(?P<version>[^"]+)"')
+# A build.sh line that pins a conda-forge package: `occt=8.0.2`.
+CONDA = re.compile(r"^(?P<package>[a-z0-9][a-z0-9_-]*)=(?P<version>\d+\.\d+\.\d+)\s*(#.*)?$")
 STABLE = re.compile(r"^\d+\.\d+\.\d+$")
-# A pyproject.toml requirement pinned to one release, `"name==1.2.3.4"`; a final release's number.
-PYPI_PIN = re.compile(r'"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[0-9][^"\s;,]*)"')
-FINAL = re.compile(r"^\d+(\.\d+)*$")
 BUILDS = (["cargo build --release --locked"], ["./build.sh"])
+# The results that pass a case: the tiers, from the suite's own tolerance to its loosest. A case
+# beyond them is `fail`.
+ANSWERED = ("1e-7", "1e-6", "1e-5", "1e-3")
 
 
 def read(path):
@@ -151,74 +154,57 @@ def kernel_crates(manifest):
     return crates
 
 
-def pin(manifest, moves):
-    """The manifest with each kernel crate's pin moved. moves maps a crate to (from, to): versions
-    for one from crates.io, revs for one from GitHub. Links to a moved GitHub release's tag, in a
-    comment say, move with it: (from, to, from_tag, to_tag)."""
-    out, section = [], None
-    for line in manifest.splitlines(keepends=True):
-        stripped = line.strip()
-        if stripped.startswith("["):
-            section = stripped
-        elif section == "[dependencies]":
-            for name, (old, new, *tags) in moves.items():
-                key = re.escape(name)
-                plain = re.match(rf'^\s*{key}\s*=\s*"={re.escape(old)}"', line)
-                table = (re.search(rf'\bpackage\s*=\s*"{key}"', line)
-                         or re.match(rf'^\s*{key}\s*=\s*\{{', line))
-                if plain or (table and f'version = "={old}"' in line):
-                    line = line.replace(f'"={old}"', f'"={new}"', 1)
-                elif table and f'rev = "{old}"' in line:
-                    line = line.replace(f'rev = "{old}"', f'rev = "{new}"', 1)
-                if len(tags) == 2 and tags[0]:
-                    line = line.replace(f"/releases/tag/{tags[0]}", f"/releases/tag/{tags[1]}")
-        out.append(line)
-    return "".join(out)
+def conda_packages(script):
+    """Each conda-forge package a build script pins, `package=X.Y.Z` on a line of its own, in the
+    order it pins them: (package, version). A script that installs nothing from conda-forge pins
+    none."""
+    if "conda-forge" not in script:
+        return []
+    return [(m["package"], m["version"]) for line in script.splitlines()
+            if (m := CONDA.match(line.strip()))]
 
 
-def report(source, old, new):
-    """The source with the literal version `fn version` returns moved from old to new, and whether
-    it held one. An adapter that reports its kernel's own constant needs no change."""
-    m = REPORTED.search(source)
-    if not m or m["version"] != old:
-        return source, False
-    return source[:m.start("version")] + new + source[m.end("version"):], True
+def pins(adapter):
+    """The kernel's pins in the adapter's checkout, the first naming the kernel's release: each
+    {"name", "source"} with "version", or with "slug" and "rev" for one from git."""
+    found = []
+    path = os.path.join(adapter, "Cargo.toml")
+    if os.path.exists(path):
+        for c in kernel_crates(read(path)):
+            if "slug" in c:
+                found.append({"name": c["crate"], "source": "git", "slug": c["slug"],
+                              "rev": c["rev"]})
+            else:
+                found.append({"name": c["crate"], "source": "crates.io",
+                              "version": c["version"]})
+    path = os.path.join(adapter, "build.sh")
+    if os.path.exists(path):
+        found += [{"name": p, "source": "conda-forge", "version": v}
+                  for p, v in conda_packages(read(path))]
+    if not found:
+        sys.exit("the adapter pins no kernel crate or package to a release")
+    return found
 
 
-def newest(crate):
-    """The crate's newest release on crates.io that is not yanked and not a pre-release."""
-    versions = fetch(f"https://crates.io/api/v1/crates/{crate}/versions")["versions"]
-    stable = [v["num"] for v in versions if not v["yanked"] and STABLE.match(v["num"])]
-    if not stable:
-        sys.exit(f"crates.io has no stable release of {crate}")
-    return max(stable, key=lambda v: tuple(int(p) for p in v.split(".")))
+def newest(versions):
+    stable = [v for v in versions if STABLE.match(v)]
+    return max(stable, key=lambda v: tuple(int(p) for p in v.split("."))) if stable else None
 
 
-def kernel_packages(pyproject):
-    """Each Python package pinned to one release in the project's dependencies: (name, version)."""
-    m = re.search(r"^dependencies\s*=\s*\[(?P<list>[^\]]*)\]", pyproject, re.M)
-    return [(p["name"], p["version"]) for p in PYPI_PIN.finditer(m["list"])] if m else []
+def crate_versions(crate):
+    """The crate's releases on crates.io that are not yanked."""
+    return [v["num"] for v in fetch(f"https://crates.io/api/v1/crates/{crate}/versions")["versions"]
+            if not v["yanked"]]
 
 
-def pin_packages(pyproject, moves):
-    for name, (old, new) in moves.items():
-        pyproject = pyproject.replace(f'"{name}=={old}"', f'"{name}=={new}"', 1)
-    return pyproject
+def crate_licence(crate, version):
+    return fetch(f"https://crates.io/api/v1/crates/{crate}/{version}")["version"]["license"]
 
 
-def newest_package(name):
-    """The package's newest final release on PyPI that has files and is not yanked."""
-    releases = fetch(f"https://pypi.org/pypi/{name}/json")["releases"]
-    final = [v for v, files in releases.items()
-             if FINAL.match(v) and files and not all(f.get("yanked") for f in files)]
-    if not final:
-        sys.exit(f"PyPI has no final release of {name}")
-    return max(final, key=lambda v: tuple(int(p) for p in v.split(".")))
-
-
-def has_package(name, version):
-    files = fetch(f"https://pypi.org/pypi/{name}/json")["releases"].get(version) or []
-    return FINAL.match(version) and files and not all(f.get("yanked") for f in files)
+def conda_files(package):
+    """The package's files on conda-forge for linux-64, the platform the workflows build on."""
+    return [f for f in fetch(f"https://api.anaconda.org/package/conda-forge/{package}")["files"]
+            if f["attrs"].get("subdir") == "linux-64"]
 
 
 def release(slug, version=None):
@@ -242,107 +228,104 @@ def tag_of(slug, commit):
     return None
 
 
-def move_git(crate, version):
-    slug, rev = crate["slug"], crate["rev"]
-    old_commit = github(f"repos/{slug}/commits/{rev}")["sha"]
-    old_tag = tag_of(slug, old_commit)
-    new_tag = release(slug, version)
-    new_commit = github(f"repos/{slug}/commits/{new_tag}")["sha"]
-    return {"from": old_tag.removeprefix("v") if old_tag else rev,
-            "to": new_tag.removeprefix("v"), "repository": f"https://github.com/{slug}",
-            "from_commit": old_commit, "to_commit": new_commit,
-            "pin": (rev, new_commit[:max(len(rev), 8)], old_tag, new_tag)}
+def git_licence(slug, commit):
+    return github(f"repos/{slug}/license?ref={commit}")["license"]["spdx_id"]
 
 
-def bump(adapter, version=None):
-    """Moves the pins and the reported version; the first kernel crate names the kernel's
-    release."""
-    moved = {}
-    path = os.path.join(adapter, "Cargo.toml")
-    if os.path.exists(path):
-        manifest = read(path)
-        crates = {}
-        for c in kernel_crates(manifest):
-            if "slug" in c:
-                crates[c["crate"]] = move_git(c, version)
-            else:
-                to = version or newest(c["crate"])
-                crates[c["crate"]] = {"from": c["version"], "to": to, "pin": (c["version"], to)}
-        write(path, pin(manifest, {n: m.pop("pin") for n, m in crates.items()}))
-        moved.update(crates)
-    path = os.path.join(adapter, "pyproject.toml")
-    if os.path.exists(path):
-        pyproject = read(path)
-        packages = {}
-        for name, old in kernel_packages(pyproject):
-            if version and not has_package(name, version):
-                sys.exit(f"PyPI has no final release {version} of {name}")
-            packages[name] = {"from": old, "to": version or newest_package(name), "pypi": True}
-        write(path, pin_packages(pyproject, {n: (p["from"], p["to"]) for n, p in packages.items()}))
-        moved.update(packages)
-    if not moved:
-        sys.exit("the adapter pins no kernel crate or package to a release")
-    first = next(iter(moved))
-    old, new = moved[first]["from"], moved[first]["to"]
-    reported = []
-    for dirpath, _, files in os.walk(os.path.join(adapter, "src")):
-        for f in sorted(files):
-            if f.endswith(".rs"):
-                p = os.path.join(dirpath, f)
-                text, changed = report(read(p), old, new)
-                if changed:
-                    write(p, text)
-                    reported.append(os.path.relpath(p, adapter))
-    return {"crates": moved, "kernel_crate": first, "from": old, "to": new,
-            "reported_in": reported}
+def move(pin, version):
+    """Where one pin moves: to the given release, which must be a stable one, or to its newest;
+    with the licence each release declares where its source says."""
+    name = pin["name"]
+    if pin["source"] == "git":
+        slug, rev = pin["slug"], pin["rev"]
+        old_commit = github(f"repos/{slug}/commits/{rev}")["sha"]
+        old_tag = tag_of(slug, old_commit)
+        new_tag = release(slug, version)
+        new_commit = github(f"repos/{slug}/commits/{new_tag}")["sha"]
+        return {"source": "git", "repository": f"https://github.com/{slug}",
+                "from": old_tag.removeprefix("v") if old_tag else rev,
+                "to": new_tag.removeprefix("v"), "from_commit": old_commit,
+                "to_commit": new_commit, "licence": {"from": git_licence(slug, old_commit),
+                                                     "to": git_licence(slug, new_commit)}}
+    if pin["source"] == "crates.io":
+        published = crate_versions(name)
+        to = version or newest(published)
+        if to is None or to not in published or not STABLE.match(to):
+            sys.exit(f"crates.io has no stable release {version or ''} of {name}".replace("  ", " "))
+        return {"source": "crates.io", "from": pin["version"], "to": to,
+                "licence": {"from": crate_licence(name, pin["version"]),
+                            "to": crate_licence(name, to)}}
+    files = conda_files(name)
+    by_version = {f["version"]: f["attrs"].get("license") for f in files}
+    to = version or newest(by_version)
+    if to is None or to not in by_version or not STABLE.match(to):
+        sys.exit(f"conda-forge has no stable release {version or ''} of {name}".replace("  ", " "))
+    return {"source": "conda-forge", "from": pin["version"], "to": to,
+            "licence": {"from": by_version.get(pin["version"]), "to": by_version[to]}}
 
 
-def outcomes(path):
+def target(adapter, version=None):
+    """The release the checkout pins, the one to move to, each pin's move, and each pin whose
+    licence differs between the two releases. Changes nothing."""
+    moves = {p["name"]: move(p, version) for p in pins(adapter)}
+    first = next(iter(moves.values()))
+    changed = [{"name": n, **m["licence"]} for n, m in moves.items()
+               if m["licence"]["from"] != m["licence"]["to"]]
+    return {"from": first["from"], "to": first["to"], "pins": moves, "licence_changed": changed}
+
+
+def check(adapter, wanted):
+    """What the checkout pins that the target does not say: one line for each, none when the
+    checkout pins each release the target moves to."""
+    problems = []
+    have = {p["name"]: p for p in pins(adapter)}
+    for name, m in wanted["pins"].items():
+        p = have.get(name)
+        if p is None:
+            problems.append(f"{name}: no longer pinned")
+        elif m["source"] == "git":
+            if p.get("rev") is None or not m["to_commit"].startswith(p["rev"]) \
+                    or len(p["rev"]) < 8:
+                problems.append(f"{name}: rev {p.get('rev')}, not {m['to_commit'][:8]} or longer")
+        elif p.get("version") != m["to"]:
+            problems.append(f"{name}: {p.get('version')}, not {m['to']}")
+    problems += [f"{name}: pinned now, and not before" for name in have if name not in
+                 wanted["pins"]]
+    return problems
+
+
+def summary(path):
+    """A Markdown summary of one run: the cases at each result, then each test with a case that
+    did not answer, other than one the kernel does not support."""
     data = load(path)
-    return data["kernel"], {c["id"]: (c["test"], c["result"]) for c in data["cases"]}
-
-
-def compare(before, after):
-    """A Markdown summary of the two runs: the tallies, then every test whose result changed."""
-    (k0, a), (k1, b) = outcomes(before), outcomes(after)
-    results = sorted(set(r for _, r in a.values()) | set(r for _, r in b.values()))
-    count0 = collections.Counter(r for _, r in a.values())
-    count1 = collections.Counter(r for _, r in b.values())
-    lines = [f"| Result | {k0['version']} | {k1['version']} |", "| --- | --- | --- |"]
-    lines += [f"| {r} | {count0[r]} | {count1[r]} |" for r in results]
-    lines += [f"| cases | {len(a)} | {len(b)} |", ""]
-    moved = collections.Counter()
-    for case in sorted(set(a) | set(b)):
-        was = a.get(case, (None, "absent"))
-        now = b.get(case, (None, "absent"))
-        if was[1] != now[1]:
-            moved[(was[0] or now[0], was[1], now[1])] += 1
-    if not moved:
-        lines.append("No case changed its result.")
+    cases = data["cases"]
+    counts = collections.Counter(c["result"] for c in cases)
+    lines = [f"{data['kernel']['name']} {data['kernel']['version']}, {len(cases)} cases:", "",
+             "| Result | Cases |", "| --- | --- |"]
+    lines += [f"| {r} | {counts[r]} |" for r in sorted(counts, key=lambda r: (
+        r not in ANSWERED, ANSWERED.index(r) if r in ANSWERED else 0, r))]
+    lines.append("")
+    short = collections.Counter((c["test"], c["result"]) for c in cases
+                                if c["result"] not in ANSWERED and c["result"] != "unsupported")
+    if not short:
+        lines.append("Every case it supports answered.")
         return "\n".join(lines) + "\n"
-    lines += ["| Test | Was | Now | Cases |", "| --- | --- | --- | --- |"]
-    lines += [f"| `{t}` | {w} | {n} | {c} |" for (t, w, n), c in sorted(moved.items())]
+    lines += ["| Test | Result | Cases |", "| --- | --- | --- |"]
+    lines += [f"| `{t}` | {r} | {n} |" for (t, r), n in sorted(short.items())]
     return "\n".join(lines) + "\n"
 
 
 def pinned(adapter):
-    """The kernel release the adapter's checkout pins, read from its manifest without building it:
-    the first kernel crate's or package's version, or the tag of the GitHub release its rev is."""
-    path = os.path.join(adapter, "Cargo.toml")
-    crates = kernel_crates(read(path)) if os.path.exists(path) else []
-    if crates and "version" in crates[0]:
-        return crates[0]["version"]
-    if crates:
-        slug, rev = crates[0]["slug"], crates[0]["rev"]
-        tag = tag_of(slug, github(f"repos/{slug}/commits/{rev}")["sha"])
-        if tag is None:
-            sys.exit(f"{slug} has no release at {rev}")
-        return tag.removeprefix("v")
-    path = os.path.join(adapter, "pyproject.toml")
-    packages = kernel_packages(read(path)) if os.path.exists(path) else []
-    if packages:
-        return packages[0][1]
-    sys.exit("the adapter pins no kernel crate or package to a release")
+    """The kernel release the adapter's checkout pins, read without building it: the first pin's
+    version, or the tag of the GitHub release its rev is."""
+    first = pins(adapter)[0]
+    if first["source"] != "git":
+        return first["version"]
+    slug, rev = first["slug"], first["rev"]
+    tag = tag_of(slug, github(f"repos/{slug}/commits/{rev}")["sha"])
+    if tag is None:
+        sys.exit(f"{slug} has no release at {rev}")
+    return tag.removeprefix("v")
 
 
 def registry(root, kernel, version, commit):
@@ -368,10 +351,13 @@ def main():
         print(json.dumps(kernels(args[1], args[2] if len(args) == 3 else "")))
     elif args[:1] == ["plan"] and len(args) == 3:
         print(json.dumps(plan(args[1], args[2])))
-    elif args[:1] == ["bump"] and len(args) in (2, 3):
-        print(json.dumps(bump(args[1], args[2] if len(args) == 3 and args[2] else None)))
-    elif args[:1] == ["compare"] and len(args) == 3:
-        sys.stdout.write(compare(args[1], args[2]))
+    elif args[:1] == ["target"] and len(args) in (2, 3):
+        print(json.dumps(target(args[1], args[2] if len(args) == 3 and args[2] else None)))
+    elif args[:1] == ["check"] and len(args) == 3:
+        if problems := check(args[1], load(args[2])):
+            sys.exit("\n".join(problems))
+    elif args[:1] == ["summary"] and len(args) == 2:
+        sys.stdout.write(summary(args[1]))
     elif args[:1] == ["pinned"] and len(args) == 2:
         print(pinned(args[1]))
     elif args[:1] == ["registry"] and len(args) == 5:

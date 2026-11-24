@@ -427,7 +427,7 @@ standing in for the first, and its results say nothing about either. Such a func
 `unsupported`. Each adapter says why in one line, and the kernel is judged on what it offers
 directly.
 
-An adapter may do four things that are not a call of the kernel. No others are allowed:
+An adapter may do five things that are not a call of the kernel. No others are allowed:
 
 1. **Translating form.** The adapter may give a profile's segments as the kernel's curves, a frame
    as its placement, and a path as its spine. It may sample a curve the kernel returns into points,
@@ -443,6 +443,16 @@ An adapter may do four things that are not a call of the kernel. No others are a
    answers queries on an empty solid: a volume of 0, no meetings of a ray, and every point outside.
 4. **What a handle means.** A handle is a solid that stays as it was. Where a kernel's call consumes
    its operand, the adapter keeps a record of how the solid was made and makes it again.
+5. **Drawing what the kernel made.** `mesh`, `display`, `section` and `project` draw a solid the
+   kernel has already made, and make nothing. For these the adapter may make several of the
+   kernel's calls that read the solid without changing it, such as its mesher, its list of the
+   faces that use an edge and its normal at a point, and put their answers into the protocol's
+   form. It may work out what follows from those answers alone: the turn at an edge from the two
+   normals the kernel gave there, a seam from a face the kernel says uses an edge twice, a split
+   edge from two faces the kernel says lie on one surface, and a curve's points by the kernel's
+   own sampler where it has one. It moves no point, makes no normal and compares no surfaces with
+   a number of its own. What the kernel cannot say, such as an edge's turn, the adapter leaves
+   out.
 
 Where a case asks for one thing by way of another, the suite does the other thing itself. It uses
 one recipe that is public and the same for every kernel. The recipes are the stand-ins below, the

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
-# Moves adapters the suite maintains to newer releases of their kernels, and has Claude make each
-# adapter use what its release changed. Opens a pull request in each adapter's repository and
-# merges nothing; the Registry update workflow moves kernels.json once they merge: bench/README.md.
+# Has Claude move each adapter the suite maintains to its kernel's newer release, and use what the
+# release changed. Opens a pull request in each adapter's repository and merges nothing; the
+# Registry update workflow moves kernels.json once they merge: bench/README.md.
 name: Adapter update
 run-name: Adapter update · ${{ inputs.kernels || 'all' }}${{ inputs.dry_run && ' · dry run' || '' }}
 
@@ -16,10 +16,6 @@ on:
         description: The release to move to, for one kernel; empty for each one's newest
         type: string
         default: ''
-      claude:
-        description: Have Claude make each adapter use its release; untick for the pins alone
-        type: boolean
-        default: true
       dry_run:
         description: Open no pull request; keep each change and report as the run's artifacts
         type: boolean
@@ -72,5 +68,4 @@ jobs:
     with:
       kernel: ${{ matrix.kernel }}
       version: ${{ inputs.version }}
-      claude: ${{ inputs.claude }}
       dry_run: ${{ inputs.dry_run }}
