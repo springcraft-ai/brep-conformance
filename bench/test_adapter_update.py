@@ -4,7 +4,10 @@ import json
 import os
 import tempfile
 import unittest
+import urllib.error
 from unittest import mock
+
+import adapter_update
 
 from adapter_update import (check, conda_packages, kernel_crates, kernels, licences, load, pinned,
                             plan, read, registry, summary, target, write)
@@ -158,12 +161,43 @@ class Target(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self.target({"build.sh": BUILD}, "8.1.0")
 
+    def test_a_release_older_than_the_pin_is_refused_and_never_the_newest(self):
+        manifest = MANIFEST.replace('helper = "=1.0.0"\n', "").replace("0.24.0", "0.26.0")
+        with self.assertRaises(SystemExit):
+            self.target({"Cargo.toml": manifest}, "0.24.0")
+        ahead = manifest.replace("0.26.0", "0.30.0")
+        with mock.patch("adapter_update.crate_licence", lambda name, version: "MIT"):
+            moved = self.target({"Cargo.toml": ahead})
+        self.assertEqual((moved["from"], moved["to"]), ("0.30.0", "0.30.0"))
+
     def test_changes_nothing_in_the_checkout(self):
         with tempfile.TemporaryDirectory() as d:
             write(os.path.join(d, "Cargo.toml"), GIT)
             with mock.patch("adapter_update.github", fake_github):
                 target(d)
             self.assertEqual(read(os.path.join(d, "Cargo.toml")), GIT)
+
+
+class GitHub(unittest.TestCase):
+    def test_a_token_in_the_environment_goes_with_each_call(self):
+        seen = {}
+
+        def fetch(url, headers=None):
+            seen["headers"] = headers
+            return {}
+        with mock.patch("adapter_update.fetch", fetch), \
+                mock.patch.dict(os.environ, {"GITHUB_TOKEN": "t"}):
+            adapter_update.github("repos/owner/kernel")
+        self.assertEqual(seen["headers"], {"Authorization": "Bearer t"})
+        with mock.patch("adapter_update.fetch", fetch), mock.patch.dict(os.environ, {}, clear=True):
+            adapter_update.github("repos/owner/kernel")
+        self.assertIsNone(seen["headers"])
+
+    def test_a_repository_with_no_licence_file_has_none(self):
+        def missing(path):
+            raise urllib.error.HTTPError(path, 404, "Not Found", None, None)
+        with mock.patch("adapter_update.github", missing):
+            self.assertIsNone(adapter_update.git_licence("owner/kernel", NEW))
 
 
 class Check(unittest.TestCase):

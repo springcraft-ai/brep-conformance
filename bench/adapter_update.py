@@ -31,6 +31,7 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 
 OWNER = "https://github.com/springcraft-ai/"
@@ -66,14 +67,18 @@ def load(path):
     return json.loads(read(path))
 
 
-def fetch(url):
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+def fetch(url, headers=None):
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
     with urllib.request.urlopen(request, timeout=30) as reply:
         return json.load(reply)
 
 
 def github(path):
-    return fetch(f"https://api.github.com/{path}")
+    """GitHub's API, with GITHUB_TOKEN where the environment has one: a runner shares its address,
+    and with it the limit GitHub sets on calls that carry no token."""
+    token = os.environ.get("GITHUB_TOKEN")
+    return fetch(f"https://api.github.com/{path}",
+                 {"Authorization": f"Bearer {token}"} if token else None)
 
 
 def entry(root, kernel):
@@ -231,7 +236,30 @@ def tag_of(slug, commit):
 
 
 def git_licence(slug, commit):
-    return github(f"repos/{slug}/license?ref={commit}")["license"]["spdx_id"]
+    """The licence GitHub reads in the repository at the commit, or None where it finds no licence
+    file."""
+    try:
+        return github(f"repos/{slug}/license?ref={commit}")["license"]["spdx_id"]
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
+def version_key(version):
+    return tuple(int(p) for p in version.split(".")) if STABLE.match(version) else None
+
+
+def forward(name, old, new, asked):
+    """The release to move to: the newest, or the one asked for, never one older than the pin. A
+    pin newer than the newest release stays where it is; a release asked for that is older than
+    the pin is refused."""
+    a, b = version_key(old), version_key(new)
+    if a is None or b is None or b >= a:
+        return new
+    if asked:
+        sys.exit(f"{name} pins {old}, newer than {new}: the workflows move a kernel forward only")
+    return old
 
 
 def move(pin, version):
@@ -243,9 +271,12 @@ def move(pin, version):
         old_commit = github(f"repos/{slug}/commits/{rev}")["sha"]
         old_tag = tag_of(slug, old_commit)
         new_tag = release(slug, version)
+        old_version = old_tag.removeprefix("v") if old_tag else rev
+        if forward(name, old_version, new_tag.removeprefix("v"), version) == old_version:
+            new_tag = old_tag
         new_commit = github(f"repos/{slug}/commits/{new_tag}")["sha"]
         return {"source": "git", "repository": f"https://github.com/{slug}",
-                "from": old_tag.removeprefix("v") if old_tag else rev,
+                "from": old_version,
                 "to": new_tag.removeprefix("v"), "from_commit": old_commit,
                 "to_commit": new_commit, "licence": {"from": git_licence(slug, old_commit),
                                                      "to": git_licence(slug, new_commit)}}
@@ -254,6 +285,7 @@ def move(pin, version):
         to = version or newest(published)
         if to is None or to not in published or not STABLE.match(to):
             sys.exit(f"crates.io has no stable release {version or ''} of {name}".replace("  ", " "))
+        to = forward(name, pin["version"], to, version)
         return {"source": "crates.io", "from": pin["version"], "to": to,
                 "licence": {"from": crate_licence(name, pin["version"]),
                             "to": crate_licence(name, to)}}
@@ -262,8 +294,9 @@ def move(pin, version):
     to = version or newest(by_version)
     if to is None or to not in by_version or not STABLE.match(to):
         sys.exit(f"conda-forge has no stable release {version or ''} of {name}".replace("  ", " "))
+    to = forward(name, pin["version"], to, version)
     return {"source": "conda-forge", "from": pin["version"], "to": to,
-            "licence": {"from": by_version.get(pin["version"]), "to": by_version[to]}}
+            "licence": {"from": by_version.get(pin["version"]), "to": by_version.get(to)}}
 
 
 def target(adapter, version=None):

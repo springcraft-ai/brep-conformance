@@ -46,6 +46,7 @@ jobs:
         id: move
         env:
           KERNELS: ${{ inputs.kernels }}
+          GITHUB_TOKEN: ${{ github.token }} # read-only, for GitHub's API without its shared limit
         run: |
           rows="$RUNNER_TEMP/rows.md" licences="$RUNNER_TEMP/licences.txt"
           : > "$rows"

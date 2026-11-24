@@ -23,8 +23,10 @@ versions, and for one from git the commits, it moves between, and the licence ea
 declares; and `licence_changed`, each pin whose licence differs between the two.
 
 A kernel the adapter takes from conda-forge, as a line `package=X.Y.Z` of its `build.sh`, has
-nothing in `work/old/` or `work/new/`: its source is too big to unpack whole. Clone its repository,
-from `work/kernel.json`, and compare the two releases' tags there, starting from the release notes.
+nothing in `work/old/` or `work/new/`: its source is too big to unpack whole. Start from its release
+notes. Then clone each release's tag shallowly into `work/`, never inside `adapter/`, as
+`git clone --depth 1 --branch <tag> <repository> work/<tag>`, with the repository from
+`work/kernel.json`, and compare the two.
 
 Read these first, in this order:
 
@@ -40,7 +42,7 @@ answer it with a kernel call.
 
 ## What to do
 
-You have 30 minutes, and then you are stopped wherever you are. Do the steps in this order, so
+You have 90 minutes, and then you are stopped wherever you are. Do the steps in this order, so
 that a run cut short still leaves the pins moved and the adapter building, and write
 `work/report.md` as you go, not at the end.
 

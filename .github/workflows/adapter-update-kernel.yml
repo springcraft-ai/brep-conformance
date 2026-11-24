@@ -44,6 +44,7 @@ jobs:
         id: target
         env:
           VERSION: ${{ inputs.version }}
+          GITHUB_TOKEN: ${{ github.token }} # read-only, for GitHub's API without its shared limit
         run: |
           mkdir work
           python3 -I suite/bench/adapter_update.py plan suite "$KERNEL" > work/where.json
@@ -78,8 +79,8 @@ jobs:
     if: needs.target.outputs.moved == 'true'
     runs-on: ubuntu-24.04
     environment: adapter-claude
-    # The builds, Claude's 30 minutes, and the run on the smoke families and Claude's.
-    timeout-minutes: 90
+    # The builds, Claude's 90 minutes, and the run on the smoke families and Claude's.
+    timeout-minutes: 150
     permissions:
       contents: read
       id-token: write # for the Claude API's workload identity federation
@@ -120,9 +121,13 @@ jobs:
               done
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: |
-            suite -> target
-            adapter -> target
+          workspaces: suite -> target
+      # An adapter its own build.sh makes, with no cargo workspace, has nothing for this to keep.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        if: hashFiles('adapter/Cargo.lock') != ''
+        with:
+          workspaces: adapter -> target
+          key: adapter
       - name: Build the suite
         run: |
           suite/bench/adapter-build-deps.sh
@@ -132,11 +137,11 @@ jobs:
       - uses: anthropics/claude-code-action/base-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
         id: claude
         continue-on-error: true
-        timeout-minutes: 30
+        timeout-minutes: 90
         with:
           prompt_file: suite/bench/adapter-update-prompt.md
           claude_args: >-
-            --model opus --max-turns 120
+            --model opus --max-turns 300
             --allowedTools Bash,Read,Edit,Write,Glob,Grep
           anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
           anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
@@ -249,6 +254,8 @@ jobs:
           echo "::add-mask::$token"
           branch="kernel/$TO"
           git clone -q "https://x-access-token:$token@github.com/$slug.git" adapter
+          # Claude's change is to the commit target read, which main may have moved past since.
+          git -C adapter checkout -q "$(jq -r .commit work/plan.json)"
           # A branch this workflow left, one commit on main by the bot, is replaced on a re-run;
           # one anybody else has pushed to is not.
           if git -C adapter fetch -q origin "$branch" 2> /dev/null; then
