@@ -142,6 +142,57 @@ The machine does hold one cloud credential, its own role, and anything running o
 role. The role can put files in the staging bucket and do nothing else. `bench` lists what it sent
 in `results/staged.txt`, and `publish` refuses to copy unless staging holds exactly that list.
 
+## Adapter update
+
+The [Adapter update workflow](../.github/workflows/adapter-update.yml) moves an adapter the suite
+maintains to a newer release of its kernel. It is started by hand on `main`, for one kernel, and
+opens pull requests; it merges nothing. An adapter its kernel's own maintainers keep, or one whose
+repository is not the suite's, is not offered: its maintainers move it by pull request.
+
+| Input     | Default   | What it does                                                                  |
+| --------- | --------- | ----------------------------------------------------------------------------- |
+| `kernel`  | —         | The kernel whose adapter to update                                            |
+| `step`    | `adapter` | `adapter`, the adapter's pull request; `registry`, the registry's, after that |
+| `version` | empty     | The release to move to; empty for the newest published one                    |
+| `claude`  | on        | Has Claude make the adapter use the release; off for the pins alone           |
+| `dry_run` | off       | Opens no pull request; the change and its report stay as the run's artifact   |
+
+[`adapter_update.py`](adapter_update.py) does the mechanical part. It moves a kernel only between
+published releases, never to a branch, a draft or a pre-release, and the adapter's own pin says
+where those come from:
+
+| The adapter pins its kernel                     | Its newest release                         |
+| ----------------------------------------------- | ------------------------------------------ |
+| Exactly, `=X.Y.Z`, from crates.io               | The newest on crates.io                    |
+| By `rev` from GitHub, publishing no crate       | The tagged commit of its newest GitHub one |
+| Exactly, `name==X.Y.Z`, in `pyproject.toml`     | The newest on PyPI with files              |
+
+The version `fn version` returns moves with the pins where the adapter writes it out. The adapter
+builds with the commands `kernels.json` gives it, through [`adapter-build.sh`](adapter-build.sh):
+cargo, or the adapter's own `build.sh`.
+
+The `adapter` step has three jobs:
+
+| Job       | Holds          | What it does                                                                 |
+| --------- | -------------- | ---------------------------------------------------------------------------- |
+| `bump`    | Nothing        | Runs the whole suite on the adapter, moves the pins, and runs it again       |
+| `adapt`   | A Claude token | Claude makes the adapter build and use the release; the job runs it again    |
+| `propose` | The App's key  | Opens the pull request in the adapter's repository, with the runs' table     |
+
+Claude follows [`adapter-update-prompt.md`](adapter-update-prompt.md): the contract's rules, the
+two releases' sources, and what to report. The pull request shows the workflow's own run, not
+Claude's, and opens as a draft when the adapter does not build, reports another release, or Claude
+did not finish.
+
+Once that pull request merges, the `registry` step builds the adapter's `main`, reads the release
+it reports, and opens a pull request here moving the kernel's entry in
+[`kernels.json`](../kernels.json) to it, for review as [process.md](../doc/process.md#the-registry)
+says.
+
+`bump` and `adapt` build and run kernel code. Neither can write to a repository: `bump` holds
+nothing, and `adapt` only a Claude token that expires in minutes and is good for one workspace.
+Only `propose`, which runs no kernel code, holds the App's key.
+
 ## Setup
 
 The workflow reads these from the `benchmark` environment, which allows only `main`:
@@ -177,3 +228,21 @@ the default token subject. The buckets are secrets, so the public logs mask them
 | `BENCHMARK_STAGING_BUCKET`          | Secret   | The staging bucket         |
 
 `bench` reads the staging bucket's name too, for the one step that sends the files.
+
+The Adapter update workflow has its own App, which holds Contents and Pull requests, read and
+write, and nothing else, on this repository and the adapter repositories the suite maintains. Its
+`propose` jobs read it from the `adapter-update` environment, and its `adapt` job reads the Claude
+workspace from the `adapter-claude` environment; both allow only `main`:
+
+| Name                           | Kind     | Environment      | What it is                         |
+| ------------------------------ | -------- | ---------------- | ---------------------------------- |
+| `ADAPTER_APP_CLIENT_ID`        | Variable | `adapter-update` | The adapter update App             |
+| `ADAPTER_APP_PRIVATE_KEY`      | Secret   | `adapter-update` | That App's key                     |
+| `ANTHROPIC_FEDERATION_RULE_ID` | Variable | `adapter-claude` | The rule that grants Claude tokens |
+| `ANTHROPIC_ORGANIZATION_ID`    | Variable | `adapter-claude` | The Claude organization            |
+| `ANTHROPIC_SERVICE_ACCOUNT_ID` | Variable | `adapter-claude` | The account the tokens act as      |
+| `ANTHROPIC_WORKSPACE_ID`       | Variable | `adapter-claude` | The workspace they are good for    |
+
+There is no Claude key: the `adapt` job trades GitHub's token for the run for a Claude token that
+lasts minutes. The rule grants one only to a manual run of this repository's `main` in the
+`adapter-claude` environment, and the workspace's spending limit caps what a run can cost.

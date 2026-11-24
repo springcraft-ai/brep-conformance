@@ -1,0 +1,469 @@
+# SPDX-License-Identifier: MIT
+# Moves an adapter the suite maintains to a newer release of its kernel, and has Claude make the
+# adapter use what the release changed; or, once that has merged, moves the kernel's registry
+# entry. Each opens a pull request and merges nothing: bench/README.md.
+name: Adapter update
+run-name: Adapter update · ${{ inputs.kernel }} · ${{ inputs.step }}${{ inputs.dry_run && ' · dry run' || '' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel:
+        description: The kernel whose adapter to update, as kernels.json names it
+        type: choice
+        options: [next.BREP, springrep, arris, cad-kernel, cadrs, opencascade, solidcore]
+      step:
+        description: adapter, a pull request moving the adapter to the release; registry, one
+          moving kernels.json to the adapter's main once that has merged
+        type: choice
+        options: [adapter, registry]
+        default: adapter
+      version:
+        description: The kernel release to move to; empty for its newest published release
+        type: string
+        default: ''
+      claude:
+        description: Have Claude make the adapter use the release; untick for the pins alone
+        type: boolean
+        default: true
+      dry_run:
+        description: Open no pull request; keep the change and the report as the run's artifact
+        type: boolean
+        default: false
+
+# A job with no permissions block inherits these, so a job added later gets nothing by default.
+permissions: {}
+
+concurrency:
+  group: adapter-update-${{ inputs.kernel }}
+  cancel-in-progress: false
+
+env:
+  KERNEL: ${{ inputs.kernel }}
+  THREADS: 4
+
+jobs:
+  # Builds and runs kernel code, so it holds no secret and no token that can write.
+  bump:
+    if: inputs.step == 'adapter'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    permissions:
+      contents: read
+    outputs:
+      moved: ${{ steps.bump.outputs.moved }}
+      to: ${{ steps.bump.outputs.to }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: suite
+          persist-credentials: false
+      - name: Check out the adapter
+        id: plan
+        run: |
+          mkdir work
+          python3 -I suite/bench/adapter_update.py plan suite "$KERNEL" > work/plan.json
+          git clone -q "$(jq -r .repo work/plan.json)" adapter
+          echo "binary=$(jq -r .binary work/plan.json)" >> "$GITHUB_OUTPUT"
+          echo "Adapter at $(git -C adapter rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            suite -> target
+            adapter -> target
+      - name: Run the suite on the adapter as it is
+        env:
+          BINARY: ${{ steps.plan.outputs.binary }}
+        run: |
+          suite/bench/adapter-build-deps.sh
+          (cd suite && cargo build --release --locked -p brep-conformance)
+          suite/bench/adapter-build.sh adapter work/plan.json
+          suite/target/release/brep-conformance --adapter "adapter/$BINARY" \
+              --threads "$THREADS" --out work/before.json > work/before.txt
+      - name: Move the kernel's pins
+        id: bump
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 -I suite/bench/adapter_update.py bump adapter "$VERSION" > work/bump.json
+          from=$(jq -r .from work/bump.json)
+          to=$(jq -r .to work/bump.json)
+          echo "to=$to" >> "$GITHUB_OUTPUT"
+          if [ "$from" = "$to" ]; then
+              echo "The adapter is at $KERNEL $to already" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "moved=false" >> "$GITHUB_OUTPUT"
+              exit 0
+          fi
+          echo "moved=true" >> "$GITHUB_OUTPUT"
+          # A crate from crates.io moves to its release alone, one from git to the rev now pinned,
+          # and a package from PyPI to its new pin.
+          registry=() git=()
+          for crate in $(jq -r '.crates | to_entries[]
+              | select((.value.repository | not) and (.value.pypi | not)) | .key' work/bump.json)
+          do
+              registry+=(-p "$crate")
+          done
+          for crate in $(jq -r '.crates | to_entries[] | select(.value.repository) | .key' \
+              work/bump.json); do
+              git+=(-p "$crate")
+          done
+          if [ "${#registry[@]}" -gt 0 ]; then
+              (cd adapter && cargo update "${registry[@]}" --precise "$to")
+          fi
+          if [ "${#git[@]}" -gt 0 ]; then
+              (cd adapter && cargo update "${git[@]}")
+          fi
+          if jq -e '[.crates[] | select(.pypi)] | length > 0' work/bump.json > /dev/null; then
+              (cd adapter && uv lock)
+          fi
+          echo "Moved $KERNEL $from to $to: $(jq -c .crates work/bump.json)" \
+              >> "$GITHUB_STEP_SUMMARY"
+      # A release that changes a call the adapter uses fails to build here; the adapt job fixes it.
+      - name: Run the suite with the pins moved
+        if: steps.bump.outputs.moved == 'true'
+        env:
+          BINARY: ${{ steps.plan.outputs.binary }}
+        run: |
+          if suite/bench/adapter-build.sh adapter work/plan.json; then
+              suite/target/release/brep-conformance --adapter "adapter/$BINARY" \
+                  --threads "$THREADS" --out work/after.json > work/after.txt
+              python3 -I suite/bench/adapter_update.py compare work/before.json work/after.json \
+                  > work/changes.md
+              cat work/changes.md >> "$GITHUB_STEP_SUMMARY"
+          else
+              echo "The adapter does not build with the pins moved" \
+                  | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          git -C adapter diff --binary > work/bump.patch
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: steps.bump.outputs.moved == 'true'
+        with:
+          name: bump
+          path: work
+
+  # Claude runs kernel code too: it holds no GitHub token that can write, and its Claude access is
+  # a short-lived token for one workspace, which the adapter-claude environment's rule grants only
+  # to this job on main.
+  adapt:
+    needs: bump
+    if: inputs.claude && needs.bump.outputs.moved == 'true'
+    runs-on: ubuntu-24.04
+    environment: adapter-claude
+    timeout-minutes: 345
+    permissions:
+      contents: read
+      id-token: write # for the Claude API's workload identity federation
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: suite
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: bump
+          path: work
+      - name: Check out the adapter with the pins moved, and both releases' sources
+        id: plan
+        run: |
+          git clone -q "$(jq -r .repo work/plan.json)" adapter
+          git -C adapter apply --binary ../work/bump.patch
+          echo "binary=$(jq -r .binary work/plan.json)" >> "$GITHUB_OUTPUT"
+          jq --arg k "$KERNEL" '.kernels[] | select(.kernel == $k)' suite/kernels.json \
+              > work/kernel.json
+          mkdir -p work/old work/new
+          # A crate from crates.io as published there, one from git as its two releases' commits.
+          # A package from PyPI is a build of a kernel whose source is too big to unpack whole:
+          # kernel.json names its repository, for Claude to compare the two releases' tags there.
+          jq -r '.crates | to_entries[] | .value as $v | select($v.pypi | not)
+              | if $v.repository then "\(.key) \($v.repository) \($v.from_commit) \($v.to_commit)"
+                else "\(.key) - \($v.from) \($v.to)" end' work/bump.json \
+              | while read -r crate repository from to; do
+                  if [ "$repository" = - ]; then
+                      crates=https://static.crates.io/crates/$crate
+                      curl -sSfL "$crates/$crate-$from.crate" | tar xz -C work/old
+                      curl -sSfL "$crates/$crate-$to.crate" | tar xz -C work/new
+                  else
+                      tarballs=https://codeload.github.com/${repository#https://github.com/}/tar.gz
+                      curl -sSfL "$tarballs/$from" | tar xz -C work/old
+                      curl -sSfL "$tarballs/$to" | tar xz -C work/new
+                  fi
+              done
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            suite -> target
+            adapter -> target
+      - name: Build the suite
+        run: |
+          suite/bench/adapter-build-deps.sh
+          cd suite && cargo build --release --locked -p brep-conformance
+
+      # A run that stops short, at its turn limit say, still proposes what it did, as a draft.
+      - uses: anthropics/claude-code-action/base-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe # v1.0.269
+        id: claude
+        continue-on-error: true
+        with:
+          prompt_file: suite/bench/adapter-update-prompt.md
+          claude_args: >-
+            --model opus --max-turns 400
+            --allowedTools Bash,Read,Edit,Write,Glob,Grep
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          anthropic_service_account_id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          anthropic_workspace_id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+
+      # The pull request carries what this step measures, not what Claude says it measured.
+      - name: Check Claude's change and run the suite on it
+        env:
+          BINARY: ${{ steps.plan.outputs.binary }}
+          CLAUDE: ${{ steps.claude.outcome }}
+        run: |
+          if [ "$CLAUDE" != success ]; then
+              printf '\n## Not done\n\nClaude stopped before it finished; see the run.\n' \
+                  >> work/report.md
+          fi
+          git -C adapter add -A
+          bad=$(git -C adapter diff --cached --name-only \
+              | grep -E '^(\.github/|LICENSE|CONTRIBUTING\.md|rust-toolchain\.toml)' || true)
+          if [ -n "$bad" ]; then
+              echo "::error::Claude changed files it may not: $bad"
+              exit 1
+          fi
+          git -C adapter diff --cached --binary > work/final.patch
+          if suite/bench/adapter-build.sh adapter work/plan.json; then
+              suite/target/release/brep-conformance --adapter "adapter/$BINARY" \
+                  --threads "$THREADS" --out work/final.json > work/final.txt
+              python3 -I suite/bench/adapter_update.py compare work/before.json work/final.json \
+                  > work/changes.md
+              cat work/changes.md >> "$GITHUB_STEP_SUMMARY"
+          else
+              rm -f work/final.json work/changes.md
+              echo "The adapter does not build after Claude's change" \
+                  | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          [ -f work/report.md ] && cat work/report.md >> "$GITHUB_STEP_SUMMARY"
+          rm -rf work/old work/new
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: adapt
+          path: work
+
+  # Runs no kernel code: it applies the change, and opens the pull request with the App's token.
+  propose:
+    needs: [bump, adapt]
+    if: >-
+      always() && !inputs.dry_run && needs.bump.result == 'success'
+      && needs.bump.outputs.moved == 'true'
+      && (needs.adapt.result == 'success' || needs.adapt.result == 'skipped')
+    runs-on: ubuntu-24.04
+    environment: adapter-update
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: suite
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.adapt.result == 'success' && 'adapt' || 'bump' }}
+          path: work
+      - name: Open the pull request
+        env:
+          APP_CLIENT_ID: ${{ vars.ADAPTER_APP_CLIENT_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.ADAPTER_APP_PRIVATE_KEY }}
+          TO: ${{ needs.bump.outputs.to }}
+        run: |
+          repo=$(python3 -I suite/bench/adapter_update.py plan suite "$KERNEL" | jq -r .repo)
+          slug=${repo#https://github.com/}
+          token=$(suite/bench/app-token.sh '{"contents": "write", "pull_requests": "write"}' \
+              "$slug")
+          echo "::add-mask::$token"
+          branch="kernel/$TO"
+          if GH_TOKEN=$token gh api "repos/$slug/branches/$branch" > /dev/null 2>&1; then
+              echo "::error::$slug has a branch $branch already"
+              exit 1
+          fi
+          git clone -q "https://x-access-token:$token@github.com/$slug.git" adapter
+          # After Claude, only the final run counts: the run with the pins alone was another build.
+          if [ -f work/final.patch ]; then
+              patch=work/final.patch results=work/final.json
+          else
+              patch=work/bump.patch results=work/after.json
+          fi
+          git -C adapter apply --binary "../$patch"
+
+          from=$(jq -r .from work/bump.json)
+          crates=$(jq -r '.crates | keys | map("`\(.)`") | join(", ")' work/bump.json)
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          draft=()
+          if [ ! -f "$results" ]; then
+              draft=(--draft)
+          elif [ "$(jq -r .kernel.version "$results")" != "$TO" ]; then
+              draft=(--draft)
+          elif [ -f work/report.md ] && grep -q '^## Not done' work/report.md; then
+              draft=(--draft)
+          fi
+          {
+              echo "Moves $KERNEL from $from to $TO: $crates, pinned exactly."
+              echo
+              if [ -f work/report.md ]; then
+                  cat work/report.md
+              else
+                  echo "## Summary"
+                  echo
+                  echo "- The pins and the version the adapter reports, and nothing else."
+              fi
+              echo
+              echo "## Results"
+              echo
+              if [ -f work/changes.md ]; then
+                  echo "The whole suite at springcraft-ai/brep-conformance@${GITHUB_SHA::7}," \
+                      "before and after:"
+                  echo
+                  cat work/changes.md
+              else
+                  echo "The adapter does not build at $TO yet, so nothing was run."
+              fi
+              echo
+              echo "## Test plan"
+              echo
+              if [ -f "$results" ]; then
+                  echo "- [x] Builds at $TO with \`cargo build --release --locked\`"
+                  echo "- [x] Reports $KERNEL $(jq -r .kernel.version "$results")"
+                  echo "- [x] The whole suite, before and after: the table above"
+              else
+                  echo "- [ ] Builds at $TO"
+              fi
+              echo "- [ ] Each change is pass-through, as the contract asks"
+              echo
+              echo "Opened by the [Adapter update]($run) workflow."
+          } > "$RUNNER_TEMP/body.md"
+
+          title="Take $KERNEL $TO"
+          git -C adapter config user.name "github-actions[bot]"
+          git -C adapter config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C adapter switch -q -c "$branch"
+          git -C adapter add -A
+          git -C adapter commit -q -m "$title"
+          git -C adapter push -q origin "$branch"
+          GH_TOKEN=$token gh pr create --repo "$slug" --base main --head "$branch" "${draft[@]}" \
+              --title "$title" --body-file "$RUNNER_TEMP/body.md" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # The registry step: what the adapter's main reports, read by running it, outside any secret.
+  registry-check:
+    if: inputs.step == 'registry'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      commit: ${{ steps.check.outputs.commit }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          path: suite
+          persist-credentials: false
+      - name: Check out the adapter's main
+        id: plan
+        run: |
+          python3 -I suite/bench/adapter_update.py plan suite "$KERNEL" > plan.json
+          git clone -q "$(jq -r .repo plan.json)" adapter
+          echo "binary=$(jq -r .binary plan.json)" >> "$GITHUB_OUTPUT"
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            suite -> target
+            adapter -> target
+      - name: Read the release it reports
+        id: check
+        env:
+          BINARY: ${{ steps.plan.outputs.binary }}
+        run: |
+          suite/bench/adapter-build-deps.sh
+          (cd suite && cargo build --release --locked -p brep-conformance)
+          suite/bench/adapter-build.sh adapter plan.json
+          read -ra smoke < suite/bench/smoke.txt
+          suite/target/release/brep-conformance --adapter "adapter/$BINARY" \
+              --threads "$THREADS" --out smoke.json "${smoke[@]}" > /dev/null
+          commit=$(git -C adapter rev-parse HEAD)
+          version=$(jq -r .kernel.version smoke.json)
+          pinned=$(jq -r --arg k "$KERNEL" '.kernels[] | select(.kernel == $k)
+              | "\(.version) \(.adapter.commit)"' suite/kernels.json)
+          if [ "$pinned" = "$version $commit" ]; then
+              echo "kernels.json pins $KERNEL $version at $commit already" \
+                  | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+          fi
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "The adapter's main, $commit, reports $KERNEL $version;" \
+              "kernels.json pins $pinned" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  registry-propose:
+    needs: registry-check
+    if: needs.registry-check.outputs.commit != '' && !inputs.dry_run
+    runs-on: ubuntu-24.04
+    environment: adapter-update
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # The push below takes the App's token; a persisted read-only one would be sent instead.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Open the pull request
+        env:
+          APP_CLIENT_ID: ${{ vars.ADAPTER_APP_CLIENT_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.ADAPTER_APP_PRIVATE_KEY }}
+          COMMIT: ${{ needs.registry-check.outputs.commit }}
+          VERSION: ${{ needs.registry-check.outputs.version }}
+        run: |
+          token=$(bench/app-token.sh '{"contents": "write", "pull_requests": "write"}')
+          echo "::add-mask::$token"
+          before=$(jq -r --arg k "$KERNEL" '.kernels[] | select(.kernel == $k)
+              | "\(.version) \(.adapter.commit)"' kernels.json)
+          repo=$(jq -r --arg k "$KERNEL" '.kernels[] | select(.kernel == $k) | .adapter.repo' \
+              kernels.json)
+          jq -n --arg k "$KERNEL" --arg v "$VERSION" '{kernel: {name: $k, version: $v}}' \
+              > "$RUNNER_TEMP/reported.json"
+          python3 -I bench/adapter_update.py registry . "$KERNEL" "$RUNNER_TEMP/reported.json" \
+              "$COMMIT" > /dev/null
+          read -r was was_commit <<<"$before"
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          title="[registry] Move $KERNEL to $VERSION, its adapter pinned at ${COMMIT::7}"
+          {
+              echo "## Summary"
+              echo
+              echo "- Moves $KERNEL to $VERSION, with its adapter pinned at" \
+                  "${repo#https://github.com/}@${COMMIT::7}, the adapter's main."
+              echo
+              echo "| Field | Before | After |"
+              echo "| --- | --- | --- |"
+              echo "| \`version\` | \`$was\` | \`$VERSION\` |"
+              echo "| \`adapter.commit\` | \`${was_commit::7}\` | \`${COMMIT::7}\` |"
+              echo
+              echo "## Test plan"
+              echo
+              echo "- [x] The adapter at ${COMMIT::7} builds and reports $KERNEL $VERSION"
+              echo "- [ ] The adapter's changes since \`${was_commit::7}\` are pass-through:" \
+                  "$repo/compare/$was_commit...$COMMIT"
+              echo
+              echo "Opened by the [Adapter update]($run) workflow."
+          } > "$RUNNER_TEMP/body.md"
+          branch="registry/$KERNEL-$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -q -c "$branch"
+          git add kernels.json
+          git commit -q -m "$title"
+          git push -q "https://x-access-token:$token@github.com/$GITHUB_REPOSITORY.git" "$branch"
+          GH_TOKEN=$token gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+              --title "$title" --body-file "$RUNNER_TEMP/body.md" | tee -a "$GITHUB_STEP_SUMMARY"

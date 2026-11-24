@@ -1,12 +1,13 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
-# Prints an installation token of the benchmark's GitHub App, limited to this repository and to the
-# permissions given as JSON; by default its self-hosted runners only. Reads APP_CLIENT_ID,
-# APP_PRIVATE_KEY and GITHUB_REPOSITORY.
-# Usage: app-token.sh [permissions]
+# Prints an installation token of a GitHub App, limited to one repository and to the permissions
+# given as JSON; by default the benchmark's App's self-hosted runners on this repository. Reads
+# APP_CLIENT_ID, APP_PRIVATE_KEY and GITHUB_REPOSITORY.
+# Usage: app-token.sh [permissions [owner/repository]]
 set -euo pipefail
 
 permissions=${1:-'{"administration": "write"}'}
+repository=${2:-$GITHUB_REPOSITORY}
 
 api=https://api.github.com
 accept="Accept: application/vnd.github+json"
@@ -24,8 +25,8 @@ signature=$(printf '%s.%s' "$header" "$claims" \
 jwt="$header.$claims.$signature"
 
 installation=$(curl -sSf -H "Authorization: Bearer $jwt" -H "$accept" \
-    "$api/repos/$GITHUB_REPOSITORY/installation" | jq -r .id)
-scope=$(jq -n --arg repo "${GITHUB_REPOSITORY#*/}" --argjson permissions "$permissions" \
+    "$api/repos/$repository/installation" | jq -r .id)
+scope=$(jq -n --arg repo "${repository#*/}" --argjson permissions "$permissions" \
     '{repositories: [$repo], permissions: $permissions}')
 curl -sSf -X POST -H "Authorization: Bearer $jwt" -H "$accept" \
     "$api/app/installations/$installation/access_tokens" -d "$scope" | jq -r .token
