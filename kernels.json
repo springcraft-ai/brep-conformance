@@ -23,8 +23,8 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-arris",
-        "commit": "d59945e2a8f10e31c2c3ecfeba8139e1d77a8e41",
-        "license": "MIT",
+        "commit": "a6f2bdb819b8eccd6b0865c5a62dc89602e5c2c1",
+        "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/arris-adapter"
       },
@@ -38,8 +38,8 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-cad-kernel",
-        "commit": "7cf583bba7f3708f099bf5a8e0ea4f858f5e10f8",
-        "license": "MIT",
+        "commit": "eb61788a4d863e748b716b6156355533f20c5778",
+        "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/cad-kernel-adapter"
       },
@@ -53,8 +53,8 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-cadrs",
-        "commit": "bf3b059bed6740c5ef2ede327202373e1f851429",
-        "license": "MIT",
+        "commit": "3fda2e7627c9d889b74a7cb8578a0fb797a7a826",
+        "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/cadrs-adapter"
       },
@@ -83,8 +83,8 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-next-brep",
-        "commit": "705f5e16c489d25fcda61a8b38c3042a0795a910",
-        "license": "MIT",
+        "commit": "7d1d9f6586af3fc3d0d9bfecc9335aff0b2c6894",
+        "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/next-brep-adapter"
       },
@@ -98,8 +98,8 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-occt",
-        "commit": "f0552c5bf8ffb4ba9c12e49b68e4bb56bebfca37",
-        "license": "MIT",
+        "commit": "448db18d60eb82490b5ba13a12fc4219d9252530",
+        "license": "MIT OR Apache-2.0",
         "build": ["./build.sh"],
         "run": "{dir}/build/occt-adapter"
       },
@@ -128,8 +128,8 @@
       "maintained_by_suite": true,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-springrep",
-        "commit": "feaf7ef2b9231f4f22b1992031cd7a1aa414ea30",
-        "license": "MIT",
+        "commit": "01fedc51e5a90c134b554604f6ff28b1f0d7f054",
+        "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/springrep-adapter"
       },
