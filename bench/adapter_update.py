@@ -43,7 +43,7 @@ PLAIN = re.compile(r'^(?P<key>[A-Za-z0-9_-]+)\s*=\s*"=(?P<version>[^"]+)"\s*(#.*
 TABLE = re.compile(r'^(?P<key>[A-Za-z0-9_-]+)\s*=\s*\{(?P<body>.*)\}\s*(#.*)?$')
 FIELD = re.compile(r'\b(?P<name>package|version|git|rev|path)\s*=\s*"(?P<value>[^"]*)"')
 GITHUB = re.compile(r"^https://github\.com/(?P<slug>[^/]+/[^/]+?)(\.git)?/?$")
-# A build.sh line that pins a conda-forge package: `occt=8.0.2`.
+# A build.sh line that pins a conda-forge package: `kernelpkg=1.2.3`.
 CONDA = re.compile(r"^(?P<package>[a-z0-9][a-z0-9_-]*)=(?P<version>\d+\.\d+\.\d+)\s*(#.*)?$")
 STABLE = re.compile(r"^\d+\.\d+\.\d+$")
 BUILDS = (["cargo build --release --locked"], ["./build.sh"])

@@ -82,16 +82,16 @@ class Crates(unittest.TestCase):
 
 
 BUILD = """#!/bin/bash
-# The release of conda-forge's occt package the adapter links.
-occt=8.0.1
+# The release of conda-forge's kernelpkg package the adapter links.
+kernelpkg=8.0.1
     ninja=1.12.1
-"$mamba" create -c conda-forge "occt=$occt=novtk*"
+"$mamba" create -c conda-forge "kernelpkg=$kernelpkg=*"
 """
 
 
 def fake_fetch(url):
     """crates.io with Kernel_core and Kernel_blend 0.24.0 to 0.27.0, a yanked 0.28.0 and a
-    pre-release, relicensed at 0.27.0; and conda-forge with occt 8.0.1 and 8.0.2 for linux-64, an
+    pre-release, relicensed at 0.27.0; and conda-forge with kernelpkg 8.0.1 and 8.0.2 for linux-64, an
     8.1.0 for another platform, and a release named another way."""
     crates = {"0.24.0": "MIT", "0.26.0": "MIT", "0.27.0": "MIT OR Apache-2.0", "0.28.0": "MIT",
               "0.29.0-rc.1": "MIT"}
@@ -101,7 +101,7 @@ def fake_fetch(url):
         for v, licence in crates.items():
             if url == f"https://crates.io/api/v1/crates/{name}/{v}":
                 return {"version": {"license": licence}}
-    if url == "https://api.anaconda.org/package/conda-forge/occt":
+    if url == "https://api.anaconda.org/package/conda-forge/kernelpkg":
         file = lambda v, subdir="linux-64": {"version": v, "attrs": {
             "subdir": subdir, "license": "LGPL-2.1-only"}}
         return {"files": [file("8.0.1"), file("8.0.2"), file("8_0_3"), file("8.1.0", "osx-arm64")]}
@@ -110,10 +110,10 @@ def fake_fetch(url):
 
 class Conda(unittest.TestCase):
     def test_a_line_of_its_own_in_a_script_that_installs_from_conda_forge_is_a_pin(self):
-        self.assertEqual(conda_packages(BUILD), [("occt", "8.0.1"), ("ninja", "1.12.1")])
+        self.assertEqual(conda_packages(BUILD), [("kernelpkg", "8.0.1"), ("ninja", "1.12.1")])
 
     def test_a_script_that_installs_nothing_from_conda_forge_pins_nothing(self):
-        self.assertEqual(conda_packages("#!/bin/bash\nocct=8.0.1\n"), [])
+        self.assertEqual(conda_packages("#!/bin/bash\nkernelpkg=8.0.1\n"), [])
 
 
 class Target(unittest.TestCase):
@@ -153,7 +153,7 @@ class Target(unittest.TestCase):
     def test_a_conda_forge_package_moves_to_its_newest_stable_release_for_linux(self):
         moved = self.target({"build.sh": BUILD.replace("    ninja=1.12.1\n", "")})
         self.assertEqual((moved["from"], moved["to"]), ("8.0.1", "8.0.2"))
-        self.assertEqual(moved["pins"]["occt"]["licence"],
+        self.assertEqual(moved["pins"]["kernelpkg"]["licence"],
                          {"from": "LGPL-2.1-only", "to": "LGPL-2.1-only"})
         with self.assertRaises(SystemExit):
             self.target({"build.sh": BUILD}, "8.1.0")
@@ -168,7 +168,7 @@ class Target(unittest.TestCase):
 
 class Check(unittest.TestCase):
     WANTED = {"pins": {"kernel_core": {"source": "git", "to": "0.2.9", "to_commit": NEW},
-                       "occt": {"source": "conda-forge", "to": "8.0.2"}}}
+                       "kernelpkg": {"source": "conda-forge", "to": "8.0.2"}}}
 
     def check(self, manifest, script):
         with tempfile.TemporaryDirectory() as d:
@@ -178,12 +178,12 @@ class Check(unittest.TestCase):
 
     def test_a_checkout_that_pins_each_release_passes(self):
         manifest = GIT.replace("07e083bb", NEW[:8])
-        self.assertEqual(self.check(manifest, "conda-forge\nocct=8.0.2\n"), [])
-        self.assertEqual(self.check(GIT.replace("07e083bb", NEW), "conda-forge\nocct=8.0.2\n"), [])
+        self.assertEqual(self.check(manifest, "conda-forge\nkernelpkg=8.0.2\n"), [])
+        self.assertEqual(self.check(GIT.replace("07e083bb", NEW), "conda-forge\nkernelpkg=8.0.2\n"), [])
 
     def test_each_pin_left_behind_dropped_cut_short_or_added_is_named(self):
         problems = self.check(GIT.replace("07e083bb", NEW[:6]),
-                              "conda-forge\nocct=8.0.1\nninja=1.12.1\n")
+                              "conda-forge\nkernelpkg=8.0.1\nninja=1.12.1\n")
         self.assertEqual(len(problems), 3)
         self.assertEqual(len(self.check(GIT, "")), 2)
 
