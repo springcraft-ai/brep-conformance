@@ -4,7 +4,7 @@
 //!
 //! ```text
 //! cargo build --release --example box_kernel -p brep-protocol
-//! cargo run --release -p brep-conformance -- --adapter target/release/examples/box_kernel
+//! cargo run --release -p brep-conformance -- --adapter target/release/examples/box_kernel --skip-nist
 //! ```
 
 use brep_protocol::model::{Frame, Primitive, Side, Vec3};

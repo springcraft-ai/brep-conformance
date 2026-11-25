@@ -53,7 +53,7 @@ output. [Calling a kernel](api.md#calling-a-kernel) is the whole of what it must
 
    ```bash
    cargo build --release --example box_kernel -p brep-protocol
-   cargo run --release -p brep-conformance -- --adapter target/release/examples/box_kernel
+   cargo run --release -p brep-conformance -- --adapter target/release/examples/box_kernel --skip-nist
    ```
 
    The summary says how many cases call only functions the adapter offers, and how many of those it

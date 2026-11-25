@@ -61,9 +61,12 @@ says.
 
 ```bash
 cargo build --release -p brep-conformance
-target/release/brep-conformance --kernel arris --out arris.json  # official: the registry's adapter
-target/release/brep-conformance --adapter path/to/arris-adapter --out arris.json --html arris.html
-target/release/brep-conformance --adapter path/to/occt/build/occt-adapter --out occt.json
+python3 nist/fetch.py  # NIST's STEP files, into nist/
+target/release/brep-conformance --kernel arris --nist nist --out arris.json  # official
+target/release/brep-conformance --adapter path/to/arris-adapter --skip-nist --out arris.json \
+    --html arris.html
+target/release/brep-conformance --adapter path/to/occt/build/occt-adapter --skip-nist \
+    --out occt.json
 cargo build --release --target wasm32-unknown-unknown -p brep-conformance-viewer
 target/release/brep-conformance-report arris.json occt.json \
     --viewer target/wasm32-unknown-unknown/release/brep_conformance_viewer.wasm --out report.html
@@ -91,7 +94,8 @@ opens without the network, with the viewer when `--viewer` names its WebAssembly
 time in units of the run's calibration workload. `--peer "<command>"` starts a second kernel's
 adapter to read the STEP files this one writes, reported as interop apart from the score.
 `--nist DIR` adds a case of `step/read-nist` for each of NIST's STEP files there, which
-[`nist/fetch.py`](nist/fetch.py) downloads into [`nist/`](nist/NOTICE).
+[`nist/fetch.py`](nist/fetch.py) downloads into [`nist/`](nist/NOTICE). A run without them must pass
+`--skip-nist`.
 `--family A,B` runs only those tests: each a test path, a directory such as `fillets/`, or a
 family's name.
 

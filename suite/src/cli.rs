@@ -2,9 +2,11 @@
 //!
 //! ```text
 //! brep-conformance (--adapter "<command>" | --kernel NAME [--work DIR]) [--peer "<command>"]
-//!                  [--nist DIR] [--family A,B] [--timeout S] [--seed N] [--threads N] [--out FILE]
-//!                  [--glb DIR] [--step DIR] [--html FILE [--viewer viewer.wasm]]
+//!                  (--nist DIR | --skip-nist) [--family A,B] [--timeout S] [--seed N] [--threads N]
+//!                  [--out FILE] [--glb DIR] [--step DIR] [--html FILE [--viewer viewer.wasm]]
 //! ```
+//!
+//! A complete run reads NIST's STEP files, so a run without them says so with `--skip-nist`.
 //!
 //! `--kernel` makes an official run: the adapter the [registry](crate::registry) pins for that
 //! kernel, checked out and built under `--work` (`adapters` by default), which must report the
@@ -32,6 +34,26 @@ pub fn main() -> ExitCode {
             .and_then(|i| args.get(i + 1))
             .cloned()
     };
+    let usage = "usage: brep-conformance (--adapter \"<command>\" | --kernel NAME [--work DIR]) \
+                 [--peer \"<command>\"] (--nist DIR | --skip-nist) [--family A,B] [--timeout S] \
+                 [--seed N] [--threads N] [--out FILE] [--glb DIR] [--step DIR] \
+                 [--html FILE [--viewer viewer.wasm]]";
+    // Checked before `--kernel` builds an adapter, so a missing choice costs no build.
+    let nist = match (value("--nist"), args.iter().any(|a| a == "--skip-nist")) {
+        (Some(dir), false) => Some(dir),
+        (None, true) => None,
+        (Some(_), true) => {
+            eprintln!("--nist and --skip-nist: give one of them");
+            return ExitCode::from(2);
+        }
+        (None, false) => {
+            eprintln!(
+                "give --nist DIR to run NIST's STEP files, which nist/fetch.py downloads into \
+                 nist/, or --skip-nist to run without them\n{usage}"
+            );
+            return ExitCode::from(2);
+        }
+    };
     let (adapter, official) = match (value("--adapter"), value("--kernel")) {
         (Some(adapter), None) => (adapter.split_whitespace().map(String::from).collect(), None),
         (None, Some(kernel)) => {
@@ -45,12 +67,7 @@ pub fn main() -> ExitCode {
             }
         }
         _ => {
-            eprintln!(
-                "usage: brep-conformance (--adapter \"<command>\" | --kernel NAME [--work DIR]) \
-                 [--peer \"<command>\"] [--nist DIR] [--family A,B] [--timeout S] [--seed N] \
-                 [--threads N] [--out FILE] [--glb DIR] [--step DIR] \
-                 [--html FILE [--viewer viewer.wasm]]"
-            );
+            eprintln!("{usage}");
             return ExitCode::from(2);
         }
     };
@@ -97,7 +114,7 @@ pub fn main() -> ExitCode {
         value("--family").map(|f| f.split(',').map(String::from).collect());
     // `--nist DIR` adds a case for each of NIST's STEP files there, as `nist/fetch.py` leaves them.
     let mut all = generate::cases(seed);
-    if let Some(dir) = value("--nist") {
+    if let Some(dir) = nist {
         match generate::nist_cases(std::path::Path::new(&dir)) {
             Ok(more) => all.extend(more),
             Err(e) => {
