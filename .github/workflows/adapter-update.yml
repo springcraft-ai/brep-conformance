@@ -65,6 +65,8 @@ jobs:
       contents: read
       id-token: write # for the Claude API's workload identity federation, in the adapt job only
     uses: ./.github/workflows/adapter-update-kernel.yml
+    # A called workflow sees no secret, its environments' included, unless the caller passes them.
+    secrets: inherit
     with:
       kernel: ${{ matrix.kernel }}
       version: ${{ inputs.version }}
