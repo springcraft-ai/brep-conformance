@@ -6,7 +6,7 @@
   "scripts": {
     "postinstall": "node scripts/fetch-ds.mjs",
     "predev": "[ -n \"$BREP_REPORTS_DIR\" ] || npm run reports --silent",
-    "dev": "vite",
+    "dev": "BREP_REPORTS_DIR=${BREP_REPORTS_DIR:-.reports} vite",
     "build": "vite build --outDir dist/client && vite build --ssr src/entry-server.tsx --outDir dist/server && node scripts/prerender.mjs",
     "preview": "vite preview --outDir dist/site",
     "reports": "node scripts/reports.ts fetch ../reports.json .reports",
