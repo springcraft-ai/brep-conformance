@@ -53,7 +53,7 @@ npm install
 
 ```bash
 npm run reports # .reports: the published reports, which the site reads by default
-npm run dev     # http://localhost:5173, every route rendered on request
+npm run dev     # http://localhost:5173, every route rendered on request; runs reports first
 npm run build   # dist/site: the static site
 npm run preview # serve dist/site
 npm test        # data and routing tests, and a render of every route
@@ -70,11 +70,12 @@ that name: the CDN caches each name for good.
 The site reads `reports.json` and the reports it lists, `<run>/<kernel>-<hash>.json`, under
 `BREP_REPORTS_DIR`. When it is unset, the site reads `.reports`, and has no results when that folder
 has no `reports.json`. `npm run reports` fills `.reports` from the CDN, checking each file against
-the hash in its name; `node scripts/reports.ts fetch ../reports.json DIR` fills another folder. The
-tests read one run of two invented kernels in [`src/fixtures/reports/`](src/fixtures/reports/),
-whose files prettier leaves alone because their names pin their bytes. `SITE_BASE` sets the path the
-site is served under, such as `/brep-conformance/`. The dev server reads the reports once, so
-restart it after they change.
+the hash in its name, and `npm run dev` runs it first when `BREP_REPORTS_DIR` is unset;
+`node scripts/reports.ts fetch ../reports.json DIR` fills another folder. The tests read one run of
+two invented kernels in [`src/fixtures/reports/`](src/fixtures/reports/), whose files prettier
+leaves alone because their names pin their bytes. `SITE_BASE` sets the path the site is served
+under, such as `/brep-conformance/`. The dev server reads the reports once, so restart it after they
+change.
 
 A report shows its shape files from the CDN. For a run not yet published, set `BREP_ASSETS_DIR` to a
 folder laid out as the CDN is, `<suite>/<kernel>/<version>/<key>`, with each folder filled by
