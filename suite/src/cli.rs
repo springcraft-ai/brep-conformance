@@ -21,22 +21,67 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use brep_protocol::{Kernel, Remote};
+use clap::{ArgGroup, Parser};
 
 use crate::{generate, html, registry, report, run};
 
+#[derive(Parser)]
+#[command(
+    name = "brep-conformance",
+    about = "Run the conformance suite on a kernel's adapter"
+)]
+#[command(group(ArgGroup::new("source").required(true).args(["adapter", "kernel"])))]
+struct Args {
+    /// The adapter's command, split on whitespace.
+    #[arg(long, value_name = "COMMAND")]
+    adapter: Option<String>,
+    /// Make an official run with the adapter the registry pins for this kernel.
+    #[arg(long, value_name = "NAME")]
+    kernel: Option<String>,
+    /// Where `--kernel` checks out and builds the adapter.
+    #[arg(long, value_name = "DIR", default_value = "adapters")]
+    work: PathBuf,
+    /// A second kernel's adapter, to read the STEP files this one writes.
+    #[arg(long, value_name = "COMMAND")]
+    peer: Option<String>,
+    /// Add a case for each of NIST's STEP files here, as `nist/fetch.py` leaves them.
+    #[arg(long, value_name = "DIR")]
+    nist: Option<PathBuf>,
+    /// Run only these tests: test paths, directories such as `fillets/`, or family names.
+    #[arg(long, value_name = "A,B", value_delimiter = ',')]
+    family: Option<Vec<String>>,
+    /// The limit on one call, in seconds.
+    #[arg(long, value_name = "S", default_value_t = 120.0)]
+    timeout: f64,
+    /// The seed that draws the cases.
+    #[arg(long, value_name = "N", default_value_t = 1)]
+    seed: u64,
+    /// The number of workers [default: the available parallelism]
+    #[arg(long, value_name = "N")]
+    threads: Option<usize>,
+    /// The results file.
+    #[arg(long, value_name = "FILE", default_value = "conformance-results.json")]
+    out: PathBuf,
+    /// Write every case's shapes as GLB files under this folder.
+    #[arg(long, value_name = "DIR")]
+    glb: Option<PathBuf>,
+    /// Write every case's shapes as STEP files under this folder.
+    #[arg(long, value_name = "DIR")]
+    step: Option<PathBuf>,
+    /// Also write the run as a report page.
+    #[arg(long, value_name = "FILE")]
+    html: Option<PathBuf>,
+    /// The shape viewer's WebAssembly, to embed in the report page.
+    #[arg(long, value_name = "viewer.wasm")]
+    viewer: Option<PathBuf>,
+}
+
 pub fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().collect();
-    let value = |flag: &str| {
-        args.iter()
-            .position(|a| a == flag)
-            .and_then(|i| args.get(i + 1))
-            .cloned()
-    };
-    let (adapter, official) = match (value("--adapter"), value("--kernel")) {
+    let args = Args::parse();
+    let (adapter, official) = match (args.adapter, args.kernel) {
         (Some(adapter), None) => (adapter.split_whitespace().map(String::from).collect(), None),
         (None, Some(kernel)) => {
-            let work = PathBuf::from(value("--work").unwrap_or_else(|| "adapters".into()));
-            match registry::find(&kernel).and_then(|e| Ok((e.prepare(&work)?, e))) {
+            match registry::find(&kernel).and_then(|e| Ok((e.prepare(&args.work)?, e))) {
                 Ok((command, entry)) => (command, Some(entry)),
                 Err(e) => {
                     eprintln!("--kernel {kernel}: {e}");
@@ -44,35 +89,26 @@ pub fn main() -> ExitCode {
                 }
             }
         }
-        _ => {
-            eprintln!(
-                "usage: brep-conformance (--adapter \"<command>\" | --kernel NAME [--work DIR]) \
-                 [--peer \"<command>\"] [--nist DIR] [--family A,B] [--timeout S] [--seed N] \
-                 [--threads N] [--out FILE] [--glb DIR] [--step DIR] \
-                 [--html FILE [--viewer viewer.wasm]]"
-            );
-            return ExitCode::from(2);
-        }
+        _ => unreachable!("clap requires exactly one of --adapter and --kernel"),
     };
-    let seed: u64 = value("--seed").map_or(1, |s| s.parse().expect("--seed takes a number"));
-    let threads = value("--threads").map_or_else(
-        || std::thread::available_parallelism().map_or(4, |n| n.get()),
-        |s| s.parse().expect("--threads takes a number"),
-    );
-    let out = PathBuf::from(value("--out").unwrap_or_else(|| "conformance-results.json".into()));
+    let threads = args
+        .threads
+        .unwrap_or_else(|| std::thread::available_parallelism().map_or(4, |n| n.get()));
 
     // Read before the run, so a wrong path costs no run.
-    let viewer = match value("--viewer").map(|path| std::fs::read(&path).map_err(|e| (path, e))) {
+    let viewer = match args
+        .viewer
+        .map(|path| std::fs::read(&path).map_err(|e| (path, e)))
+    {
         Some(Ok(bytes)) => Some(bytes),
         Some(Err((path, e))) => {
-            eprintln!("--viewer {path}: {e}");
+            eprintln!("--viewer {}: {e}", path.display());
             return ExitCode::from(2);
         }
         None => None,
     };
 
-    let limit = value("--timeout").map_or(120.0, |s| s.parse().expect("--timeout takes seconds"));
-    let limit = std::time::Duration::from_secs_f64(limit);
+    let limit = std::time::Duration::from_secs_f64(args.timeout);
     // One worker started here, to check it before the run, and dropped before the run starts its
     // own: a run holds no more workers than threads.
     let kernel = match Remote::new(adapter.clone(), limit) {
@@ -93,12 +129,11 @@ pub fn main() -> ExitCode {
         }
     }
     // `--family` runs only the named families, comma-separated, for a quick look at one area.
-    let only: Option<Vec<String>> =
-        value("--family").map(|f| f.split(',').map(String::from).collect());
+    let only = args.family;
     // `--nist DIR` adds a case for each of NIST's STEP files there, as `nist/fetch.py` leaves them.
-    let mut all = generate::cases(seed);
-    if let Some(dir) = value("--nist") {
-        match generate::nist_cases(std::path::Path::new(&dir)) {
+    let mut all = generate::cases(args.seed);
+    if let Some(dir) = args.nist {
+        match generate::nist_cases(&dir) {
             Ok(more) => all.extend(more),
             Err(e) => {
                 eprintln!("--nist: {e}");
@@ -116,7 +151,7 @@ pub fn main() -> ExitCode {
         })
         .collect();
     // A second kernel's adapter, to read the STEP files this one writes.
-    let peer: Option<Vec<String>> = match value("--peer") {
+    let peer: Option<Vec<String>> = match args.peer {
         Some(cmd) => {
             let cmd: Vec<String> = cmd.split_whitespace().map(String::from).collect();
             // Checked here, as the kernel's own worker is.
@@ -131,8 +166,8 @@ pub fn main() -> ExitCode {
         None => None,
     };
     let exports = run::Exports {
-        glb: value("--glb").map(PathBuf::from),
-        step: value("--step").map(PathBuf::from),
+        glb: args.glb,
+        step: args.step,
     };
     drop(kernel);
     let start = |cmd: &[String]| Remote::new(cmd.to_vec(), limit);
@@ -157,13 +192,14 @@ pub fn main() -> ExitCode {
     if let Some(e) = &official {
         results["adapter"] = e.stamp();
     }
-    std::fs::write(&out, serde_json::to_string_pretty(&results).unwrap()).expect("writing results");
+    std::fs::write(&args.out, serde_json::to_string_pretty(&results).unwrap())
+        .expect("writing results");
     print!("{}", report::summary(&results));
-    println!("\nresults: {}", out.display());
-    if let Some(path) = value("--html") {
+    println!("\nresults: {}", args.out.display());
+    if let Some(path) = args.html {
         let page = html::page(std::slice::from_ref(&results), viewer.as_deref());
         std::fs::write(&path, page).expect("writing the report");
-        println!("report: {path}");
+        println!("report: {}", path.display());
     }
 
     ExitCode::SUCCESS

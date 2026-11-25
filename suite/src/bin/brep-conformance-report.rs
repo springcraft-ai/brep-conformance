@@ -15,57 +15,53 @@
 //! ```text
 //! ```
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use brep_conformance::{html, report};
+use clap::Parser;
 use serde_json::Value;
 
-fn read(path: &str) -> Value {
-    let bytes = std::fs::read(path).unwrap_or_else(|e| panic!("reading {path}: {e}"));
-    serde_json::from_slice(&bytes).unwrap_or_else(|e| panic!("parsing {path}: {e}"))
+#[derive(Parser)]
+#[command(
+    name = "brep-conformance-report",
+    about = "Write the report page for results files"
+)]
+struct Args {
+    /// The results files, one per kernel.
+    #[arg(required = true, value_name = "RESULTS.json")]
+    results: Vec<PathBuf>,
+    /// The report page.
+    #[arg(long, value_name = "FILE", default_value = "conformance-report.html")]
+    out: PathBuf,
+    /// The shape viewer's WebAssembly, to embed in the page.
+    #[arg(long, value_name = "viewer.wasm")]
+    viewer: Option<PathBuf>,
+    /// Write one run's report as the results site reads it, instead of the page.
+    #[arg(long, value_name = "FILE")]
+    flat: Option<PathBuf>,
+    /// Mark the flat report as made by the benchmark workflow.
+    #[arg(long, requires = "flat")]
+    verified: bool,
+    /// The folder a benchmark session left beside the results.
+    #[arg(long, value_name = "DIR", requires_all = ["flat", "run"])]
+    bench: Option<PathBuf>,
+    /// The workflow run and attempt the benchmark session belongs to.
+    #[arg(long, value_name = "ID", requires = "bench")]
+    run: Option<String>,
+}
+
+fn read(path: &Path) -> Value {
+    let p = path.display();
+    let bytes = std::fs::read(path).unwrap_or_else(|e| panic!("reading {p}: {e}"));
+    serde_json::from_slice(&bytes).unwrap_or_else(|e| panic!("parsing {p}: {e}"))
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let mut runs = Vec::new();
-    let (mut flat, mut verified) = (None, false);
-    let (mut bench, mut run): (Option<PathBuf>, Option<String>) = (None, None);
-    let mut out = PathBuf::from("conformance-report.html");
-    let mut viewer: Option<Vec<u8>> = None;
-    let mut i = 0;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--flat" => {
-                flat = Some(PathBuf::from(&args[i + 1]));
-                i += 1;
-            }
-            "--verified" => verified = true,
-            "--bench" => {
-                bench = Some(PathBuf::from(&args[i + 1]));
-                i += 1;
-            }
-            "--run" => {
-                run = Some(args[i + 1].clone());
-                i += 1;
-            }
-            "--viewer" => {
-                let path = &args[i + 1];
-                viewer =
-                    Some(std::fs::read(path).unwrap_or_else(|e| panic!("reading {path}: {e}")));
-                i += 1;
-            }
-            "--out" => {
-                out = PathBuf::from(&args[i + 1]);
-                i += 1;
-            }
-            path => runs.push(read(path)),
-        }
-        i += 1;
-    }
-    assert!(!runs.is_empty(), "name at least one results file");
-    if let Some(path) = flat {
+    let args = Args::parse();
+    let runs: Vec<Value> = args.results.iter().map(|p| read(p)).collect();
+    if let Some(path) = args.flat {
         assert!(runs.len() == 1, "--flat takes one results file");
-        let session = match (bench, run) {
+        let session = match (args.bench, args.run) {
             (Some(dir), Some(run)) => {
                 let kernel = runs[0]["kernel"]["name"]
                     .as_str()
@@ -73,15 +69,17 @@ fn main() {
                 report::session(&dir, kernel, &run)
                     .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
             }
-            (None, None) => report::Session::default(),
-            _ => panic!("--bench and --run go together"),
+            _ => report::Session::default(),
         };
         let text =
-            serde_json::to_string_pretty(&report::flat(&runs[0], verified, &session)).unwrap();
+            serde_json::to_string_pretty(&report::flat(&runs[0], args.verified, &session)).unwrap();
         std::fs::write(&path, text + "\n").expect("writing the flat report");
         println!("{}", path.display());
         return;
     }
-    std::fs::write(&out, html::page(&runs, viewer.as_deref())).expect("writing the report");
-    println!("{}", out.display());
+    let viewer = args
+        .viewer
+        .map(|p| std::fs::read(&p).unwrap_or_else(|e| panic!("reading {}: {e}", p.display())));
+    std::fs::write(&args.out, html::page(&runs, viewer.as_deref())).expect("writing the report");
+    println!("{}", args.out.display());
 }
