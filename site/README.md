@@ -52,7 +52,7 @@ npm install
 ## Usage
 
 ```bash
-npm run dev     # http://localhost:5173, with the published reports
+npm run dev     # http://localhost:5173, every route rendered on request
 npm run build   # dist/site: the static site
 npm run preview # serve dist/site
 npm test        # data and routing tests, and a render of every route
