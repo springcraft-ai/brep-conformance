@@ -202,7 +202,7 @@ jobs:
           echo "Families: $families" >> "$GITHUB_STEP_SUMMARY"
           if suite/bench/adapter-build.sh adapter work/plan.json; then
               suite/target/release/brep-conformance --adapter "adapter/$BINARY" \
-                  --threads "$THREADS" --family "$families" \
+                  --threads "$THREADS" --family "$families" --skip-nist \
                   --out work/final.json > work/final.txt
               python3 -I suite/bench/adapter_update.py summary work/final.json > work/results.md
               cat work/results.md >> "$GITHUB_STEP_SUMMARY"

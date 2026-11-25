@@ -190,7 +190,7 @@ Build the adapter and run the suite as the workflow does:
 ```sh
 suite/bench/adapter-build.sh adapter work/plan.json
 suite/target/release/brep-conformance --adapter "adapter/$(jq -r .binary work/plan.json)" \
-    --threads 4 --out work/check.json --family <family>,<family> > work/check.txt
+    --threads 4 --skip-nist --out work/check.json --family <family>,<family> > work/check.txt
 ```
 
 Never run the whole suite: it takes hours and the workflow does not need it. Run the families in

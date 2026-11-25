@@ -2,9 +2,11 @@
 //!
 //! ```text
 //! brep-conformance (--adapter "<command>" | --kernel NAME [--work DIR]) [--peer "<command>"]
-//!                  [--nist DIR] [--family A,B] [--timeout S] [--seed N] [--threads N] [--out FILE]
-//!                  [--glb DIR] [--step DIR] [--html FILE [--viewer viewer.wasm]]
+//!                  (--nist DIR | --skip-nist) [--family A,B] [--timeout S] [--seed N] [--threads N]
+//!                  [--out FILE] [--glb DIR] [--step DIR] [--html FILE [--viewer viewer.wasm]]
 //! ```
+//!
+//! A complete run reads NIST's STEP files, so a run without them says so with `--skip-nist`.
 //!
 //! `--kernel` makes an official run: the adapter the [registry](crate::registry) pins for that
 //! kernel, checked out and built under `--work` (`adapters` by default), which must report the
@@ -31,6 +33,7 @@ use crate::{generate, html, registry, report, run};
     about = "Run the conformance suite on a kernel's adapter"
 )]
 #[command(group(ArgGroup::new("source").required(true).args(["adapter", "kernel"])))]
+#[command(group(ArgGroup::new("nist_files").required(true).args(["nist", "skip_nist"])))]
 struct Args {
     /// The adapter's command, split on whitespace.
     #[arg(long, value_name = "COMMAND")]
@@ -47,6 +50,9 @@ struct Args {
     /// Add a case for each of NIST's STEP files here, as `nist/fetch.py` leaves them.
     #[arg(long, value_name = "DIR")]
     nist: Option<PathBuf>,
+    /// Run without NIST's STEP files.
+    #[arg(long)]
+    skip_nist: bool,
     /// Run only these tests: test paths, directories such as `fillets/`, or family names.
     #[arg(long, value_name = "A,B", value_delimiter = ',')]
     family: Option<Vec<String>>,

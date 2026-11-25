@@ -55,7 +55,7 @@ jobs:
                   rust) adapter=target/release/examples/box_kernel ;;
                   cpp) adapter=protocol/cpp/build/box_kernel ;;
               esac
-              target/release/brep-conformance --adapter "$adapter" --threads 4 \
+              target/release/brep-conformance --adapter "$adapter" --threads 4 --skip-nist \
                   --out "$which.json" > /dev/null
           done
           python3 -I - rust.json cpp.json <<'EOF'

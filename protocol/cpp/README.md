@@ -96,7 +96,7 @@ on it, from this folder:
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build
-cd ../.. && cargo run --release -p brep-conformance -- --adapter protocol/cpp/build/box_kernel
+cd ../.. && cargo run --release -p brep-conformance -- --adapter protocol/cpp/build/box_kernel --skip-nist
 ```
 
 The suite gives it the same outcome on every case as the Rust example.

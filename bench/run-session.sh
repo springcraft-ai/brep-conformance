@@ -29,7 +29,7 @@ fi
 export BENCH_CORES=$isolated
 
 # NIST's STEP files run, as step/read-nist cases, unless the session runs with BENCH_NIST=false.
-nist=()
+nist=(--skip-nist)
 if [ "${BENCH_NIST:-true}" != false ]; then
     nist=(--nist "$root/nist")
 fi
