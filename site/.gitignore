@@ -6,3 +6,5 @@ dist/
 .ds/
 # The link-preview image scripts/og.mjs draws, for uploading to the CDN.
 og.png
+# The published reports `npm run reports` fetches, which the site reads by default.
+.reports/

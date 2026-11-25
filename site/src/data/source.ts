@@ -8,10 +8,14 @@ import { boardRuns, currentSuite, emptyIndex, fileHash, parseIndex, type RunsInd
 // Build-time only: a page's *.data.ts may import this, a *.page.tsx never does.
 
 // A folder holding reports.json and, below it, <run>/<file> for each report it lists, as
-// `node scripts/reports.ts fetch` leaves them. With no BREP_REPORTS_DIR the site has no results.
+// `node scripts/reports.ts fetch` leaves them: BREP_REPORTS_DIR, or else .reports where
+// `npm run reports` fetched it. With neither the site has no results.
+const DEFAULT_REPORTS_DIR = resolve('.reports')
 export const REPORTS_DIR = process.env.BREP_REPORTS_DIR
   ? resolve(process.env.BREP_REPORTS_DIR)
-  : null
+  : existsSync(join(DEFAULT_REPORTS_DIR, 'reports.json'))
+    ? DEFAULT_REPORTS_DIR
+    : null
 
 const ASSETS_DIR = process.env.BREP_ASSETS_DIR ? resolve(process.env.BREP_ASSETS_DIR) : null
 

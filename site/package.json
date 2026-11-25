@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build --outDir dist/client && vite build --ssr src/entry-server.tsx --outDir dist/server && node scripts/prerender.mjs",
     "preview": "vite preview --outDir dist/site",
+    "reports": "node scripts/reports.ts fetch ../reports.json .reports",
     "test": "vitest run",
     "check": "bash -c 'rc=0; tsc -p . || rc=1; vitest run || rc=1; prettier --check --log-level warn . || rc=1; BREP_REPORTS_DIR=src/fixtures/reports BREP_ANY_KERNEL=1 npm run build --silent >/dev/null || rc=1; exit $rc'",
     "fix": "prettier --write --log-level warn ."
