@@ -52,8 +52,7 @@ npm install
 ## Usage
 
 ```bash
-npm run reports # .reports: the published reports, which npm run dev reads by default
-npm run dev     # http://localhost:5173, every route rendered on request; runs reports first
+npm run dev     # http://localhost:5173, with the published reports
 npm run build   # dist/site: the static site
 npm run preview # serve dist/site
 npm test        # data and routing tests, and a render of every route
@@ -67,14 +66,12 @@ look, not its results, so it never names a kernel. To change it, edit
 `CHROME` where it is not in the usual place), upload it under a new name, and point `SHARE_IMAGE` at
 that name: the CDN caches each name for good.
 
-The site reads `reports.json` and the reports it lists, `<run>/<kernel>-<hash>.json`, under
-`BREP_REPORTS_DIR`, and has no results when it is unset. `npm run dev` sets it to `.reports` when it
-is unset, and first runs `npm run reports`, which fills `.reports` from the CDN, checking each file
-against the hash in its name. `node scripts/reports.ts fetch ../reports.json DIR` fills another
-folder. The tests read one run of two invented kernels in
-[`src/fixtures/reports/`](src/fixtures/reports/), whose files prettier leaves alone because their
-names pin their bytes. `SITE_BASE` sets the path the site is served under, such as
-`/brep-conformance/`. The dev server reads the reports once, so restart it after they change.
+`npm run dev` fetches the published reports into `.reports`. To show other reports, set
+`BREP_REPORTS_DIR` to a folder that `node scripts/reports.ts fetch <reports.json> DIR` filled. The
+tests read one run of two invented kernels in [`src/fixtures/reports/`](src/fixtures/reports/),
+whose files prettier leaves alone because their names pin their bytes. `SITE_BASE` sets the path the
+site is served under, such as `/brep-conformance/`. The dev server reads the reports once, so
+restart it after they change.
 
 A report shows its shape files from the CDN. For a run not yet published, set `BREP_ASSETS_DIR` to a
 folder laid out as the CDN is, `<suite>/<kernel>/<version>/<key>`, with each folder filled by
