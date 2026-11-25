@@ -139,6 +139,58 @@
           "seconds": 110
         }
       }
+    },
+    {
+      "run": "45521848124-1",
+      "suite": "2.0.2",
+      "scope": "all",
+      "reports": {
+        "anvil-brep": {
+          "file": "anvil-brep-efa0c51e4c23509e.json",
+          "complete": true,
+          "seconds": 406
+        },
+        "arris": {
+          "file": "arris-2e9def34b62b3b87.json",
+          "complete": true,
+          "seconds": 963
+        },
+        "cad-kernel": {
+          "file": "cad-kernel-6d3ef02ea8c35f32.json",
+          "complete": true,
+          "seconds": 166
+        },
+        "cadrs": {
+          "file": "cadrs-ca165e369b539328.json",
+          "complete": true,
+          "seconds": 176
+        },
+        "kentron": {
+          "file": "kentron-6c4346f71728fae6.json",
+          "complete": true,
+          "seconds": 227
+        },
+        "next.BREP": {
+          "file": "next.BREP-e8347e72f034e8ae.json",
+          "complete": true,
+          "seconds": 349
+        },
+        "opencascade": {
+          "file": "opencascade-9f2b79599710c6c9.json",
+          "complete": true,
+          "seconds": 792
+        },
+        "solidcraft": {
+          "file": "solidcraft-6d5a2502fe78f8c6.json",
+          "complete": true,
+          "seconds": 1667
+        },
+        "springrep": {
+          "file": "springrep-43d6c2acbb905423.json",
+          "complete": true,
+          "seconds": 111
+        }
+      }
     }
   ],
   "leaderboard": {
@@ -157,6 +209,10 @@
         "anvil-brep": "45259371420-1",
         "springrep": "45259371420-1"
       }
+    },
+    "2.0.2": {
+      "run": "45521848124-1",
+      "kernels": {}
     }
   }
 }
