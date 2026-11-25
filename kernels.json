@@ -17,13 +17,13 @@
     },
     {
       "kernel": "arris",
-      "version": "0.10.0",
+      "version": "0.12.0",
       "license": "MIT OR Apache-2.0",
       "source": "https://github.com/arris-labs/arris",
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-arris",
-        "commit": "a6f2bdb819b8eccd6b0865c5a62dc89602e5c2c1",
+        "commit": "1e047b2cb289b4375e39dfb985a61151c7ee3bae",
         "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/arris-adapter"
@@ -77,13 +77,13 @@
     },
     {
       "kernel": "next.BREP",
-      "version": "0.24.0",
+      "version": "0.28.0",
       "license": "LicenseRef-Autodrop3d",
       "source": "https://github.com/mmiscool/next.BREP.io_RUST_BREP_KERNEL",
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-next-brep",
-        "commit": "7d1d9f6586af3fc3d0d9bfecc9335aff0b2c6894",
+        "commit": "aacedf20b5863f409b8b1a40c20b1eff871ac94d",
         "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/next-brep-adapter"
@@ -113,7 +113,7 @@
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-solidcraft",
-        "commit": "7d62c34f8fbecd3527b64ffe6ed3c9c154dd4743",
+        "commit": "568e0de85e1ed45cc40317e62bae901ab70e8164",
         "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/solidcraft-adapter"
@@ -122,13 +122,13 @@
     },
     {
       "kernel": "springrep",
-      "version": "2.1.0",
+      "version": "2.1.1",
       "license": "MIT",
       "source": "https://github.com/springcraft-ai/springrep",
       "maintained_by_suite": true,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-springrep",
-        "commit": "01fedc51e5a90c134b554604f6ff28b1f0d7f054",
+        "commit": "da57ba3ed4a7e8f1122a96fde53ad4474b9b0d47",
         "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/springrep-adapter"
