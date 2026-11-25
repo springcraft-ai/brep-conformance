@@ -3,7 +3,20 @@
 Every release of the suite, newest first. [doc/versioning.md](doc/versioning.md) says what each
 number promises and what an entry records.
 
-## 2.0.1 (unreleased)
+## 2.0.2 (unreleased)
+
+Verdicts and scores on 2.0.1 stand, except on the three tests below, where a case can only move from
+failed to passed.
+
+### Tests fixed
+
+- `queries/hidden-lines-of-a-cylinder`, `queries/hidden-lines-of-a-drilled-box` and
+  `queries/hidden-lines-of-a-sphere`: B38 could measure a drawing's vertex just short of a whole
+  circle's seam by its distance round the circle to the seam, about `r·2π·(1 − t)`, instead of 0.
+  An exact drawing with a vertex there failed. The search for the nearest point now runs across the
+  seam. Results move from failed to passed only.
+
+## 2.0.1 (2026-11-22)
 
 Verdicts and scores on 2.0.0 stand. Case times do not compare with 2.0.0's.
 
@@ -13,6 +26,13 @@ Verdicts and scores on 2.0.0 stand. Case times do not compare with 2.0.0's.
   write STEP run, so every kernel is timed on the same work; its time is the case's new `step_ms`,
   null where none ran. The site shows the median of `step_ms` beside the median case time. No
   verdict changes.
+
+### Reporting
+
+- With `--bench DIR --run ID`, the flat report records the Benchmark workflow's run (`run.id`),
+  whether the pass ran every test (`run.complete`), the suite's and the adapter's commits, and the
+  machine (`environment.machine`). Without the options these fields are null or absent. No verdict
+  changes.
 
 ## 2.0.0 (2026-11-22)
 
@@ -42,10 +62,10 @@ a refused blend differently.
   in each triangle that uses it, one of the normals that the cone has across that triangle, to
   within 1e-3.
 - B42 has a fourth check, of what each edge says: the faces it names, the turn between them against
-  its closed form to within 1e-3, the flag on an edge a split made, and the seams. A display from an
-  adapter written to protocol 1.0.0 fails this check alone, as not reported, except on a ball, which
-  has no edge to report. B42 also displays a box with its upright edges rounded, where faces meet
-  smoothly, and a box with one side in two faces.
+  its closed form to within 1e-3, and the flag on an edge a split made. Each of these is judged only
+  where the display gives it, and seams are not scored. A display that gives none of them, as from
+  an adapter written to protocol 1.0.0, passes this check as not reported. B42 also displays a box
+  with its upright edges rounded, where faces meet smoothly, and a box with one side in two faces.
 - B31 and B39 no longer run when the kernel refused the blend. Before, a kernel that offers `normal`
   or curvatures at probes got a failed case for a refused blend. Now the case is a refusal, as
   every other check of a blend case already scored it.
@@ -53,6 +73,13 @@ a refused blend differently.
   significant digits, with any magnitude below a picometre as zero, and the generator uses the same
   maths on every platform. So the same seed draws the same cases and ids on every platform. The
   cases themselves are the same as before to within their last bits, and no verdict changes.
+
+### Reporting
+
+- The results file records when the run started (`started_unix`), how long it took (`wall_ms`) and
+  the time limit of one call (`time_limit_ms`). Each case records its steps (`ops`) and whether a
+  newly started kernel answered it (`cold`), so that its time includes that kernel's first calls.
+  The flat report carries the same fields. No verdict changes.
 
 ### Tests added
 

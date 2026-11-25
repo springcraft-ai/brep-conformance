@@ -22,7 +22,7 @@ mod export;
 pub use export::{EXPORT_TOLERANCE, Exports};
 
 /// The suite's release and the contract version its checks implement.
-pub const SUITE_VERSION: &str = "2.0.1";
+pub const SUITE_VERSION: &str = "2.0.2";
 pub const CONTRACT_VERSION: &str = "2.0.0";
 /// The version of the results file and of the flat report, as
 /// [doc/formats.md](../../doc/formats.md) gives them: raised when a field is removed or changes

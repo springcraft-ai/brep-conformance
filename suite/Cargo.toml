@@ -1,6 +1,6 @@
 [package]
 name = "brep-conformance"
-version = "2.0.1"
+version = "2.0.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "A kernel-neutral conformance suite for B-rep operations: cases, oracles, runner"

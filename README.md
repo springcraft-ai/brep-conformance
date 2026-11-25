@@ -98,7 +98,7 @@ family's name.
 A kernel's results change only when the tests (the suite version or seed), its adapter, or the
 kernel's release or configuration change. Run it once per such change, keep its results under
 `target/brep-conformance/` named by what they came from
-(`<kernel>-suite2.0.1-protocol1.1.0-<kernel release>.json`), and give the report that file.
+(`<kernel>-suite2.0.2-protocol1.1.0-<kernel release>.json`), and give the report that file.
 
 ## Additional Information
 
