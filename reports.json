@@ -191,6 +191,28 @@
           "seconds": 111
         }
       }
+    },
+    {
+      "run": "45886633073-1",
+      "suite": "2.0.2",
+      "scope": "named",
+      "reports": {
+        "cad-kernel": {
+          "file": "cad-kernel-03654eb354d96a43.json",
+          "complete": true,
+          "seconds": 578
+        },
+        "next.BREP": {
+          "file": "next.BREP-acd96b5b38cf9918.json",
+          "complete": true,
+          "seconds": 366
+        },
+        "solidcraft": {
+          "file": "solidcraft-dee5642bfbfc23e3.json",
+          "complete": true,
+          "seconds": 2668
+        }
+      }
     }
   ],
   "leaderboard": {
@@ -212,7 +234,11 @@
     },
     "2.0.2": {
       "run": "45521848124-1",
-      "kernels": {}
+      "kernels": {
+        "cad-kernel": "45886633073-1",
+        "next.BREP": "45886633073-1",
+        "solidcraft": "45886633073-1"
+      }
     }
   }
 }
