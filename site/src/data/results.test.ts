@@ -311,8 +311,20 @@ describe('leaderboard and indexes', () => {
     raw('alpha', '1', [row('1', 'b/x', 'pass', '1e-7'), row('2', 'b/x', 'unsupported', null)]),
   )
 
-  it('ranks by pass rate alone', () => {
+  it('ranks by pass rate first', () => {
     expect(leaderboard([b, a]).map(r => r.kernel)).toEqual(['zeta', 'alpha'])
+  })
+
+  it('breaks a tie in pass rate by speed, faster first, then by name', () => {
+    const passed = (kernel: string, ms: number) =>
+      parseReport(raw(kernel, '1', [row('1', 'b/x', 'pass', '1e-7', ms)]))
+    const none = parseReport(raw('aardvark', '1', [row('1', 'b/x', 'refused', null)]))
+    const slow = passed('alpha', 9)
+    const fast = passed('zeta', 2)
+    const level = passed('beta', 9)
+    expect(leaderboard([slow, level, fast]).map(r => r.kernel)).toEqual(['zeta', 'alpha', 'beta'])
+    // A kernel that passed nothing has no time and no rate: it sorts last by rate already.
+    expect(leaderboard([none, slow]).map(r => r.kernel)).toEqual(['alpha', 'aardvark'])
   })
 
   it('lists a test’s cases from every kernel, each once, in the suite’s order', () => {
