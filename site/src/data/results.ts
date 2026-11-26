@@ -458,7 +458,8 @@ export interface LeaderRow {
   run: string | null
 }
 
-// Ranked by the headline alone, ties by name: no kernel gets a place of its own.
+// Ordered by the headline, the 1e-7 pass rate; ties by the median time of the passed cases, faster
+// first, a kernel with no time last; then by name.
 export function leaderboard(latest: Report[]): LeaderRow[] {
   return latest
     .map(r => ({
@@ -473,7 +474,12 @@ export function leaderboard(latest: Report[]): LeaderRow[] {
       time: caseTime(r),
       run: r.run.id,
     }))
-    .sort((a, b) => b.summary.passRate - a.summary.passRate || a.kernel.localeCompare(b.kernel))
+    .sort(
+      (a, b) =>
+        b.summary.passRate - a.summary.passRate ||
+        (a.time?.median ?? Infinity) - (b.time?.median ?? Infinity) ||
+        a.kernel.localeCompare(b.kernel),
+    )
 }
 
 export interface TestKernel {
