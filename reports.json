@@ -213,6 +213,18 @@
           "seconds": 2668
         }
       }
+    },
+    {
+      "run": "46041452108-1",
+      "suite": "2.0.2",
+      "scope": "named",
+      "reports": {
+        "kentron": {
+          "file": "kentron-17865b9e2b2d3340.json",
+          "complete": true,
+          "seconds": 138
+        }
+      }
     }
   ],
   "leaderboard": {
@@ -237,7 +249,8 @@
       "kernels": {
         "cad-kernel": "45886633073-1",
         "next.BREP": "45886633073-1",
-        "solidcraft": "45886633073-1"
+        "solidcraft": "45886633073-1",
+        "kentron": "46041452108-1"
       }
     }
   }
