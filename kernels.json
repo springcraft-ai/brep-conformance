@@ -47,13 +47,13 @@
     },
     {
       "kernel": "cadrs",
-      "version": "0.2.9",
+      "version": "0.2.10",
       "license": "MIT OR Apache-2.0",
       "source": "https://github.com/rvdende/cadrs",
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-cadrs",
-        "commit": "deb1b8dd322b37cda949b03044bc28f921819bf3",
+        "commit": "6ad447e64d711723e2ddab2c39bebc8208add5de",
         "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/cadrs-adapter"
@@ -107,13 +107,13 @@
     },
     {
       "kernel": "solidcraft",
-      "version": "0.50.0",
+      "version": "0.51.2",
       "license": "Apache-2.0",
       "source": "https://github.com/tangency-labs/solidcraft",
       "maintained_by_suite": false,
       "adapter": {
         "repo": "https://github.com/springcraft-ai/brep-conformance-solidcraft",
-        "commit": "3506e5cfa95b263f732ad98fe30113cbc7328b0b",
+        "commit": "23fd5880100ff9b1b2c17df4305eb7358915a526",
         "license": "MIT OR Apache-2.0",
         "build": ["cargo build --release --locked"],
         "run": "{dir}/target/release/solidcraft-adapter"
